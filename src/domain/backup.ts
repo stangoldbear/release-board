@@ -1,5 +1,5 @@
-import { DEFAULT_COLOR_ID, isKnownColorId, normalizeColorId } from '../data/colors';
-import type { DailyMetric, DailyNotes, Lane, PlanSnapshot, TaskItem } from '../types';
+import { DEFAULT_COLOR_ID, isKnownColorId, normalizeColorId } from './colors';
+import type { DailyMetric, DailyNotes, Lane, PlanSnapshot, TaskItem } from './types';
 import { formatDateToIT, formatDateToISO, isIsoDate } from '../utils/dateUtils';
 import { parseLocaleNumber } from './numberFormat';
 import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES } from './plan';

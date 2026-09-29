@@ -7,13 +7,18 @@ giornalieri.
 
 ## Funzionalità
 
-- Vista mensile a colonne giornaliere e vista settimanale.
-- Attività su corsie, da trascinare e ridimensionare, con stato, colore, assegnatario e checklist.
+- Calendario a corsie con tre livelli di zoom (due settimane, mese, trimestre) e bacheca
+  settimanale.
+- Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e
+  checklist.
 - Note e valori giornalieri, per esempio il fatturato, allineati ai giorni del calendario.
 - Festività italiane e weekend evidenziati.
+- Tema chiaro e scuro, oppure quello del dispositivo.
 - Backup e ripristino in un file JSON dalle Impostazioni.
+- Con un progetto Firebase: piano condiviso con il team in tempo reale, anche offline, accesso con
+  GitHub, membri invitati per username, cronologia delle modifiche.
 
-In questa versione i dati restano nel browser che li ha creati. Per spostarli altrove usa
+Senza progetto Firebase i dati restano nel browser che li ha creati. Per spostarli altrove usa
 Impostazioni → Backup.
 
 ## Pubblicare la tua copia
@@ -25,15 +30,34 @@ Impostazioni → Backup.
 Un repository privato pubblica solo se il suo piano include GitHub Pages e se la variabile di
 repository `PAGES_DEPLOY` vale `true`.
 
+## Istanza condivisa con Firebase
+
+Il sito pubblicato spiega da solo come fare, nella schermata "Configura la tua istanza" e in
+Impostazioni → Istanza condivisa. In breve: un progetto Firebase dedicato sul piano gratuito, un
+database Firestore standard (non in modalità Datastore), il provider GitHub in Authentication con
+un'app OAuth
+GitHub, il dominio del sito tra quelli autorizzati, le regole di `firestore/firestore.rules`
+pubblicate, e quattro variabili di repository lette al momento della build:
+`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`,
+`VITE_FIREBASE_APP_ID`. Sono identificativi pubblici: la protezione dei dati sono le regole.
+
+Chi fa il primo accesso crea il piano e ne è proprietario; invita gli altri per username GitHub. I
+dati stanno nel progetto Firebase dell'installazione, e in nessun altro posto.
+
 ## Sviluppo
 
 Serve Node.js 22.12 o successivo; la versione di riferimento è in `.nvmrc`.
 
 ```sh
 npm ci
-npm run dev      # http://localhost:3000
-npm run check    # formattazione, lint, tipi, test e build
+npm run dev         # http://localhost:3000
+npm run check       # formattazione, lint, tipi, test e build
+npm run test:rules  # regole e adattatori Firestore sull'emulatore (serve Java 21)
 ```
+
+Per sviluppare la parte condivisa senza un progetto reale, un file `.env.local` con
+`VITE_FIREBASE_EMULATORS=true` e quattro valori qualsiasi (`VITE_FIREBASE_PROJECT_ID` che inizi
+con `demo-`) fa parlare l'app con gli emulatori Auth e Firestore della Firebase CLI.
 
 ## Sicurezza della supply chain
 

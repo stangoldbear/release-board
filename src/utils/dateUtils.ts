@@ -15,6 +15,21 @@ export const ITALIAN_MONTHS = [
 
 export const ITALIAN_DAYS_SHORT = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 
+export const ITALIAN_MONTHS_SHORT = [
+  'gen',
+  'feb',
+  'mar',
+  'apr',
+  'mag',
+  'giu',
+  'lug',
+  'ago',
+  'set',
+  'ott',
+  'nov',
+  'dic',
+];
+
 export function formatDateToISO(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -22,8 +37,13 @@ export function formatDateToISO(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Today in the local time zone, as YYYY-MM-DD. */
+export function todayIso(): string {
+  return formatDateToISO(new Date());
+}
+
 export function parseISODate(dateStr: string): Date {
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const [y = 0, m = 1, d = 1] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 
@@ -119,33 +139,51 @@ export function getDaysInMonth(year: number, monthIndex: number): Date[] {
   return days;
 }
 
-export function getWeekDays(centerDate: Date): Date[] {
-  const curr = new Date(centerDate);
-  // Monday is the first day of the week
-  const day = curr.getDay();
-  const diff = curr.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(curr.setDate(diff));
-
-  const days: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    days.push(d);
-  }
-  return days;
-}
-
-export function addDays(date: Date, days: number): Date {
+function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
 }
 
+/** Days from one ISO date to another: 0 for the same day, negative when `to` comes first. */
+export function diffDays(from: string, to: string): number {
+  const diffTime = parseISODate(to).getTime() - parseISODate(from).getTime();
+  // Rounded: a day across a daylight saving change lasts 23 or 25 hours.
+  return Math.round(diffTime / (1000 * 60 * 60 * 24));
+}
+
+/** Number of days from start to end, both included. */
 export function daysBetween(startStr: string, endStr: string): number {
-  const start = parseISODate(startStr);
-  const end = parseISODate(endStr);
-  const diffTime = end.getTime() - start.getTime();
-  return Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1; // inclusive
+  return diffDays(startStr, endStr) + 1;
+}
+
+/** The ISO date `days` days after `iso`, or before it when negative. */
+export function addDaysIso(iso: string, days: number): string {
+  return formatDateToISO(addDays(parseISODate(iso), days));
+}
+
+/** The same day `months` months later, or earlier, kept inside the target month: 31/01 + 1 → 28/02. */
+export function addMonthsIso(iso: string, months: number): string {
+  const date = parseISODate(iso);
+  const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(date.getDate(), lastDay));
+  return formatDateToISO(target);
+}
+
+/** Monday of the week that contains the date. */
+export function startOfWeek(iso: string): string {
+  const daysSinceMonday = (parseISODate(iso).getDay() + 6) % 7;
+  return addDaysIso(iso, -daysSinceMonday);
+}
+
+export function startOfMonth(iso: string): string {
+  return `${iso.slice(0, 7)}-01`;
+}
+
+export function endOfMonth(iso: string): string {
+  const date = parseISODate(iso);
+  return formatDateToISO(new Date(date.getFullYear(), date.getMonth() + 1, 0));
 }
 
 /**
@@ -181,7 +219,15 @@ export function formatDateToIT(date: Date | string | null | undefined): string {
 /** True for a real calendar date written as YYYY-MM-DD (so 2026-02-30 is rejected). */
 export function isIsoDate(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [y, m, d] = value.split('-').map(Number);
+  const [y = 0, m = 1, d = 1] = value.split('-').map(Number);
   const date = new Date(Date.UTC(y, m - 1, d));
   return date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+/** A timestamp as short Italian date and time, or the text itself when it is not a timestamp. */
+export function formatDateTimeIT(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? iso
+    : date.toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
 }

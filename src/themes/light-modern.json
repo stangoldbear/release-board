@@ -1,0 +1,38 @@
+{
+  "name": "Light Modern",
+  "dark": false,
+  "colors": {
+    "canvas": "#F3F3F3",
+    "surface": "#FFFFFF",
+    "surface-muted": "#F8F8F8",
+    "surface-strong": "#E6E6E6",
+    "line": "#E0E0E0",
+    "line-strong": "#8F8F8F",
+    "fg": "#1F1F1F",
+    "fg-muted": "#5A5A5A",
+    "accent": "#005FB8",
+    "on-accent": "#FFFFFF",
+    "accent-soft": "#E3EEF9",
+    "link": "#005FB8",
+    "focus": "#005FB8",
+    "danger": "#B3261E",
+    "on-danger": "#FFFFFF",
+    "danger-soft": "#FCEBEA",
+    "warning": "#7A4D00",
+    "warning-soft": "#FFF3D1",
+    "success": "#1E7A34",
+    "holiday": "#FBE7EA",
+    "holiday-fg": "#9B1C31",
+    "overlay": "#000000"
+  },
+  "tasks": {
+    "yellow": { "bg": "#FEF3C7", "border": "#F2B01E", "fg": "#451A03" },
+    "gray": { "bg": "#E2E8F0", "border": "#94A3B8", "fg": "#0F172A" },
+    "blue": { "bg": "#E0F2FE", "border": "#38BDF8", "fg": "#082F49" },
+    "ice": { "bg": "#F8FAFC", "border": "#38BDF8", "fg": "#1E293B" },
+    "green": { "bg": "#D1FAE5", "border": "#34D399", "fg": "#022C22" },
+    "indigo": { "bg": "#E0E7FF", "border": "#818CF8", "fg": "#1E1B4B" },
+    "red": { "bg": "#FFE4E6", "border": "#FB7185", "fg": "#4C0519" },
+    "purple": { "bg": "#F3E8FF", "border": "#C084FC", "fg": "#3B0764" }
+  }
+}

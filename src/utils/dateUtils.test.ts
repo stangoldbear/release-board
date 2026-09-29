@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addDaysIso,
+  addMonthsIso,
   daysBetween,
+  diffDays,
+  endOfMonth,
   formatDateToISO,
   formatDateToIT,
   getDaysInMonth,
   getEasterSunday,
   getItalianHolidayName,
-  getWeekDays,
   isIsoDate,
   parseISODate,
+  startOfMonth,
+  startOfWeek,
 } from './dateUtils';
 
 describe('getEasterSunday', () => {
@@ -66,10 +71,31 @@ describe('calendar helpers', () => {
     expect(daysBetween('2026-09-10', '2026-09-10')).toBe(1);
     expect(daysBetween('2026-03-28', '2026-03-30')).toBe(3);
   });
+});
 
-  it('starts weeks on Monday', () => {
-    const week = getWeekDays(parseISODate('2026-09-27')).map(formatDateToISO);
-    expect(week[0]).toBe('2026-09-21');
-    expect(week[6]).toBe('2026-09-27');
+describe('ISO date arithmetic', () => {
+  it('measures signed day differences across daylight saving changes', () => {
+    expect(diffDays('2026-03-28', '2026-03-30')).toBe(2);
+    expect(diffDays('2026-10-26', '2026-10-24')).toBe(-2);
+  });
+
+  it('adds days across months and years', () => {
+    expect(addDaysIso('2026-09-30', 1)).toBe('2026-10-01');
+    expect(addDaysIso('2027-01-01', -1)).toBe('2026-12-31');
+    expect(addDaysIso('2026-03-28', 2)).toBe('2026-03-30');
+  });
+
+  it('adds months without leaving the target month', () => {
+    expect(addMonthsIso('2026-01-31', 1)).toBe('2026-02-28');
+    expect(addMonthsIso('2026-11-15', 3)).toBe('2027-02-15');
+    expect(addMonthsIso('2026-03-31', -1)).toBe('2026-02-28');
+  });
+
+  it('finds the start of the week and the bounds of the month', () => {
+    expect(startOfWeek('2026-09-27')).toBe('2026-09-21');
+    expect(startOfWeek('2026-09-21')).toBe('2026-09-21');
+    expect(startOfWeek('2026-11-01')).toBe('2026-10-26');
+    expect(startOfMonth('2026-09-29')).toBe('2026-09-01');
+    expect(endOfMonth('2028-02-10')).toBe('2028-02-29');
   });
 });

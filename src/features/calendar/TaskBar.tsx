@@ -1,0 +1,129 @@
+import type { KeyboardEvent, PointerEvent } from 'react';
+import { TASK_STATUS_LABELS } from '../../domain/plan';
+import type { TaskChanges } from '../../domain/plan';
+import { moveTask, resizeTask } from '../../domain/schedule';
+import type { PlacedTask } from '../../domain/schedule';
+import type { TaskItem } from '../../domain/types';
+import { taskColorStyle } from '../../themes';
+import { daysBetween, formatDateToIT } from '../../utils/dateUtils';
+import type { DragKind } from './useTaskDrag';
+
+/** Bars narrower than this have no resize handles: the whole bar moves. */
+const MIN_RESIZABLE_WIDTH = 40;
+/** Bars at least this wide show assignee and length under the title. */
+const MIN_DETAILED_WIDTH = 100;
+
+interface TaskBarProps {
+  placed: PlacedTask<TaskItem>;
+  dayWidth: number;
+  top: number;
+  height: number;
+  dragging: boolean;
+  /** Id of the text that explains the keyboard commands. */
+  describedBy: string;
+  onPointerDown: (event: PointerEvent, kind: DragKind) => void;
+  onOpen: () => void;
+  onContextMenu: (x: number, y: number) => void;
+  onChange: (changes: TaskChanges) => void;
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * A task on the timeline. Click or Enter opens it; it can be dragged with a mouse, resized from its
+ * edges, and moved with the arrow keys (Shift+arrows move the end date).
+ */
+export function TaskBar({
+  placed,
+  dayWidth,
+  top,
+  height,
+  dragging,
+  describedBy,
+  onPointerDown,
+  onOpen,
+  onContextMenu,
+  onChange,
+}: TaskBarProps) {
+  const { task, first, last, continuesBefore, continuesAfter } = placed;
+  const width = (last - first + 1) * dayWidth - 4;
+  const resizable = width >= MIN_RESIZABLE_WIDTH;
+  const detailed = width >= MIN_DETAILED_WIDTH && height >= 40;
+  const length = daysBetween(task.startDate, task.endDate);
+  const period = `dal ${formatDateToIT(task.startDate)} al ${formatDateToIT(task.endDate)}`;
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const days = event.key === 'ArrowRight' ? 1 : -1;
+    if (event.shiftKey) {
+      onChange({ endDate: resizeTask(task, 'end', days).endDate });
+    } else {
+      const { startDate, endDate } = moveTask(task, days);
+      onChange({ startDate, endDate });
+    }
+  };
+
+  const handle = (edge: 'start' | 'end') => (
+    <span
+      aria-hidden="true"
+      onPointerDown={(event) => onPointerDown(event, edge)}
+      className={`absolute inset-y-0 flex w-2.5 cursor-ew-resize items-center justify-center hover:bg-current/15 ${
+        edge === 'start' ? 'left-0' : 'right-0'
+      }`}
+    >
+      <span className="h-3 w-0.5 rounded-full bg-current opacity-0 group-hover/bar:opacity-40" />
+    </span>
+  );
+
+  return (
+    <button
+      type="button"
+      id={`task-rect-${task.id}`}
+      aria-label={`${oneLine(task.title)}, ${period}, ${TASK_STATUS_LABELS[task.status]}`}
+      aria-describedby={describedBy}
+      title={`${task.title}\n${formatDateToIT(task.startDate)} → ${formatDateToIT(task.endDate)}`}
+      onPointerDown={(event) => onPointerDown(event, 'move')}
+      onClick={onOpen}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        // Opened from the keyboard, the event has no pointer position: use the bar's.
+        const rect = event.currentTarget.getBoundingClientRect();
+        onContextMenu(event.clientX || rect.left, event.clientY || rect.bottom);
+      }}
+      onKeyDown={handleKeyDown}
+      style={{
+        ...taskColorStyle(task.colorId),
+        left: first * dayWidth + 2,
+        width: Math.max(width, 6),
+        top,
+        height,
+      }}
+      className={`group/bar pointer-events-auto absolute flex cursor-grab flex-col justify-center overflow-hidden border-2 text-left active:cursor-grabbing ${
+        width < MIN_DETAILED_WIDTH ? 'px-1' : 'px-2.5'
+      } ${
+        task.borderStyle === 'dashed' ? 'border-dashed' : 'border-solid'
+      } ${continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'} ${
+        continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'
+      } ${dragging ? 'z-30 opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'}`}
+    >
+      {resizable && !continuesBefore && handle('start')}
+      <span
+        className={`block text-xs leading-4 font-semibold wrap-break-word ${
+          detailed || height < 40 ? 'truncate' : 'line-clamp-2'
+        }`}
+      >
+        {task.title}
+      </span>
+      {detailed && (
+        <span className="flex items-center gap-1.5 text-xs leading-4 opacity-85">
+          {task.assignee && <span className="truncate">{task.assignee}</span>}
+          {length > 1 && <span className="ml-auto shrink-0 tabular-nums">{length} g</span>}
+        </span>
+      )}
+      {resizable && !continuesAfter && handle('end')}
+    </button>
+  );
+}

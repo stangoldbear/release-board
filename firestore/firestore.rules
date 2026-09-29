@@ -1,0 +1,219 @@
+rules_version = '2';
+
+// Release Board. One plan per instance, open to its members only. Every change to the plan's
+// content says who made it and when, and is written in the same batch as a history entry.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // The GitHub account behind the signed-in user: it is the id of the member documents.
+    function githubId() {
+      return request.auth.token.firebase.identities['github.com'][0];
+    }
+
+    function planPath(planId) {
+      return /databases/$(database)/documents/plans/$(planId);
+    }
+
+    function memberPath(planId) {
+      return /databases/$(database)/documents/plans/$(planId)/members/$(githubId());
+    }
+
+    function historyPath(planId, entryId) {
+      return /databases/$(database)/documents/plans/$(planId)/history/$(entryId);
+    }
+
+    function isMember(planId) {
+      return signedIn() && exists(memberPath(planId));
+    }
+
+    // For writes: also true for the first owner, who adds themselves in the batch that creates
+    // the plan. Member documents can only be created by the owner or in that batch.
+    function isMemberAfter(planId) {
+      return signedIn() && existsAfter(memberPath(planId));
+    }
+
+    function isOwner(planId) {
+      return isMember(planId) && get(memberPath(planId)).data.role == 'owner';
+    }
+
+    function isIsoDate(value) {
+      return value is string && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isText(value, max) {
+      return value is string && value.size() > 0 && value.size() <= max;
+    }
+
+    // Who, when, and the history entry of the same batch that records the change. The client
+    // writes the server timestamp, so updatedAt equals the time of the request.
+    function audited(planId) {
+      let data = request.resource.data;
+      return data.updatedBy == request.auth.uid
+        && data.updatedAt == request.time
+        && data.lastHistoryId is string
+        && existsAfter(historyPath(planId, data.lastHistoryId));
+    }
+
+    // An update must point to a new entry: the previous one already exists.
+    function auditedUpdate(planId) {
+      return audited(planId)
+        && request.resource.data.lastHistoryId != resource.data.lastHistoryId;
+    }
+
+    match /plans/{planId} {
+      // Anyone signed in may learn whether the plan exists, to be offered its creation or told to
+      // ask for an invitation. The document holds only the plan's name.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['name', 'createdBy', 'createdAt'])
+        && isText(request.resource.data.name, 80)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && getAfter(memberPath(planId)).data.role == 'owner';
+      allow update: if isOwner(planId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && isText(request.resource.data.name, 80);
+      allow delete: if false;
+
+      match /members/{memberId} {
+        function validMember() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['login', 'avatarUrl', 'role', 'addedBy', 'addedAt'])
+            && isText(data.login, 39)
+            && data.login.matches('^[A-Za-z0-9-]+$')
+            && data.avatarUrl is string
+            && data.avatarUrl.size() <= 300
+            && data.role in ['owner', 'editor']
+            && data.addedBy == request.auth.uid
+            && data.addedAt == request.time;
+        }
+
+        // Everyone sees their own membership; members see each other.
+        allow get: if signedIn() && (memberId == githubId() || isMember(planId));
+        allow list: if isMember(planId);
+        // The first owner adds themselves while creating the plan; then only the owner invites.
+        allow create: if validMember() && (
+          isOwner(planId)
+          || (memberId == githubId()
+            && request.resource.data.role == 'owner'
+            && !exists(planPath(planId))
+            && getAfter(planPath(planId)).data.createdBy == request.auth.uid));
+        // The owner changes roles and removes members, never their own membership.
+        allow update: if isOwner(planId)
+          && memberId != githubId()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+          && request.resource.data.role in ['owner', 'editor'];
+        allow delete: if isOwner(planId) && memberId != githubId();
+      }
+
+      match /lanes/{laneId} {
+        allow read: if isMember(planId);
+        function validLane() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['name', 'position', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isText(data.name, 60)
+            && data.position is int
+            && data.position >= 0;
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validLane();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validLane();
+        allow delete: if isMember(planId);
+      }
+
+      match /tasks/{taskId} {
+        function validTask() {
+          let data = request.resource.data;
+          return data.keys().hasOnly([
+              'laneId', 'title', 'startDate', 'endDate', 'colorId', 'borderStyle', 'status',
+              'assignee', 'description', 'deliverables', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isText(data.laneId, 100)
+            && isText(data.title, 500)
+            && isIsoDate(data.startDate)
+            && isIsoDate(data.endDate)
+            && data.startDate <= data.endDate
+            && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple']
+            && data.borderStyle in ['dashed', 'solid']
+            && data.status in ['planned', 'in_progress', 'review', 'completed', 'blocked']
+            && (!('assignee' in data) || (data.assignee is string && data.assignee.size() <= 100))
+            && (!('description' in data)
+              || (data.description is string && data.description.size() <= 5000))
+            && (!('deliverables' in data)
+              || (data.deliverables is list && data.deliverables.size() <= 100));
+        }
+
+        allow read: if isMember(planId);
+        allow create: if isMemberAfter(planId) && audited(planId) && validTask();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validTask();
+        allow delete: if isMember(planId);
+      }
+
+      match /metrics/{metricId} {
+        allow read: if isMember(planId);
+        function validMetric() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(
+              ['label', 'unit', 'decimals', 'position', 'visible', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isText(data.label, 60)
+            && data.unit is string
+            && data.unit.size() <= 10
+            && data.decimals is int
+            && data.decimals >= 0
+            && data.decimals <= 4
+            && data.position is int
+            && data.visible is bool;
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validMetric();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validMetric();
+        allow delete: if isMember(planId);
+
+        match /values/{date} {
+          allow read: if isMember(planId);
+          function validValue() {
+            return isIsoDate(date)
+              && request.resource.data.keys().hasOnly(['value', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+              && request.resource.data.value is number;
+          }
+
+          allow create: if isMemberAfter(planId) && audited(planId) && validValue();
+          allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validValue();
+          allow delete: if isMember(planId);
+        }
+      }
+
+      match /notes/{date} {
+        allow read: if isMember(planId);
+        function validNote() {
+          return isIsoDate(date)
+            && request.resource.data.keys().hasOnly(['text', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isText(request.resource.data.text, 2000);
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validNote();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validNote();
+        allow delete: if isMember(planId);
+      }
+
+      // Who changed what and when. Entries are written by the client together with the change
+      // and can never be altered.
+      match /history/{entryId} {
+        allow read: if isMember(planId);
+        allow create: if isMemberAfter(planId)
+          && request.resource.data.keys().hasOnly(
+            ['entity', 'entityId', 'action', 'actor', 'at', 'before', 'after', 'summary'])
+          && request.resource.data.entity in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'member']
+          && request.resource.data.action in ['create', 'update', 'delete', 'import', 'setup']
+          && request.resource.data.actor.uid == request.auth.uid
+          && request.resource.data.actor.githubId == githubId()
+          && request.resource.data.at == request.time;
+        allow update, delete: if false;
+      }
+    }
+  }
+}

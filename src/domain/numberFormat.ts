@@ -40,3 +40,17 @@ export function formatLocaleNumber(value: number, decimals = 0): string {
     maximumFractionDigits: decimals,
   }).format(value);
 }
+
+const compactFormat = new Intl.NumberFormat('it-IT', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+
+/**
+ * The number in full when it fits in `maxLength` characters, otherwise abbreviated:
+ * 1234567 → "1,2 Mln". For narrow cells, next to a tooltip with the full value.
+ */
+export function formatShortNumber(value: number, decimals: number, maxLength: number): string {
+  const full = formatLocaleNumber(value, decimals);
+  return full.length <= maxLength ? full : compactFormat.format(value);
+}

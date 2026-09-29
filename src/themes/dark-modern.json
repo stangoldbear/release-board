@@ -1,0 +1,38 @@
+{
+  "name": "Dark Modern",
+  "dark": true,
+  "colors": {
+    "canvas": "#181818",
+    "surface": "#1F1F1F",
+    "surface-muted": "#252526",
+    "surface-strong": "#313131",
+    "line": "#2B2B2B",
+    "line-strong": "#737373",
+    "fg": "#CCCCCC",
+    "fg-muted": "#A0A0A0",
+    "accent": "#0078D4",
+    "on-accent": "#FFFFFF",
+    "accent-soft": "#10304D",
+    "link": "#4DAAFC",
+    "focus": "#0078D4",
+    "danger": "#F48771",
+    "on-danger": "#1F1F1F",
+    "danger-soft": "#3D2020",
+    "warning": "#E2C08D",
+    "warning-soft": "#3A3122",
+    "success": "#89D185",
+    "holiday": "#33232A",
+    "holiday-fg": "#F4A6B4",
+    "overlay": "#000000"
+  },
+  "tasks": {
+    "yellow": { "bg": "#3D3212", "border": "#D6A21E", "fg": "#FCE8B2" },
+    "gray": { "bg": "#2F3338", "border": "#7A8391", "fg": "#E1E5EA" },
+    "blue": { "bg": "#0E3048", "border": "#3AA0D8", "fg": "#CFEAFB" },
+    "ice": { "bg": "#242A30", "border": "#3AA0D8", "fg": "#DCE6EE" },
+    "green": { "bg": "#0F3A2C", "border": "#2FB981", "fg": "#C8F2DF" },
+    "indigo": { "bg": "#25284F", "border": "#7C83F0", "fg": "#DADDFE" },
+    "red": { "bg": "#45202A", "border": "#EE6A80", "fg": "#FFD6DC" },
+    "purple": { "bg": "#36224C", "border": "#B57CF0", "fg": "#EBDAFE" }
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatLocaleNumber, parseLocaleNumber } from './numberFormat';
+import { formatLocaleNumber, formatShortNumber, parseLocaleNumber } from './numberFormat';
 
 describe('parseLocaleNumber', () => {
   it.each([
@@ -32,5 +32,18 @@ describe('formatLocaleNumber', () => {
     for (const value of [0, 7, 1234, 98765, 1234567]) {
       expect(parseLocaleNumber(formatLocaleNumber(value))).toBe(value);
     }
+  });
+});
+
+describe('formatShortNumber', () => {
+  it('keeps the full number when it fits', () => {
+    expect(formatShortNumber(125000, 0, 8)).toBe('125.000');
+    expect(formatShortNumber(12500.5, 2, 9)).toBe('12.500,50');
+  });
+
+  it('abbreviates numbers that do not fit', () => {
+    // Intl separates number and unit with a no-break space.
+    expect(formatShortNumber(1234567, 0, 8)).toBe('1,2\u00a0Mln');
+    expect(formatShortNumber(125000, 0, 4)).toBe('125K');
   });
 });

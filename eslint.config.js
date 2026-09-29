@@ -22,6 +22,8 @@ export default defineConfig([
     },
     rules: {
       '@typescript-eslint/consistent-type-imports': 'error',
+      // `const { id, ...rest } = item` is the usual way to leave a field out.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
     },
   },
   {

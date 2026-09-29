@@ -1,0 +1,32 @@
+/*
+ * Semantic colors. The active theme (src/themes/*.json) sets the --rb-* variables on <html>, and
+ * these lines turn them into Tailwind utilities such as bg-surface or text-fg-muted.
+ *
+ * The default palette is switched off, so a class like bg-slate-100 produces no style: components
+ * use only these tokens, and every theme applies to all of them.
+ */
+@theme inline {
+  --color-*: initial;
+  --color-canvas: var(--rb-canvas);
+  --color-surface: var(--rb-surface);
+  --color-surface-muted: var(--rb-surface-muted);
+  --color-surface-strong: var(--rb-surface-strong);
+  --color-line: var(--rb-line);
+  --color-line-strong: var(--rb-line-strong);
+  --color-fg: var(--rb-fg);
+  --color-fg-muted: var(--rb-fg-muted);
+  --color-accent: var(--rb-accent);
+  --color-on-accent: var(--rb-on-accent);
+  --color-accent-soft: var(--rb-accent-soft);
+  --color-link: var(--rb-link);
+  --color-focus: var(--rb-focus);
+  --color-danger: var(--rb-danger);
+  --color-on-danger: var(--rb-on-danger);
+  --color-danger-soft: var(--rb-danger-soft);
+  --color-warning: var(--rb-warning);
+  --color-warning-soft: var(--rb-warning-soft);
+  --color-success: var(--rb-success);
+  --color-holiday: var(--rb-holiday);
+  --color-holiday-fg: var(--rb-holiday-fg);
+  --color-overlay: var(--rb-overlay);
+}

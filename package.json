@@ -1,6 +1,6 @@
 {
   "name": "release-board",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Calendario Gantt per pianificare rilasci e attività su corsie parallele.",
   "license": "MIT",
@@ -21,15 +21,19 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:emulator": "vitest run --config vitest.emulator.config.ts",
+    "test:rules": "firestore/with-emulator.sh npm run test:emulator",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
+    "firebase": "12.19.0",
     "lucide-react": "1.47.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@firebase/rules-unit-testing": "5.0.2",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "24.13.6",
     "@types/react": "19.3.0",

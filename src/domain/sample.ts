@@ -1,15 +1,16 @@
-import type { BorderStyle, DailyMetric, PlanSnapshot, TaskItem, TaskStatus } from '../types';
+import type { TaskColorId } from './colors';
+import type { BorderStyle, DailyMetric, PlanSnapshot, TaskItem, TaskStatus } from './types';
 import { formatDateToISO, getDaysInMonth, isWeekend } from '../utils/dateUtils';
 import { DEFAULT_LANES } from './plan';
 
 interface SampleTask {
   title: string;
-  lane: number;
+  laneId: string;
   /** Day of the month the task starts on. */
   day: number;
   /** Duration in days, inclusive. */
   days: number;
-  colorId: string;
+  colorId: TaskColorId;
   status: TaskStatus;
   borderStyle: BorderStyle;
   assignee?: string;
@@ -18,7 +19,7 @@ interface SampleTask {
 const SAMPLE_TASKS: SampleTask[] = [
   {
     title: 'Avvio versione 2.8',
-    lane: 0,
+    laneId: 'lane-1',
     day: 1,
     days: 1,
     colorId: 'gray',
@@ -27,7 +28,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Nuovo carrello',
-    lane: 0,
+    laneId: 'lane-1',
     day: 2,
     days: 7,
     colorId: 'blue',
@@ -37,7 +38,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'API ordini',
-    lane: 1,
+    laneId: 'lane-2',
     day: 3,
     days: 6,
     colorId: 'yellow',
@@ -47,7 +48,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Calendario editoriale',
-    lane: 2,
+    laneId: 'lane-3',
     day: 5,
     days: 9,
     colorId: 'purple',
@@ -57,7 +58,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Migrazione database',
-    lane: 1,
+    laneId: 'lane-2',
     day: 10,
     days: 2,
     colorId: 'yellow',
@@ -66,7 +67,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Collaudo',
-    lane: 1,
+    laneId: 'lane-2',
     day: 12,
     days: 3,
     colorId: 'ice',
@@ -75,7 +76,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Rilascio in produzione',
-    lane: 1,
+    laneId: 'lane-2',
     day: 16,
     days: 1,
     colorId: 'green',
@@ -84,7 +85,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Pubblicazione sugli store',
-    lane: 0,
+    laneId: 'lane-1',
     day: 17,
     days: 2,
     colorId: 'gray',
@@ -93,7 +94,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Newsletter clienti',
-    lane: 2,
+    laneId: 'lane-3',
     day: 19,
     days: 1,
     colorId: 'indigo',
@@ -102,7 +103,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Correzione pagamenti',
-    lane: 1,
+    laneId: 'lane-2',
     day: 22,
     days: 1,
     colorId: 'red',
@@ -111,7 +112,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Retrospettiva',
-    lane: 0,
+    laneId: 'lane-1',
     day: 24,
     days: 1,
     colorId: 'gray',
@@ -137,7 +138,7 @@ export function buildSamplePlan(year: number, month: number): PlanSnapshot {
     const task: TaskItem = {
       id: `sample-${index + 1}`,
       title: sample.title,
-      laneId: lanes[sample.lane].id,
+      laneId: sample.laneId,
       startDate: dateOf(sample.day),
       endDate: dateOf(sample.day + sample.days - 1),
       colorId: sample.colorId,
