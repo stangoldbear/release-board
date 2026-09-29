@@ -1,8 +1,7 @@
-import React from 'react';
 import { TriangleAlert, Trash } from 'lucide-react';
+import { Dialog } from './Dialog';
 
 export interface ConfirmDialogProps {
-  isOpen: boolean;
   title: string;
   message: string;
   itemTitle?: string;
@@ -13,8 +12,8 @@ export interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
-  isOpen,
+/** Asks to confirm an action. Mounted only while open. */
+export function ConfirmDialog({
   title,
   message,
   itemTitle,
@@ -23,46 +22,25 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   variant = 'danger',
   onConfirm,
   onCancel,
-}) => {
-  if (!isOpen) return null;
+}: ConfirmDialogProps) {
+  const VariantIcon = variant === 'danger' ? Trash : TriangleAlert;
 
   return (
-    <div
-      id="confirm-dialog-overlay"
-      className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
-      onClick={onCancel}
-    >
-      <div
-        id="confirm-dialog-card"
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden p-6 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start gap-3.5">
-          <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              variant === 'danger' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'
-            }`}
-          >
-            {variant === 'danger' ? (
-              <Trash className="w-5 h-5" />
-            ) : (
-              <TriangleAlert className="w-5 h-5" />
-            )}
-          </div>
-          <div className="flex-1">
-            <h3 className="text-base font-bold text-slate-900 leading-tight">{title}</h3>
-            <p className="text-xs text-slate-600 mt-1 leading-relaxed">{message}</p>
-          </div>
+    <Dialog
+      title={title}
+      icon={
+        <div
+          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            variant === 'danger' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'
+          }`}
+        >
+          <VariantIcon className="w-5 h-5" aria-hidden="true" />
         </div>
-
-        {itemTitle && (
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 break-words flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
-            <span className="line-clamp-2">{itemTitle}</span>
-          </div>
-        )}
-
-        <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+      }
+      onClose={onCancel}
+      className="max-w-md"
+      footer={
+        <>
           <button
             id="cancel-confirm-btn"
             type="button"
@@ -81,11 +59,20 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 : 'bg-amber-600 hover:bg-amber-700'
             }`}
           >
-            <Trash className="w-3.5 h-3.5" />
+            <Trash className="w-3.5 h-3.5" aria-hidden="true" />
             {confirmLabel}
           </button>
+        </>
+      }
+    >
+      <p className="text-sm text-slate-600 leading-relaxed">{message}</p>
+
+      {itemTitle && (
+        <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 break-words flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+          <span className="line-clamp-2">{itemTitle}</span>
         </div>
-      </div>
-    </div>
+      )}
+    </Dialog>
   );
-};
+}

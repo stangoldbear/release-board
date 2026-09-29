@@ -1,16 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  Calendar,
-  CircleCheck,
-  Copy,
-  Pen,
-  EyeOff,
-  MoveHorizontal,
-  Plus,
-  StickyNote,
-  Trash,
-  X,
-} from 'lucide-react';
+import { Calendar, Copy, Pen, EyeOff, MoveHorizontal, Plus, StickyNote, Trash } from 'lucide-react';
 import type { DailyMetric, DailyNotes, Lane, RowVisibility, TaskItem } from '../types';
 import { getColorById } from '../data/colors';
 import { formatLocaleNumber } from '../domain/numberFormat';
@@ -24,6 +13,7 @@ import {
   ITALIAN_DAYS_SHORT,
   formatDateToIT,
 } from '../utils/dateUtils';
+import { DailyNoteDialog } from './DailyNoteDialog';
 
 interface GanttTimelineProps {
   year: number;
@@ -65,9 +55,8 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
   const days = getDaysInMonth(year, month);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Note editing modal state
+  // Day whose note is being edited
   const [editingNoteDate, setEditingNoteDate] = useState<string | null>(null);
-  const [tempNoteText, setTempNoteText] = useState('');
 
   // Context Menu state (for right-clicking tasks)
   const [contextMenu, setContextMenu] = useState<{
@@ -590,10 +579,7 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                   return (
                     <div
                       key={`note-cell-${dateStr}`}
-                      onClick={() => {
-                        setEditingNoteDate(dateStr);
-                        setTempNoteText(noteText);
-                      }}
+                      onClick={() => setEditingNoteDate(dateStr)}
                       className={`w-14 shrink-0 border-r border-slate-200 p-1 flex flex-col justify-center cursor-pointer transition-all relative ${
                         redInfo.isRed
                           ? 'bg-rose-50/30 hover:bg-rose-100/50'
@@ -651,110 +637,13 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
         </div>
       </div>
 
-      {/* Note Editing Modal */}
       {editingNoteDate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="px-5 py-3.5 border-b border-slate-200 bg-amber-50/70 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700">
-                  <StickyNote className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Nota per il {formatDateToIT(editingNoteDate)}
-                  </h3>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingNoteDate(null)}
-                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="p-5 space-y-3">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
-                  Testo della Nota Giornaliera
-                </label>
-                <textarea
-                  autoFocus
-                  rows={4}
-                  value={tempNoteText}
-                  onChange={(e) => setTempNoteText(e.target.value)}
-                  placeholder="Scrivi qui promemoria, eventi, scadenze o note operative per questo giorno..."
-                  className="w-full px-3 py-2 text-sm bg-amber-50/30 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-400 text-slate-800 placeholder:text-slate-400"
-                />
-              </div>
-
-              {/* Quick tags */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-[11px] text-slate-400 mr-1">Suggeriti:</span>
-                {[
-                  'Kickoff Deploy',
-                  'Code Freeze',
-                  'Release Day',
-                  'QA Testing',
-                  'Sync Operativo',
-                ].map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => setTempNoteText((prev) => (prev ? `${prev} - ${tag}` : tag))}
-                    className="px-2 py-0.5 text-[11px] bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-900 border border-slate-200 hover:border-amber-300 rounded transition-colors"
-                  >
-                    +{tag}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-              {dailyNotes[editingNoteDate] ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onUpdateDailyNote(editingNoteDate, '');
-                    setEditingNoteDate(null);
-                  }}
-                  className="px-3 py-1.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg font-medium flex items-center gap-1 transition-colors"
-                >
-                  <Trash className="w-3.5 h-3.5" />
-                  Elimina Nota
-                </button>
-              ) : (
-                <div />
-              )}
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingNoteDate(null)}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-lg transition-colors"
-                >
-                  Annulla
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onUpdateDailyNote(editingNoteDate, tempNoteText);
-                    setEditingNoteDate(null);
-                  }}
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-2xs transition-colors flex items-center gap-1.5"
-                >
-                  <CircleCheck className="w-3.5 h-3.5" />
-                  Salva Nota
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DailyNoteDialog
+          date={editingNoteDate}
+          note={dailyNotes[editingNoteDate] ?? ''}
+          onSave={(text) => onUpdateDailyNote(editingNoteDate, text)}
+          onClose={() => setEditingNoteDate(null)}
+        />
       )}
 
       {/* Floating Drag Info Pill */}

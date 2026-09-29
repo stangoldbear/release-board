@@ -1,1 +1,21 @@
 @import 'tailwindcss';
+
+@layer base {
+  /* The page behind an open modal dialog stays still: on phones it would scroll in its place. */
+  html:has(dialog:modal) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
+/*
+ * iOS Safari zooms into form fields with text smaller than 16px and stays zoomed in afterwards, so
+ * dialogs no longer fit the screen. Outside the layers on purpose: it wins over text size utilities.
+ */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

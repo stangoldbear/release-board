@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { SquareCheckBig, Copy, Layers, Plus, Tag, Trash, User, X } from 'lucide-react';
 import type { BorderStyle, Lane, TaskItem, TaskStatus } from '../types';
 import { COLOR_PRESETS, DEFAULT_COLOR_ID } from '../data/colors';
@@ -12,6 +12,7 @@ import {
 } from '../utils/dateUtils';
 import { createId } from '../utils/id';
 import { ConfirmDialog } from './ConfirmDialog';
+import { Dialog } from './Dialog';
 
 interface TaskModalProps {
   onClose: () => void;
@@ -49,6 +50,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [deliverables, setDeliverables] = useState<string[]>(initialTask?.deliverables ?? []);
   const [newDeliverable, setNewDeliverable] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const formId = useId();
 
   const handleAddDeliverable = () => {
     if (!newDeliverable.trim()) return;
@@ -90,36 +92,65 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const selectedColor = COLOR_PRESETS.find((c) => c.id === colorId) || COLOR_PRESETS[0];
 
   return (
-    <div
-      id="task-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        id="task-modal-card"
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-8"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">
-              {initialTask ? 'Modifica attività' : 'Nuova attività'}
-            </h2>
-          </div>
-          <button
-            id="close-task-modal-btn"
-            type="button"
-            onClick={onClose}
-            aria-label="Chiudi"
-            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <>
+      <Dialog
+        title={initialTask ? 'Modifica attività' : 'Nuova attività'}
+        onClose={onClose}
+        className="max-w-2xl"
+        footer={
+          <>
+            {initialTask && (
+              <div className="mr-auto flex items-center gap-2">
+                {onDelete && (
+                  <button
+                    id="delete-task-btn"
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Trash className="w-4 h-4" />
+                    Elimina
+                  </button>
+                )}
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                {onDuplicate && (
+                  <button
+                    id="duplicate-task-btn"
+                    type="button"
+                    onClick={() => {
+                      onDuplicate(initialTask);
+                      onClose();
+                    }}
+                    className="px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-300 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Crea una copia esatta di questa attività"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-slate-500" />
+                    Duplica
+                  </button>
+                )}
+              </div>
+            )}
+
+            <button
+              id="cancel-task-btn"
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+            >
+              Annulla
+            </button>
+            <button
+              id="save-task-btn"
+              type="submit"
+              form={formId}
+              className="px-5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm transition-colors cursor-pointer"
+            >
+              {initialTask ? 'Salva modifiche' : 'Crea attività'}
+            </button>
+          </>
+        }
+      >
+        <form id={formId} onSubmit={handleSubmit} className="space-y-5">
           {/* Titolo Attività */}
           <div>
             <label
@@ -455,78 +486,27 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-400"
             />
           </div>
-
-          {/* Footer Actions */}
-          <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-            <div className="flex items-center gap-2">
-              {initialTask && onDelete && (
-                <button
-                  id="delete-task-btn"
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Trash className="w-4 h-4" />
-                  Elimina
-                </button>
-              )}
-
-              {initialTask && onDuplicate && (
-                <button
-                  id="duplicate-task-btn"
-                  type="button"
-                  onClick={() => {
-                    onDuplicate(initialTask);
-                    onClose();
-                  }}
-                  className="px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-300 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-                  title="Crea una copia esatta di questa attività"
-                >
-                  <Copy className="w-3.5 h-3.5 text-slate-500" />
-                  Duplica
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <button
-                id="cancel-task-btn"
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-              >
-                Annulla
-              </button>
-              <button
-                id="save-task-btn"
-                type="submit"
-                className="px-5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm transition-colors cursor-pointer"
-              >
-                {initialTask ? 'Salva modifiche' : 'Crea attività'}
-              </button>
-            </div>
-          </div>
         </form>
-      </div>
+      </Dialog>
 
-      {/* Confirmation Dialog for Deleting Task */}
-      <ConfirmDialog
-        isOpen={showDeleteConfirm}
-        title="Eliminare l'attività?"
-        message="L'attività viene rimossa dal calendario."
-        itemTitle={title || initialTask?.title}
-        confirmLabel="Elimina"
-        cancelLabel="Annulla"
-        variant="danger"
-        onConfirm={() => {
-          if (initialTask && onDelete) {
-            onDelete(initialTask.id);
-          }
-          setShowDeleteConfirm(false);
-          onClose();
-        }}
-        onCancel={() => setShowDeleteConfirm(false)}
-      />
-    </div>
+      {showDeleteConfirm && (
+        <ConfirmDialog
+          title="Eliminare l'attività?"
+          message="L'attività viene rimossa dal calendario."
+          itemTitle={title || initialTask?.title}
+          confirmLabel="Elimina"
+          cancelLabel="Annulla"
+          variant="danger"
+          onConfirm={() => {
+            if (initialTask && onDelete) {
+              onDelete(initialTask.id);
+            }
+            setShowDeleteConfirm(false);
+            onClose();
+          }}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
+    </>
   );
 };

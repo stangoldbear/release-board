@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { TriangleAlert, Download, Upload, X } from 'lucide-react';
+import { TriangleAlert, Download, Upload } from 'lucide-react';
 import type { PlanSnapshot } from '../types';
 import { BUILD_INFO, SOURCE_REPOSITORY_URL } from '../buildInfo';
 import {
@@ -12,6 +12,7 @@ import {
 } from '../domain/backup';
 import type { BackupSource } from '../domain/backup';
 import { downloadTextFile } from '../utils/download';
+import { Dialog } from './Dialog';
 
 interface SettingsDialogProps {
   plan: PlanSnapshot;
@@ -61,18 +62,10 @@ function countSummary(plan: PlanSnapshot): string {
   ].join(' · ');
 }
 
-/** Settings overlay on the browser modal <dialog>, which handles focus and closes with Esc. */
+/** Settings overlay. Mounted only while open. */
 export function SettingsDialog({ plan, onClose, onReplacePlan }: SettingsDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importState, setImportState] = useState<ImportState>({ step: 'idle' });
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (dialog && !dialog.open) dialog.showModal();
-  }, []);
-
-  const close = () => dialogRef.current?.close();
 
   const handleFileChosen = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -103,31 +96,12 @@ export function SettingsDialog({ plan, onClose, onReplacePlan }: SettingsDialogP
   const handleConfirmReplace = (next: PlanSnapshot) => {
     exportPlan(plan, 'prima-del-ripristino');
     onReplacePlan(next);
-    close();
+    onClose();
   };
 
   return (
-    <dialog
-      ref={dialogRef}
-      onClose={onClose}
-      aria-labelledby="settings-title"
-      className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-slate-200 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/60"
-    >
-      <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-        <h2 id="settings-title" className="text-base font-bold text-slate-900">
-          Impostazioni
-        </h2>
-        <button
-          type="button"
-          onClick={close}
-          aria-label="Chiudi"
-          className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-        >
-          <X className="h-5 w-5" aria-hidden="true" />
-        </button>
-      </header>
-
-      <div className="space-y-6 px-5 py-5">
+    <Dialog title="Impostazioni" onClose={onClose} className="max-w-lg">
+      <div className="space-y-6">
         <section aria-labelledby="settings-backup" className="space-y-3">
           <h3 id="settings-backup" className="text-sm font-bold text-slate-900">
             Backup
@@ -234,6 +208,6 @@ export function SettingsDialog({ plan, onClose, onReplacePlan }: SettingsDialogP
           </dl>
         </section>
       </div>
-    </dialog>
+    </Dialog>
   );
 }
