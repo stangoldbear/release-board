@@ -4,7 +4,7 @@ import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import { LABEL_CLASS } from '../../shared/ui/field';
 import { VersionStamp } from '../../shared/ui/VersionStamp';
-import { BeforeYouStart, stepsFor } from './setupSteps';
+import { BeforeYouStart, stepNumberIn, stepsFor } from './setupSteps';
 import type { GuideStep, Place, ProjectKind, StepContext } from './setupSteps';
 
 const PROJECT_KINDS: { kind: ProjectKind; label: string; hint: string }[] = [
@@ -102,9 +102,7 @@ function Step({
           </h3>
           <PlaceLink place={step.place} />
         </div>
-        <div className="space-y-2 text-sm [&_code]:rounded [&_code]:bg-surface-strong [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_code]:wrap-break-word [&_code]:text-fg">
-          {step.content(context)}
-        </div>
+        <div className="space-y-2 text-sm">{step.content(context)}</div>
       </div>
     </li>
   );
@@ -121,9 +119,11 @@ export function SetupGuide() {
     kind,
     host: window.location.hostname,
     siteUrl: `${window.location.origin}${window.location.pathname}`,
+    stepNumber: (id) => stepNumberIn(kind, id),
   };
   return (
-    <div className="space-y-5">
+    // Inline code looks the same everywhere in the guide, deep-dives included.
+    <div className="space-y-5 [&_code]:rounded [&_code]:bg-surface-strong [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_code]:wrap-break-word [&_code]:text-fg">
       <ProjectKindChoice value={kind} onChange={setKind} />
       <BeforeYouStart kind={kind} />
       <ol className="space-y-5">

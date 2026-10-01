@@ -6,6 +6,31 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-01
+
+### Aggiunto
+
+- Approfondimenti espandibili nella guida alla configurazione, con il perché e le conseguenze di
+  ogni scelta:
+  - app OAuth nel proprio account o nell'organizzazione, e come trasferirla in seguito;
+  - modalità di Firestore e località del database (nam5 o Europa), con le istruzioni per portare in
+    Europa un database vuoto;
+  - Authentication, dominio autorizzato, app web, chiave API dedicata, regole, variabili e primo
+    accesso;
+  - costi e limiti del piano gratuito.
+
+### Modificato
+
+- La guida usa le voci della console Google Cloud, «Firestore nativo» e «Firestore con
+  compatibilità Datastore», e rimanda agli altri passi con il loro numero: con un database già in
+  «Firestore nativo» si passa al passo 3.
+- Per un team in Italia la guida consiglia la località `europe-west8` (Milano).
+
+### Corretto
+
+- La guida ricorda la variabile `PAGES_DEPLOY`, senza la quale un repository privato non pubblica il
+  sito.
+
 ## [0.2.2] - 2026-10-01
 
 ### Aggiunto
@@ -126,7 +151,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/stangoldbear/release-board/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/stangoldbear/release-board/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/stangoldbear/release-board/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/stangoldbear/release-board/compare/v0.1.1...v0.2.0
