@@ -6,6 +6,18 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-01
+
+### Corretto
+
+- Passo "Registra l'app web" della guida: se il progetto ha già un'app web, la guida dice di lasciarla
+  com'è e di aggiungerne una nuova per Release Board, e un approfondimento spiega perché. Indica anche
+  dove leggere `firebaseConfig`: l'app nell'elenco, poi Configurazione in "Installazione e
+  configurazione degli SDK".
+- I percorsi nella console Firebase seguono il menu attuale: Impostazioni sotto Panoramica del
+  progetto, Authentication in Sicurezza, Firestore Database in Database e spazio di archiviazione, e
+  la ricerca dei prodotti.
+
 ## [0.2.4] - 2026-10-01
 
 ### Corretto
@@ -160,7 +172,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/stangoldbear/release-board/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/stangoldbear/release-board/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/stangoldbear/release-board/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/stangoldbear/release-board/compare/v0.2.1...v0.2.2

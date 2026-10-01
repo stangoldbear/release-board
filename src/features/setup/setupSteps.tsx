@@ -62,6 +62,10 @@ const GITHUB: Place = { name: 'GitHub', url: 'https://github.com/' };
 
 const APP_ENGINE_PAGE = 'https://console.cloud.google.com/appengine';
 
+/** Where the left menu of the Firebase console keeps the products the guide uses. */
+const FIRESTORE_MENU = 'Database e spazio di archiviazione → Firestore Database';
+const AUTHENTICATION_MENU = 'Sicurezza → Authentication';
+
 /** Turns the empty Datastore mode database of a project into one that this app can use. */
 const CONVERT_COMMAND =
   "gcloud firestore databases update --database='(default)' --type=firestore-native";
@@ -194,8 +198,8 @@ function LocationMore({ kind, stepNumber }: StepContext) {
               Aspetta almeno cinque minuti: prima l'ID <code>(default)</code> non si può riusare.
             </li>
             <li>
-              Dalla console Firebase crea il database con{' '}
-              <strong>Firestore Database → Crea database</strong>: edizione Standard, ID{' '}
+              Dalla console Firebase crea il database da{' '}
+              <strong>{FIRESTORE_MENU} → Crea database</strong>: edizione Standard, ID{' '}
               <code>(default)</code>, località <code>europe-west8</code>, modalità di produzione.
               Nasce già in «Firestore nativo»: salta il passo {stepNumber('convertDatabase')} e vai
               al passo {stepNumber('enableGitHub')}. Se la console non ti lascia scegliere una
@@ -245,7 +249,7 @@ const STEPS: Record<StepId, GuideStep> = {
       <>
         <Actions>
           <li>
-            Nel menu a sinistra scegli <strong>Firestore Database</strong> e premi{' '}
+            Nel menu a sinistra apri <strong>{FIRESTORE_MENU}</strong> e premi{' '}
             <strong>Crea database</strong>.
           </li>
           <li>
@@ -295,10 +299,9 @@ const STEPS: Record<StepId, GuideStep> = {
               <strong>
                 Nessuna riga <code>(default)</code>
               </strong>
-              : crealo dalla console Firebase con{' '}
-              <strong>Firestore Database → Crea database</strong>: edizione Standard, ID{' '}
-              <code>(default)</code>, una località in Europa, modalità di produzione. Poi passa al
-              passo {stepNumber('enableGitHub')}.
+              : crealo dalla console Firebase, da <strong>{FIRESTORE_MENU} → Crea database</strong>:
+              edizione Standard, ID <code>(default)</code>, una località in Europa, modalità di
+              produzione. Poi passa al passo {stepNumber('enableGitHub')}.
             </li>
             <li>
               <strong>Contiene dati</strong>, in qualsiasi modalità: lo usa già un'altra app.
@@ -375,8 +378,8 @@ const STEPS: Record<StepId, GuideStep> = {
       <>
         <Actions>
           <li>
-            Apri il progetto e nel menu a sinistra scegli <strong>Authentication</strong>. Se è la
-            prima volta, premi <strong>Inizia</strong>.
+            Apri il progetto e nel menu a sinistra apri <strong>{AUTHENTICATION_MENU}</strong>. Se è
+            la prima volta, premi <strong>Inizia</strong>.
           </li>
           <li>
             Nella scheda <strong>Metodo di accesso</strong> premi{' '}
@@ -628,30 +631,59 @@ const STEPS: Record<StepId, GuideStep> = {
       <>
         <Actions>
           <li>
-            Premi l'ingranaggio accanto a <strong>Panoramica del progetto</strong> e scegli{' '}
-            <strong>Impostazioni progetto</strong>.
+            Nel menu a sinistra apri <strong>Impostazioni</strong>, sotto{' '}
+            <strong>Panoramica del progetto</strong>: si apre <strong>Impostazioni progetto</strong>
+            , scheda <strong>Generali</strong>.
           </li>
           <li>
-            Nella scheda <strong>Generali</strong>, alla voce <strong>Le tue app</strong> in fondo
-            alla pagina, scegli l'icona <strong>Web</strong> (<code>&lt;/&gt;</code>). Se il
-            progetto ha già delle app, prima premi <strong>Aggiungi app</strong>.
+            Scorri fino a <strong>Le tue app</strong>. Se il progetto ha già delle app, anche web,
+            lasciale come sono e premi <strong>Aggiungi app</strong>; in un progetto senza app le
+            icone compaiono subito. Scegli l'icona <strong>Web</strong> (<code>&lt;/&gt;</code>).
           </li>
           <li>
             Nickname: <code>Release Board</code>. Lascia spenta l'opzione di{' '}
             <strong>Firebase Hosting</strong> e premi <strong>Registra app</strong>.
           </li>
           <li>
-            Compare un blocco di codice con <code>firebaseConfig</code>: i suoi valori servono
+            Firebase mostra come installare l'SDK: a Release Board non serve, premi{' '}
+            <strong>Continua alla console</strong>.
+          </li>
+          <li>
+            In <strong>Le tue app</strong> seleziona l'app web <strong>Release Board</strong> e, in{' '}
+            <strong>Installazione e configurazione degli SDK</strong>, scegli{' '}
+            <strong>Configurazione</strong>: compare <code>firebaseConfig</code>, con i valori che
+            servono
             {kind === 'existing' ? ` ai passi ${stepNumber('createApiKey')} e ` : ' al passo '}
-            {stepNumber('setVariables')}. Lo ritrovi in qualsiasi momento in questa pagina, sotto
-            l'app web.
+            {stepNumber('setVariables')}.
           </li>
         </Actions>
         {kind === 'existing' && (
           <Note>
-            Le app già registrate, per esempio quelle iOS e Android, restano come sono. Il valore{' '}
-            <code>measurementId</code>, se c'è, non serve.
+            C'è già un'app web nell'elenco? Non cancellarla e non modificarla: aggiungine una nuova
+            come qui sopra e usa solo quella di Release Board. Le app Android e iOS restano come
+            sono.
           </Note>
+        )}
+        {kind === 'existing' && (
+          <More title="c'è già un'app web: perché aggiungerne un'altra">
+            <p>
+              In Firebase un'«app» è solo una registrazione: un nickname e un ID app (
+              <code>appId</code>) che dicono al progetto da dove arrivano le richieste. Le app dello
+              stesso progetto condividono Authentication, Firestore e chiavi API, e un progetto può
+              averne quante ne servono, anche più app web.
+            </p>
+            <p>
+              Quella che trovi l'ha registrata qualcuno per un suo sito o per uno strumento
+              collegato al progetto: di solito il nickname lo ricorda. Release Board potrebbe usarne
+              la configurazione, ma dipenderebbe da un'app che non controlli. Con un'app sua resta
+              indipendente: si riconosce nell'elenco e si può togliere senza toccare le altre.
+            </p>
+            <p>
+              Cancellare un'app non si annulla, e ciò che la usa potrebbe smettere di funzionare;
+              rinominarla confonderebbe chi l'ha creata. Se vuoi sapere a cosa serve, chiedi a chi
+              gestisce il progetto.
+            </p>
+          </More>
         )}
         <More title="cosa crea">
           <p>
@@ -659,8 +691,10 @@ const STEPS: Record<StepId, GuideStep> = {
             il sito. Le app già registrate non cambiano.
           </p>
           <p>
-            Se nel progetto è attivo Google Analytics, Firebase può associare all'app un{' '}
-            <code>measurementId</code>: Release Board non lo usa e non invia dati ad Analytics.
+            Se nel progetto è attivo Google Analytics, Firebase può proporre di collegare l'app a
+            uno stream o associarle un <code>measurementId</code>: Release Board non usa Analytics,
+            quindi l'avviso sullo stream si può ignorare, come il pulsante{' '}
+            <strong>Link a un sito di Firebase Hosting</strong>.
           </p>
           <p>
             I valori di <code>firebaseConfig</code> finiscono nel codice del sito: non sono segreti.
@@ -736,7 +770,7 @@ const STEPS: Record<StepId, GuideStep> = {
       <>
         <Actions>
           <li>
-            Nel menu a sinistra scegli <strong>Firestore Database</strong> e apri la scheda{' '}
+            Nel menu a sinistra apri <strong>{FIRESTORE_MENU}</strong> e la scheda{' '}
             <strong>Regole</strong>.
           </li>
           <li>
@@ -934,6 +968,12 @@ export function BeforeYouStart({ kind }: { kind: ProjectKind }) {
           <li>
             Ogni passo dice dove si fa: il link apre la pagina giusta in una nuova scheda, così
             questa guida resta aperta. Gli approfondimenti spiegano il perché e le conseguenze.
+          </li>
+          <li>
+            Nella console Firebase i prodotti stanno nel menu a sinistra, raggruppati in categorie:
+            Authentication in <strong>Sicurezza</strong>, Firestore Database in{' '}
+            <strong>Database e spazio di archiviazione</strong>. Se non trovi una voce, usa{' '}
+            <strong>Cerca prodotti</strong> in alto.
           </li>
           <li>
             Basta il piano <strong>Spark</strong>, gratuito: niente carta di credito.
