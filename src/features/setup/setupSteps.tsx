@@ -388,7 +388,8 @@ const STEPS: Record<StepId, GuideStep> = {
           </li>
           <li>
             Copia l'<strong>URL di callback</strong> che la finestra mostra in basso: finisce con{' '}
-            <code>/__/auth/handler</code>. Lascia la finestra aperta.
+            <code>/__/auth/handler</code>. Su GitHub lo incollerai come{' '}
+            <strong>Redirect URI</strong>. Lascia la finestra aperta.
           </li>
         </Actions>
         {kind === 'existing' && (
@@ -444,7 +445,8 @@ const STEPS: Record<StepId, GuideStep> = {
           <li>
             Premi <strong>New OAuth App</strong> (in un'organizzazione{' '}
             <strong>New Org OAuth App</strong>; se l'elenco è vuoto,{' '}
-            <strong>Register a new application</strong>).
+            <strong>Register a new application</strong>): si apre il modulo{' '}
+            <strong>Register a new OAuth app</strong>.
           </li>
           <li>
             <strong>Application name</strong>: <code>Release Board</code>.
@@ -454,19 +456,67 @@ const STEPS: Record<StepId, GuideStep> = {
             <CopyValue value={siteUrl} confirmation="Indirizzo copiato" />
           </li>
           <li>
-            <strong>Authorization callback URL</strong>: l'URL di callback copiato al passo{' '}
-            {stepNumber('enableGitHub')}.
+            <strong>Application description</strong>: facoltativa. Per esempio{' '}
+            <code>Calendario dei rilasci del team</code>.
           </li>
           <li>
-            Lascia spento <strong>Enable Device Flow</strong> e premi{' '}
-            <strong>Register application</strong>.
+            Nella sezione <strong>Redirect URIs</strong>, nel campo <strong>Redirect URI</strong>{' '}
+            incolla l'URL di callback copiato al passo {stepNumber('enableGitHub')}. Ne basta uno:
+            non premere <strong>Add redirect URI</strong> e lascia spento{' '}
+            <strong>Allow wildcard matching</strong>.
           </li>
           <li>
-            Copia il <strong>Client ID</strong>. Poi premi{' '}
-            <strong>Generate a new client secret</strong> e copia il secret: GitHub lo mostra una
-            volta sola.
+            Lascia le due opzioni come le propone GitHub: <strong>Enable Device Flow</strong>{' '}
+            spento, <strong>Expire user access tokens</strong> attivo.
+          </li>
+          <li>
+            Premi <strong>Register application</strong>.
+          </li>
+          <li>
+            Nella pagina dell'app copia il <strong>Client ID</strong>. Poi, alla voce{' '}
+            <strong>Client secrets</strong>, premi <strong>Generate a new client secret</strong> e
+            copia il secret: GitHub lo mostra una volta sola.
           </li>
         </Actions>
+        <More title="i campi del modulo di GitHub">
+          <Cases>
+            <li>
+              <strong>Homepage URL</strong> e <strong>Application description</strong>: compaiono
+              nella pagina in cui un collega autorizza l'app, non cambiano il funzionamento.
+            </li>
+            <li>
+              <strong>Redirect URI</strong>: l'indirizzo a cui GitHub rimanda il browser dopo
+              l'autorizzazione. Deve essere quello di Firebase, che riceve la risposta, verifica
+              l'identità e apre la sessione. Firebase lo chiama «URL di callback», GitHub «Redirect
+              URI»: sono la stessa cosa. Se non coincide, GitHub mostra un errore su{' '}
+              <code>redirect_uri</code>.
+            </li>
+            <li>
+              <strong>Add redirect URI</strong>: serve solo se la stessa app deve rimandare a più
+              indirizzi, fino a dieci. Per Release Board basta quello di Firebase.
+            </li>
+            <li>
+              <strong>Allow wildcard matching</strong>: accetterebbe anche altri sottodomini e
+              percorsi dello stesso indirizzo. Spento, GitHub rimanda solo all'indirizzo esatto, e
+              nessun altro sito può ricevere gli accessi.
+            </li>
+            <li>
+              <strong>Enable Device Flow</strong>: accesso con un codice da digitare, per
+              dispositivi senza browser come la riga di comando. Release Board non lo usa.
+            </li>
+            <li>
+              <strong>Expire user access tokens</strong>: il token che GitHub consegna a Firebase
+              scade dopo otto ore e si rinnova con un <code>refresh_token</code>. Release Board lo
+              usa solo nel momento dell'accesso, poi la sessione la tiene Firebase: attivo è più
+              sicuro e per chi usa l'app non cambia nulla.
+            </li>
+            <li>
+              <strong>Client ID</strong> e <strong>Client secret</strong>: identificano l'app e ne
+              provano la proprietà quando Firebase completa l'accesso. Il Client ID non è segreto;
+              il secret sì, e sta solo in Firebase.
+            </li>
+          </Cases>
+        </More>
         <More title="app del tuo account o dell'organizzazione?">
           <p>Per l'accesso funzionano allo stesso modo: cambia chi può gestire l'app.</p>
           <p className="font-semibold">Nel tuo account (New OAuth App)</p>

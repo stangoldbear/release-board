@@ -1,6 +1,6 @@
 {
   "name": "release-board",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "Calendario Gantt per pianificare rilasci e attività su corsie parallele.",
   "license": "MIT",

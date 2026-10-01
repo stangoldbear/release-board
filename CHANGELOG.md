@@ -6,6 +6,15 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-01
+
+### Corretto
+
+- Il passo "Crea l'app OAuth" della guida segue il modulo attuale di GitHub, "Register a new OAuth
+  app": l'URL di callback di Firebase va nel campo Redirect URI, con Allow wildcard matching spento;
+  Enable Device Flow e Expire user access tokens restano come li propone GitHub. Un approfondimento
+  spiega ogni campo del modulo.
+
 ## [0.2.3] - 2026-10-01
 
 ### Aggiunto
@@ -151,7 +160,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/stangoldbear/release-board/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/stangoldbear/release-board/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/stangoldbear/release-board/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/stangoldbear/release-board/compare/v0.2.0...v0.2.1
