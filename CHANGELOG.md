@@ -6,6 +6,14 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-01
+
+### Aggiunto
+
+- Versione e commit della build in fondo a ogni schermata: benvenuto, accesso, creazione del piano,
+  caricamento, calendario e guida alla configurazione. Prima di seguire la guida si vede subito su
+  quale versione si sta lavorando.
+
 ## [0.2.1] - 2026-09-30
 
 Una guida alla configurazione più dettagliata, anche per un progetto Firebase già esistente.
@@ -118,7 +126,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/stangoldbear/release-board/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/stangoldbear/release-board/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/stangoldbear/release-board/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/stangoldbear/release-board/compare/v0.1.0...v0.1.1

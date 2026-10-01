@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import { LABEL_CLASS } from '../../shared/ui/field';
+import { VersionStamp } from '../../shared/ui/VersionStamp';
 import { BeforeYouStart, stepsFor } from './setupSteps';
 import type { GuideStep, Place, ProjectKind, StepContext } from './setupSteps';
 
@@ -141,7 +142,13 @@ export function SetupGuideDialog({ onClose }: { onClose: () => void }) {
       description="Un progetto Firebase per il tuo team, nuovo o già esistente"
       onClose={onClose}
       className="max-w-2xl"
-      footer={<Button onClick={onClose}>Chiudi</Button>}
+      footer={
+        <>
+          {/* The guide covers the page: it shows which build it describes on its own. */}
+          <VersionStamp className="mr-auto" />
+          <Button onClick={onClose}>Chiudi</Button>
+        </>
+      }
     >
       <SetupGuide />
     </Dialog>

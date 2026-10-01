@@ -22,6 +22,7 @@ import { TaskDialog } from '../features/tasks/TaskDialog';
 import { TaskSummary } from '../features/tasks/TaskSummary';
 import { isBoolean, usePreference } from '../infra/preferences';
 import { useToast } from '../shared/ui/Toast';
+import { VersionStamp } from '../shared/ui/VersionStamp';
 import { parseISODate, todayIso } from '../utils/dateUtils';
 import { EmptyPlanNotice } from './EmptyPlanNotice';
 import { Header } from './Header';
@@ -237,6 +238,10 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           onShowAll={handleShowAllRows}
         />
       </main>
+
+      <footer className="mx-auto w-full max-w-7xl px-4 pb-5 sm:px-6">
+        <VersionStamp />
+      </footer>
 
       {dialog?.kind === 'task' && (
         <TaskDialog
