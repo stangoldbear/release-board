@@ -20,16 +20,15 @@ import { DailyMetricsDialog } from '../features/metrics/DailyMetricsDialog';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { TaskDialog } from '../features/tasks/TaskDialog';
 import { TaskSummary } from '../features/tasks/TaskSummary';
-import { isBoolean, oneOf, usePreference } from '../infra/preferences';
+import { isBoolean, usePreference } from '../infra/preferences';
 import { useToast } from '../shared/ui/Toast';
-import { THEME_PREFERENCES } from '../themes';
-import { useAppliedTheme } from '../themes/useAppliedTheme';
 import { parseISODate, todayIso } from '../utils/dateUtils';
 import { EmptyPlanNotice } from './EmptyPlanNotice';
 import { Header } from './Header';
 import type { Instance } from './Instance';
 import type { PlanRepository } from './PlanRepository';
 import { SyncIndicator } from './SyncIndicator';
+import { useThemeSetting } from './ThemeProvider';
 
 /** The dialog on screen, if any: only one at a time. */
 type OpenDialog =
@@ -73,8 +72,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     true,
   );
   const [showMetrics, setShowMetrics] = usePreference('show-metrics', isBoolean, true);
-  const [theme, setTheme] = usePreference('theme', oneOf(THEME_PREFERENCES), 'system');
-  useAppliedTheme(theme);
+  const { theme, setTheme } = useThemeSetting();
 
   const [view, dispatchView] = useCalendarView();
   const [filters, setFilters] = useState<TaskFilter>(NO_FILTER);

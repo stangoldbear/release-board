@@ -32,14 +32,21 @@ repository `PAGES_DEPLOY` vale `true`.
 
 ## Istanza condivisa con Firebase
 
-Il sito pubblicato spiega da solo come fare, nella schermata "Configura la tua istanza" e in
-Impostazioni → Istanza condivisa. In breve: un progetto Firebase dedicato sul piano gratuito, un
-database Firestore standard (non in modalità Datastore), il provider GitHub in Authentication con
-un'app OAuth
-GitHub, il dominio del sito tra quelli autorizzati, le regole di `firestore/firestore.rules`
-pubblicate, e quattro variabili di repository lette al momento della build:
-`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`,
-`VITE_FIREBASE_APP_ID`. Sono identificativi pubblici: la protezione dei dati sono le regole.
+Il sito pubblicato spiega da solo come fare, passo per passo, nella schermata "Configura la tua
+istanza" e in Impostazioni → Istanza condivisa. Ogni passo dice se si fa nella console Firebase,
+nella console Google Cloud o su GitHub. La guida ha due percorsi:
+
+- **Progetto nuovo**, la strada più semplice: un progetto Firebase sul piano gratuito, solo per
+  Release Board.
+- **Progetto esistente**, anche se lo usano altre app: il suo database `(default)` deve essere
+  libero (vuoto, oppure da creare; se è in modalità Datastore si converte) e l'app usa una chiave
+  API dedicata, limitata al dominio del sito e alle API che le servono. Le altre app non cambiano.
+
+In entrambi i casi servono il provider GitHub in Authentication con un'app OAuth GitHub, il dominio
+del sito tra quelli autorizzati, le regole di `firestore/firestore.rules` pubblicate e quattro
+variabili di repository lette al momento della build: `VITE_FIREBASE_API_KEY`,
+`VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`. Sono
+identificativi pubblici: la protezione dei dati sono le regole.
 
 Chi fa il primo accesso crea il piano e ne è proprietario; invita gli altri per username GitHub. I
 dati stanno nel progetto Firebase dell'installazione, e in nessun altro posto.

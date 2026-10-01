@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Root } from './app/Root';
+import { ThemeProvider } from './app/ThemeProvider';
 import { readFirebaseConfig } from './infra/firebase/config';
 import { ToastProvider } from './shared/ui/Toast';
 import './index.css';
@@ -11,8 +12,10 @@ const emulators = import.meta.env.DEV && import.meta.env.VITE_FIREBASE_EMULATORS
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ToastProvider>
-      <Root firebaseConfig={firebaseConfig} emulators={emulators} />
-    </ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <Root firebaseConfig={firebaseConfig} emulators={emulators} />
+      </ToastProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

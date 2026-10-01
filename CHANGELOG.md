@@ -6,6 +6,32 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-30
+
+Una guida alla configurazione più dettagliata, anche per un progetto Firebase già esistente.
+
+### Aggiunto
+
+- In cima alla guida "Configura la tua istanza" si sceglie tra "Creo un nuovo progetto" e "Ho già
+  un progetto". Per un progetto esistente la guida spiega come controllare il database `(default)`,
+  come convertirlo se è vuoto e in modalità Datastore, e come creare una chiave API dedicata,
+  limitata al dominio del sito e alle API che servono, senza toccare le altre app del progetto.
+- Ogni passo dice dove si fa (console Firebase, console Google Cloud o GitHub), con un link che
+  apre la pagina in una nuova scheda, e descrive i clic uno per uno.
+- Se l'accesso non riesce per le restrizioni della chiave API, il messaggio dice quale restrizione
+  controllare.
+
+### Modificato
+
+- Se la console Firebase non permette di creare il progetto, la guida dice quale permesso manca.
+- I messaggi di errore dell'accesso indicano il passo della guida per nome, non per numero.
+
+### Corretto
+
+- Le schermate che precedono il calendario (benvenuto, accesso, creazione del piano, guida alla
+  configurazione) hanno i colori del tema: nella 0.2.0 comparivano senza colori, con le finestre
+  trasparenti.
+
 ## [0.2.0] - 2026-09-29
 
 Istanza condivisa con il team su Firebase, nuova architettura e nuova interfaccia.
@@ -92,7 +118,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/stangoldbear/release-board/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/stangoldbear/release-board/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/stangoldbear/release-board/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/stangoldbear/release-board/releases/tag/v0.1.0

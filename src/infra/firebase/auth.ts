@@ -133,15 +133,29 @@ function authErrorCode(error: unknown): string {
   return typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
 }
 
-/** A sentence for the user, pointing to the setup step when the project is misconfigured. */
+/**
+ * A sentence for the user. When the project is misconfigured it names the step of the setup guide
+ * to check, by its title: the step numbers differ between the guides for new and existing projects.
+ */
 export function describeAuthError(code: string): string {
+  // Firebase turns the server errors it does not know into codes, keeping their details: the
+  // restrictions of the API key produce codes that go on with the blocked site or API.
+  if (code.startsWith('auth/requests-from-referer-')) {
+    return 'La chiave API non accetta richieste da questo sito: controlla le sue restrizioni dei siti web (nella guida, «Crea una chiave API dedicata»).';
+  }
+  if (code.startsWith('auth/requests-to-this-api-')) {
+    return "La chiave API non consente le API dell'accesso: controlla le sue restrizioni delle API (nella guida, «Crea una chiave API dedicata»).";
+  }
+  if (code.startsWith('auth/api-key-not-valid')) {
+    return 'La chiave API non è valida: controlla la variabile VITE_FIREBASE_API_KEY (nella guida, «Imposta le variabili del sito»).';
+  }
   switch (code) {
     case 'auth/popup-blocked':
       return 'Il browser ha bloccato la finestra di accesso: consenti i popup per questo sito e riprova.';
     case 'auth/unauthorized-domain':
-      return 'Questo indirizzo non è tra i domini autorizzati del progetto Firebase (passo 5 della guida).';
+      return 'Questo indirizzo non è tra i domini autorizzati del progetto Firebase (nella guida, «Autorizza il dominio del sito»).';
     case 'auth/operation-not-allowed':
-      return 'Il provider GitHub non è attivo in Firebase Authentication (passo 3 della guida).';
+      return 'Il provider GitHub non è attivo in Firebase Authentication (nella guida, «Attiva il provider GitHub»).';
     case 'auth/network-request-failed':
       return 'Rete non disponibile: riprova quando sei connesso.';
     case 'auth/account-exists-with-different-credential':
