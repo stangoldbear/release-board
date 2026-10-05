@@ -73,6 +73,17 @@ describe('LocalPlanRepository', () => {
     expect(reopened.latest()).toEqual(latest());
   });
 
+  it('moves a note to a free day, and leaves a day that has a note alone', () => {
+    const { repository, storage, latest } = setup();
+    repository.setNote('2026-09-15', 'Congelamento');
+    repository.setNote('2026-09-18', 'Rilascio');
+
+    repository.moveNote('2026-09-15', '2026-09-16');
+    repository.moveNote('2026-09-16', '2026-09-18');
+    expect(latest().dailyNotes).toEqual({ '2026-09-16': 'Congelamento', '2026-09-18': 'Rilascio' });
+    expect(setup(storage).latest().dailyNotes).toEqual(latest().dailyNotes);
+  });
+
   it('deletes tasks and replaces the whole plan', () => {
     const { repository, latest } = setup();
     const id = repository.createTask(content);

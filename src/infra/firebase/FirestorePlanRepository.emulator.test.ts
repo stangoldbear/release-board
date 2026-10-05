@@ -3,6 +3,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { SyncStatus } from '../../app/PlanRepository';
+import { describeHistoryEntry } from '../../domain/history';
 import type { HistoryEntry } from '../../domain/history';
 import { createEmptyPlan } from '../../domain/plan';
 import { buildSamplePlan } from '../../domain/sample';
@@ -268,6 +269,56 @@ describe('changes', () => {
     );
     expect(values.metrics.find((metric) => metric.date === '2026-09-05')?.value).toBe(1250.5);
     expect(values.metrics.length).toBe(sample.metrics.length);
+  });
+
+  it('moves a note in one change, and leaves a day that has a note alone', async () => {
+    const [from, taken] = Object.keys(sample.dailyNotes).sort() as [string, string];
+    const text = sample.dailyNotes[from];
+    const to = '2026-09-25';
+    expect(sample.dailyNotes[to]).toBeUndefined();
+
+    repository.moveNote(from, to);
+    const moved = await planWhere(
+      repository,
+      (plan) => plan.dailyNotes[to] === text && !(from in plan.dailyNotes),
+    );
+    expect(Object.keys(moved.dailyNotes)).toHaveLength(Object.keys(sample.dailyNotes).length);
+
+    repository.moveNote(to, taken);
+    // A text for a day without a note becomes a new note on the other day.
+    const created = '2026-09-27';
+    expect(sample.dailyNotes['2026-09-26']).toBeUndefined();
+    repository.moveNote('2026-09-26', created, 'Rilascio');
+    await whenSynced(repository);
+    const entries = await new Promise<HistoryEntry[]>((resolve) => {
+      const stop = repository.subscribeHistory(50, (items) => {
+        if (items.length === 4 && items.every((item) => item.at !== null)) {
+          stop();
+          resolve(items);
+        }
+      });
+    });
+    expect(entries[1]).toMatchObject({
+      entity: 'note',
+      entityId: to,
+      action: 'update',
+      before: { date: from, text },
+      after: { date: to, text },
+    });
+    expect(describeHistoryEntry(entries[1] as HistoryEntry)).toMatch(/ha spostato la nota dal/);
+    expect(entries[0]).toMatchObject({
+      entity: 'note',
+      entityId: created,
+      action: 'create',
+      after: { date: created, text: 'Rilascio' },
+    });
+    expect(entries[0]?.before).toBeUndefined();
+
+    const notes = await getDocs(collection(ownerDb, `plans/${PLAN_ID}/notes`));
+    expect(notes.docs.map((item) => item.id).sort()).toEqual([taken, to, created].sort());
+    expect(notes.docs.find((item) => item.id === taken)?.data().text).toBe(
+      sample.dailyNotes[taken],
+    );
   });
 
   it('reports saving and synced, and records every change in the history', async () => {

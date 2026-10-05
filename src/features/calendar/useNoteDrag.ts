@@ -1,53 +1,42 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import type { TaskChanges } from '../../domain/plan';
-import { moveTask, resizeTask } from '../../domain/schedule';
-import type { TaskItem } from '../../domain/types';
+import type { DateRange } from '../../domain/schedule';
+import { addDaysIso } from '../../utils/dateUtils';
+import { CLICK_TOLERANCE } from './useTaskDrag';
 
-/** Moving the whole task, or one of its ends. */
-export type DragKind = 'move' | 'start' | 'end';
-
-export interface TaskDrag {
-  task: TaskItem;
-  kind: DragKind;
-  /** Days moved so far. */
-  days: number;
-  /** Lane under the pointer; only a move changes lane. */
-  laneId: string;
+export interface NoteDrag {
+  /** The day the note comes from. */
+  from: string;
+  /** The day under the pointer, within the visible period. */
+  to: string;
+  /** False when `to` already has a note: a day has one. */
+  allowed: boolean;
 }
 
-interface DragState extends TaskDrag {
+interface DragState extends NoteDrag {
   originX: number;
   originY: number;
   /** The pointer went far enough to count as a drag rather than a click. */
   moved: boolean;
 }
 
-/** Pixels the pointer can travel before a press becomes a drag. */
-export const CLICK_TOLERANCE = 4;
-
-/** The task as it would be after the drag. */
-export function draggedTask({ task, kind, days, laneId }: TaskDrag): TaskItem {
-  if (kind !== 'move') return resizeTask(task, kind, days);
-  return { ...moveTask(task, days), laneId };
-}
-
-function dragChanges(drag: TaskDrag): TaskChanges {
-  const after = draggedTask(drag);
-  const changes: TaskChanges = {};
-  if (after.startDate !== drag.task.startDate) changes.startDate = after.startDate;
-  if (after.endDate !== drag.task.endDate) changes.endDate = after.endDate;
-  if (after.laneId !== drag.task.laneId) changes.laneId = after.laneId;
-  return changes;
+/** The day `days` after `date`, kept within the visible period. */
+function dayWithin(date: string, days: number, period: DateRange): string {
+  const day = addDaysIso(date, days);
+  if (day < period.start) return period.start;
+  return day > period.end ? period.end : day;
 }
 
 /**
- * Drags task bars with a mouse or a pen, through Pointer Events. On touch screens a finger scrolls
- * the calendar instead, and a tap opens the task. Esc cancels a drag.
+ * Drags the notes of the calendar from one day to another with a mouse or a pen, like the tasks;
+ * on touch screens a finger scrolls the calendar instead. A day that already has a note does not
+ * take another one. Esc cancels a drag.
  */
-export function useTaskDrag(
+export function useNoteDrag(
   dayWidth: number,
-  onChangeTask: (taskId: string, changes: TaskChanges) => void,
+  period: DateRange,
+  isDayFree: (date: string) => boolean,
+  onMoveNote: (from: string, to: string) => void,
 ) {
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -58,15 +47,12 @@ export function useTaskDrag(
     setDrag(next);
   };
 
-  const startDrag = (event: ReactPointerEvent, task: TaskItem, kind: DragKind) => {
+  const startDrag = (event: ReactPointerEvent, date: string) => {
     if (event.button !== 0 || event.pointerType === 'touch') return;
-    // The handles sit inside the bar: only the innermost one starts the drag.
-    event.stopPropagation();
     update({
-      task,
-      kind,
-      days: 0,
-      laneId: task.laneId,
+      from: date,
+      to: date,
+      allowed: true,
       originX: event.clientX,
       originY: event.clientY,
       moved: false,
@@ -77,16 +63,12 @@ export function useTaskDrag(
     const current = dragRef.current;
     if (!current) return;
     const deltaX = event.clientX - current.originX;
-    const days = Math.round(deltaX / dayWidth);
-    const lane = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-lane-id]');
-    const laneId =
-      current.kind === 'move'
-        ? (lane?.getAttribute('data-lane-id') ?? current.laneId)
-        : current.laneId;
+    const to = dayWithin(current.from, Math.round(deltaX / dayWidth), period);
+    const allowed = to === current.from || isDayFree(to);
     const moved =
       current.moved || Math.hypot(deltaX, event.clientY - current.originY) > CLICK_TOLERANCE;
-    if (days !== current.days || laneId !== current.laneId || moved !== current.moved) {
-      update({ ...current, days, laneId, moved });
+    if (to !== current.to || allowed !== current.allowed || moved !== current.moved) {
+      update({ ...current, to, allowed, moved });
     }
   });
 
@@ -94,13 +76,12 @@ export function useTaskDrag(
     const current = dragRef.current;
     update(null);
     if (!current?.moved) return;
-    // The click that follows the release must not open the task.
+    // The click that follows the release must not open the note.
     justDragged.current = true;
     window.setTimeout(() => {
       justDragged.current = false;
     }, 0);
-    const changes = dragChanges(current);
-    if (Object.keys(changes).length > 0) onChangeTask(current.task.id, changes);
+    if (current.to !== current.from && current.allowed) onMoveNote(current.from, current.to);
   });
 
   const onCancel = useEffectEvent(() => update(null));

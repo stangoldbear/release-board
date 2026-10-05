@@ -5,6 +5,7 @@ import {
   createEmptyPlan,
   diffTask,
   isPlanEmpty,
+  moveNote,
   removeTask,
   setMetricValues,
   setNote,
@@ -75,6 +76,30 @@ describe('notes and values', () => {
     const withNote = setNote(plan, '2026-09-15', '  Congelamento  ');
     expect(withNote.dailyNotes).toEqual({ '2026-09-15': 'Congelamento' });
     expect(setNote(withNote, '2026-09-15', '   ').dailyNotes).toEqual({});
+  });
+
+  it('moves a note to a free day, with a new text when given', () => {
+    const withNote = setNote(plan, '2026-09-15', 'Congelamento');
+    expect(moveNote(withNote, '2026-09-15', '2026-09-17').dailyNotes).toEqual({
+      '2026-09-17': 'Congelamento',
+    });
+    expect(moveNote(withNote, '2026-09-15', '2026-09-17', ' Rilascio ').dailyNotes).toEqual({
+      '2026-09-17': 'Rilascio',
+    });
+  });
+
+  it('turns a text without a note to move into a new note', () => {
+    expect(moveNote(plan, '2026-09-15', '2026-09-17', 'Rilascio').dailyNotes).toEqual({
+      '2026-09-17': 'Rilascio',
+    });
+  });
+
+  it('leaves the plan as it is when the move has nowhere to go or nothing to move', () => {
+    const twoNotes = setNote(setNote(plan, '2026-09-15', 'A'), '2026-09-17', 'B');
+    expect(moveNote(twoNotes, '2026-09-15', '2026-09-17')).toBe(twoNotes);
+    expect(moveNote(twoNotes, '2026-09-15', '2026-09-15')).toBe(twoNotes);
+    expect(moveNote(twoNotes, '2026-09-20', '2026-09-21')).toBe(twoNotes);
+    expect(moveNote(twoNotes, '2026-09-15', '2026-09-16', '  ')).toBe(twoNotes);
   });
 
   it('sets and removes daily values, keeping them sorted by date', () => {

@@ -23,6 +23,11 @@ export interface PlanRepository {
   deleteTask(taskId: string): void;
   /** Sets the note of a day; blank text removes it. */
   setNote(date: string, text: string): void;
+  /**
+   * Moves the note of `from` to `to`, with a new text when one is given. A day has one note: when
+   * `to` already has one, nothing changes.
+   */
+  moveNote(from: string, to: string, text?: string): void;
   setMetricValues(changes: readonly MetricValueChange[]): void;
   /** Replaces everything, as when a backup is restored. */
   replacePlan(plan: PlanSnapshot): void;

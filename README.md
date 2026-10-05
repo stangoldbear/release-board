@@ -11,7 +11,8 @@ giornalieri.
   settimanale.
 - Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e
   checklist.
-- Note e valori giornalieri, per esempio il fatturato, allineati ai giorni del calendario.
+- Note e valori giornalieri, per esempio il fatturato, allineati ai giorni del calendario. Le note
+  si spostano trascinandole su un altro giorno, anche da tastiera.
 - Festività italiane e weekend evidenziati.
 - Tema chiaro e scuro, oppure quello del dispositivo.
 - Backup e ripristino in un file JSON dalle Impostazioni.

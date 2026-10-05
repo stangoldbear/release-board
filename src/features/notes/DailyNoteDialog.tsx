@@ -17,23 +17,45 @@ interface DailyNoteDialogProps {
   date: string;
   /** The saved note of the day, empty if there is none. */
   note: string;
+  /** Whether a day has no note yet: a day has one note. */
+  isDayFree: (date: string) => boolean;
+  /** Saves the note on its own day; blank text removes it. */
   onSave: (text: string) => void;
+  /** Saves the note on another day, moving it there when it already exists. */
+  onMove: (to: string, text: string) => void;
   onClose: () => void;
 }
 
-/** Edits the note of one day. Mounted only while open, so it always starts from the saved note. */
-export function DailyNoteDialog({ date, note, onSave, onClose }: DailyNoteDialogProps) {
+/**
+ * Edits the note of one day, and moves it to another day without dragging it. Mounted only while
+ * open, so it always starts from the saved note.
+ */
+export function DailyNoteDialog({
+  date,
+  note,
+  isDayFree,
+  onSave,
+  onMove,
+  onClose,
+}: DailyNoteDialogProps) {
   const [draft, setDraft] = useState(note);
+  const [day, setDay] = useState(date);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const textareaId = useId();
+  const dayId = useId();
+  const dayErrorId = useId();
 
   // `autoFocus` would run before the dialog opens, and a closed dialog cannot take focus.
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
 
+  const otherDay = day !== '' && day !== date;
+  const dayTaken = otherDay && !isDayFree(day);
+
   const save = (text: string) => {
-    onSave(text);
+    if (otherDay && text.trim()) onMove(day, text);
+    else onSave(text);
     onClose();
   };
 
@@ -56,7 +78,7 @@ export function DailyNoteDialog({ date, note, onSave, onClose }: DailyNoteDialog
             </Button>
           )}
           <Button onClick={onClose}>Annulla</Button>
-          <Button variant="primary" onClick={() => save(draft)}>
+          <Button variant="primary" disabled={dayTaken || day === ''} onClick={() => save(draft)}>
             Salva nota
           </Button>
         </>
@@ -89,6 +111,29 @@ export function DailyNoteDialog({ date, note, onSave, onClose }: DailyNoteDialog
               +{tag}
             </Button>
           ))}
+        </div>
+
+        <div>
+          <label htmlFor={dayId} className={LABEL_CLASS}>
+            Giorno
+          </label>
+          <input
+            id={dayId}
+            type="date"
+            required
+            value={day}
+            onChange={(event) => setDay(event.target.value)}
+            aria-invalid={dayTaken}
+            aria-describedby={dayErrorId}
+            className={FIELD_CLASS}
+          />
+          <p id={dayErrorId} className="mt-1 text-xs text-fg-muted" aria-live="polite">
+            {dayTaken
+              ? `Il ${formatDateToIT(day)} ha già una nota: scegli un altro giorno.`
+              : note
+                ? 'Cambia il giorno per spostare la nota, anche fuori dal periodo visibile.'
+                : 'La nota va su questo giorno; puoi sceglierne un altro.'}
+          </p>
         </div>
       </div>
     </Dialog>

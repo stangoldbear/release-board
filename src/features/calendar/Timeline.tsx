@@ -1,4 +1,5 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { EyeOff, MoveHorizontal, Plus, StickyNote } from 'lucide-react';
 import { sumInRange } from '../../domain/metrics';
 import { formatLocaleNumber, formatShortNumber } from '../../domain/numberFormat';
@@ -12,6 +13,7 @@ import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import {
   ITALIAN_DAYS_SHORT,
   ITALIAN_MONTHS_SHORT,
+  addDaysIso,
   diffDays,
   formatDateToIT,
   getItalianHolidayName,
@@ -22,6 +24,7 @@ import {
 import { DailyNoteDialog } from '../notes/DailyNoteDialog';
 import { TaskBar } from './TaskBar';
 import { TaskContextMenu } from './TaskContextMenu';
+import { useNoteDrag } from './useNoteDrag';
 import { draggedTask, useTaskDrag } from './useTaskDrag';
 import { useZoomGestures } from './useZoomGestures';
 
@@ -58,6 +61,8 @@ interface TimelineProps {
   onDeleteTask: (taskId: string) => void;
   onAddTaskAt: (date: string, laneId: string) => void;
   onSaveNote: (date: string, text: string) => void;
+  /** Moves the note of a day to another day, with a new text when one is given. */
+  onMoveNote: (from: string, to: string, text?: string) => void;
 }
 
 interface Column {
@@ -113,6 +118,22 @@ function columnTone(column: Column): string {
   return '';
 }
 
+/** What a drag is about to do, at the bottom of the screen. */
+function DragHint({ children }: { children: ReactNode }) {
+  return (
+    <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm text-fg shadow-2xl">
+      <MoveHorizontal className="h-4 w-4 text-link" aria-hidden="true" />
+      <span>{children}</span>
+      <span className="text-xs text-fg-muted">Esc annulla</span>
+    </div>
+  );
+}
+
+function dayName(iso: string): string {
+  const { weekday, day, month } = dayLabel(iso);
+  return `${weekday.toLowerCase()} ${day} ${month}`;
+}
+
 /** The lanes as rows of task bars over columns of days, or of weeks when zoomed out. */
 export function Timeline({
   range,
@@ -133,6 +154,7 @@ export function Timeline({
   onDeleteTask,
   onAddTaskAt,
   onSaveNote,
+  onMoveNote,
 }: TimelineProps) {
   const { dayWidth, barHeight } = SCALES[zoom];
   const today = todayIso();
@@ -145,10 +167,13 @@ export function Timeline({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const helpId = useId();
+  const noteHelpId = useId();
   const [menu, setMenu] = useState<{ task: TaskItem; x: number; y: number } | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<TaskItem | null>(null);
   const [editingNoteDate, setEditingNoteDate] = useState<string | null>(null);
   const { drag, startDrag, isClickAfterDrag } = useTaskDrag(dayWidth, onChangeTask);
+  const isDayFree = (date: string) => dailyNotes[date] === undefined;
+  const noteDrag = useNoteDrag(dayWidth, range, isDayFree, onMoveNote);
 
   useZoomGestures(scrollRef, onZoom);
 
@@ -174,14 +199,25 @@ export function Timeline({
 
   const focusBar = (taskId: string) => document.getElementById(`task-rect-${taskId}`)?.focus();
 
+  // Arrows move a note by a day, within the period and only to a day without a note; the focus
+  // follows the note to its new cell.
+  const handleNoteKeyDown = (event: KeyboardEvent, date: string) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const to = addDaysIso(date, event.key === 'ArrowRight' ? 1 : -1);
+    if (to < range.start || to > range.end || !isDayFree(to)) return;
+    onMoveNote(date, to);
+    window.requestAnimationFrame(() => document.getElementById(`note-cell-${to}`)?.focus());
+  };
+
   const labelCell = 'sticky left-0 z-20 shrink-0 border-r border-line-strong p-2';
 
   return (
     <div className="w-full overflow-hidden rounded-xl border border-line bg-surface shadow-xs select-none">
       <p className="border-b border-line bg-surface-muted px-4 py-1.5 text-xs text-fg-muted">
         <span className="pointer-coarse:hidden">
-          Trascina un&apos;attività per spostarla, o dai bordi per cambiarne le date. Ctrl +
-          rotellina cambia lo zoom.
+          Trascina un&apos;attività o una nota per spostarla; un&apos;attività anche dai bordi, per
+          cambiarne le date. Ctrl + rotellina cambia lo zoom.
         </span>
         <span className="hidden pointer-coarse:inline">
           Tocca un&apos;attività per modificarla. Avvicina o allontana due dita per lo zoom.
@@ -190,6 +226,10 @@ export function Timeline({
       <p id={helpId} className="sr-only">
         Frecce sinistra e destra spostano l&apos;attività di un giorno; con Maiusc cambiano la data
         di fine. Invio la apre, il tasto menu mostra le altre azioni.
+      </p>
+      <p id={noteHelpId} className="sr-only">
+        Frecce sinistra e destra spostano la nota di un giorno, su un giorno senza nota. Invio la
+        apre.
       </p>
 
       <div ref={scrollRef} className="w-full touch-pan-x touch-pan-y overflow-x-auto">
@@ -401,24 +441,50 @@ export function Timeline({
                     </button>
                   );
                 }
-                const text = dailyNotes[column.start] ?? '';
+                const date = column.start;
+                const text = dailyNotes[date] ?? '';
+                const moving = noteDrag.drag;
+                const isSource = moving?.from === date;
+                const isTarget = moving !== null && moving.to === date && moving.to !== moving.from;
+                // Where the note would land: its text, faded, in the free day under the pointer.
+                const preview = isTarget && moving.allowed ? dailyNotes[moving.from] : undefined;
                 return (
                   <button
-                    key={column.start}
+                    key={date}
+                    id={`note-cell-${date}`}
                     type="button"
-                    onClick={() => setEditingNoteDate(column.start)}
+                    onPointerDown={text ? (event) => noteDrag.startDrag(event, date) : undefined}
+                    onClick={() => {
+                      if (!noteDrag.isClickAfterDrag()) setEditingNoteDate(date);
+                    }}
+                    onKeyDown={text ? (event) => handleNoteKeyDown(event, date) : undefined}
                     style={{ width: column.width }}
                     aria-label={
                       text
-                        ? `Nota del ${formatDateToIT(column.start)}: ${text}`
-                        : `Aggiungi una nota per il ${formatDateToIT(column.start)}`
+                        ? `Nota del ${formatDateToIT(date)}: ${text}`
+                        : `Aggiungi una nota per il ${formatDateToIT(date)}`
                     }
+                    aria-describedby={text ? noteHelpId : undefined}
                     title={text || undefined}
-                    className={`group/note flex min-h-16 shrink-0 cursor-pointer border-r border-line p-1 text-left ${column.red ? 'bg-holiday' : ''}`}
+                    className={`group/note flex min-h-16 shrink-0 border-r border-line p-1 text-left ${
+                      text ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                    } ${column.red ? 'bg-holiday' : ''} ${
+                      isTarget
+                        ? `ring-2 ring-inset ${moving.allowed ? 'ring-link' : 'ring-danger'}`
+                        : ''
+                    }`}
                   >
                     {text ? (
-                      <span className="line-clamp-3 w-full rounded-xs border border-warning bg-warning-soft p-1 text-xs leading-4 break-words group-hover/note:shadow-sm">
+                      <span
+                        className={`line-clamp-3 w-full rounded-xs border border-warning bg-warning-soft p-1 text-xs leading-4 break-words group-hover/note:shadow-sm ${
+                          isSource ? 'opacity-40' : ''
+                        }`}
+                      >
                         {text}
+                      </span>
+                    ) : preview ? (
+                      <span className="line-clamp-3 w-full rounded-xs border border-dashed border-warning bg-warning-soft p-1 text-xs leading-4 break-words opacity-80">
+                        {preview}
                       </span>
                     ) : (
                       <span className="flex w-full items-center justify-center rounded-xs border border-dashed border-line text-fg-muted opacity-60 group-hover/note:border-warning group-hover/note:opacity-100">
@@ -444,18 +510,28 @@ export function Timeline({
       </div>
 
       {drag && (
-        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm text-fg shadow-2xl">
-          <MoveHorizontal className="h-4 w-4 text-link" aria-hidden="true" />
-          <span>
-            {drag.kind === 'move' ? 'Sposta' : drag.kind === 'start' ? 'Inizio' : 'Fine'}{' '}
-            <strong className="tabular-nums">
-              {drag.days > 0 ? `+${drag.days}` : drag.days}{' '}
-              {Math.abs(drag.days) === 1 ? 'giorno' : 'giorni'}
-            </strong>
-            {drag.laneId !== drag.task.laneId && " su un'altra corsia"}
-          </span>
-          <span className="text-xs text-fg-muted">Esc annulla</span>
-        </div>
+        <DragHint>
+          {drag.kind === 'move' ? 'Sposta' : drag.kind === 'start' ? 'Inizio' : 'Fine'}{' '}
+          <strong className="tabular-nums">
+            {drag.days > 0 ? `+${drag.days}` : drag.days}{' '}
+            {Math.abs(drag.days) === 1 ? 'giorno' : 'giorni'}
+          </strong>
+          {drag.laneId !== drag.task.laneId && " su un'altra corsia"}
+        </DragHint>
+      )}
+
+      {noteDrag.drag && (
+        <DragHint>
+          {noteDrag.drag.allowed ? (
+            <>
+              Sposta la nota a <strong>{dayName(noteDrag.drag.to)}</strong>
+            </>
+          ) : (
+            <>
+              <strong>{dayName(noteDrag.drag.to)}</strong> ha già una nota
+            </>
+          )}
+        </DragHint>
       )}
 
       {menu && (
@@ -491,7 +567,9 @@ export function Timeline({
         <DailyNoteDialog
           date={editingNoteDate}
           note={dailyNotes[editingNoteDate] ?? ''}
+          isDayFree={isDayFree}
           onSave={(text) => onSaveNote(editingNoteDate, text)}
+          onMove={(to, text) => onMoveNote(editingNoteDate, to, text)}
           onClose={() => setEditingNoteDate(null)}
         />
       )}

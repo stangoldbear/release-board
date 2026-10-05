@@ -234,6 +234,21 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     this.commit(batch);
   }
 
+  moveNote(from: string, to: string, text?: string): void {
+    const before = this.plan?.dailyNotes[from];
+    const moved = (text ?? before)?.trim();
+    if (!moved || from === to || this.plan?.dailyNotes[to] !== undefined) return;
+    const batch = writeBatch(this.db);
+    // One entry for the whole move: the history reads it from the dates before and after.
+    const historyId = this.record(batch, 'note', to, before ? 'update' : 'create', {
+      before: before ? { date: from, text: before } : undefined,
+      after: { date: to, text: moved },
+    });
+    batch.set(this.ref(`notes/${to}`), { text: moved, ...this.audit(historyId) });
+    if (before !== undefined) batch.delete(this.ref(`notes/${from}`));
+    this.commit(batch);
+  }
+
   setMetricValues(changes: readonly MetricValueChange[]): void {
     const current = new Map(this.plan?.metrics.map((metric) => [metric.date, metric.value]));
     const effective = changes.filter(({ date, value }) => (current.get(date) ?? null) !== value);

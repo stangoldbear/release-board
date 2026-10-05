@@ -45,10 +45,26 @@ function titleOf(entry: HistoryEntry): string | null {
     : null;
 }
 
+/** The days of a note that changed day: a move keeps the date before and after. */
+function noteMove(entry: HistoryEntry): { from: string; to: string } | null {
+  const from = entry.before?.date;
+  const to = entry.after?.date;
+  return entry.entity === 'note' &&
+    typeof from === 'string' &&
+    typeof to === 'string' &&
+    from !== to
+    ? { from, to }
+    : null;
+}
+
 /** "chi ha fatto cosa", to list the history. */
 export function describeHistoryEntry(entry: HistoryEntry): string {
   const who = entry.actor.login || 'Qualcuno';
   if (entry.summary) return `${who} ${ACTION_LABELS[entry.action]}: ${entry.summary}`;
+  const move = noteMove(entry);
+  if (move) {
+    return `${who} ha spostato la nota dal ${formatDateToIT(move.from)} al ${formatDateToIT(move.to)}`;
+  }
   const what =
     titleOf(entry) ??
     (entry.entity === 'note'

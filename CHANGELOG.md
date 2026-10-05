@@ -6,6 +6,22 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-05
+
+### Aggiunto
+
+- Le note si spostano su un altro giorno trascinandole con il mouse, nel calendario (zoom Dettaglio
+  e Mese) e nella bacheca settimanale. Mentre la trascini, la nota compare sul giorno di arrivo e un
+  avviso in basso dice dove andrà; Esc annulla.
+- Un giorno ha una sola nota: un giorno che ne ha già una non accetta quella trascinata, e l'avviso
+  lo dice.
+- Altri modi per spostare una nota, senza trascinarla: da tastiera, le frecce sinistra e destra la
+  spostano di un giorno; nella finestra della nota, il campo Giorno la porta su qualunque data, anche
+  fuori dal periodo visibile. Sul telefono, dove il dito scorre il calendario, si usa questo campo.
+- Nella cronologia uno spostamento è una sola voce: "ha spostato la nota dal … al …".
+
+Le regole di Firestore non cambiano: aggiornando non serve ripubblicarle.
+
 ## [0.2.5] - 2026-10-01
 
 ### Corretto
@@ -172,7 +188,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/stangoldbear/release-board/compare/v0.2.5...v0.3.0
 [0.2.5]: https://github.com/stangoldbear/release-board/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/stangoldbear/release-board/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/stangoldbear/release-board/compare/v0.2.2...v0.2.3

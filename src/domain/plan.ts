@@ -94,6 +94,23 @@ export function setNote(plan: PlanSnapshot, date: string, text: string): PlanSna
   return { ...plan, dailyNotes };
 }
 
+/**
+ * Moves the note of `from` to `to`, with a new text when one is given; without a note on `from`,
+ * the text becomes a new note on `to`. A day has one note: when `to` already has one, nothing
+ * changes.
+ */
+export function moveNote(
+  plan: PlanSnapshot,
+  from: string,
+  to: string,
+  text: string | undefined = plan.dailyNotes[from],
+): PlanSnapshot {
+  const moved = text?.trim();
+  if (!moved || from === to || plan.dailyNotes[to] !== undefined) return plan;
+  const { [from]: left, ...others } = plan.dailyNotes;
+  return { ...plan, dailyNotes: { ...others, [to]: moved } };
+}
+
 export function setMetricValues(
   plan: PlanSnapshot,
   changes: readonly MetricValueChange[],

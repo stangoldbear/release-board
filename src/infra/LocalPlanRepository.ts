@@ -3,6 +3,7 @@ import { createBackupFile, parseBackupText, serializeBackup } from '../domain/ba
 import {
   addTask,
   createEmptyPlan,
+  moveNote,
   removeTask,
   setMetricValues,
   setNote,
@@ -79,6 +80,10 @@ export class LocalPlanRepository implements PlanRepository {
 
   setNote(date: string, text: string): void {
     this.change(setNote(this.plan, date, text));
+  }
+
+  moveNote(from: string, to: string, text?: string): void {
+    this.change(moveNote(this.plan, from, to, text));
   }
 
   setMetricValues(changes: readonly MetricValueChange[]): void {

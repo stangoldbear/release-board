@@ -211,6 +211,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             onDeleteTask={handleDeleteTask}
             onAddTaskAt={handleAddTaskAt}
             onSaveNote={(date, text) => repository.setNote(date, text)}
+            onMoveNote={(from, to, text) => repository.moveNote(from, to, text)}
           />
         ) : (
           <WeekBoard
@@ -225,6 +226,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             onOpenTask={openTask}
             onDuplicateTask={handleDuplicateTask}
             onAddTaskAt={handleAddTaskAt}
+            onMoveNote={(from, to) => repository.moveNote(from, to)}
           />
         )}
 

@@ -28,9 +28,12 @@ interface WeekBoardProps {
   onOpenTask: (task: TaskItem) => void;
   onDuplicateTask: (task: TaskItem) => void;
   onAddTaskAt: (date: string, laneId: string) => void;
+  onMoveNote: (from: string, to: string) => void;
 }
 
 const DRAG_TYPE = 'text/plain';
+/** Notes travel with their own type, so that a day can refuse a note while still taking cards. */
+const NOTE_DRAG_TYPE = 'application/x-release-board-note';
 
 /** One column per day of the week with the tasks of that day as cards. */
 export function WeekBoard({
@@ -45,6 +48,7 @@ export function WeekBoard({
   onOpenTask,
   onDuplicateTask,
   onAddTaskAt,
+  onMoveNote,
 }: WeekBoardProps) {
   const today = todayIso();
   const visibleTasks = tasks.filter((task) => !visibility.hiddenLaneIds.includes(task.laneId));
@@ -55,8 +59,19 @@ export function WeekBoard({
     onChangeTask(task.id, { startDate, endDate });
   };
 
+  // A day takes any card, but a note only when it has none: a day has one note.
+  const handleDragOver = (event: DragEvent, date: string) => {
+    if (event.dataTransfer.types.includes(NOTE_DRAG_TYPE) && dailyNotes[date] !== undefined) return;
+    event.preventDefault();
+  };
+
   const handleDrop = (event: DragEvent, date: string) => {
     event.preventDefault();
+    const noteDate = event.dataTransfer.getData(NOTE_DRAG_TYPE);
+    if (noteDate) {
+      if (noteDate !== date) onMoveNote(noteDate, date);
+      return;
+    }
     const task = tasks.find((item) => item.id === event.dataTransfer.getData(DRAG_TYPE));
     if (!task || task.startDate === date) return;
     const { startDate, endDate } = moveTaskTo(task, date);
@@ -66,7 +81,7 @@ export function WeekBoard({
   return (
     <div className="space-y-3">
       <p className="text-xs text-fg-muted pointer-coarse:hidden">
-        Trascina una scheda su un altro giorno per spostarla.
+        Trascina una scheda o una nota su un altro giorno per spostarla.
       </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-7">
         {rangeDays(week).map((date) => {
@@ -80,7 +95,7 @@ export function WeekBoard({
             <section
               key={date}
               aria-label={`${ITALIAN_DAYS_SHORT[parseISODate(date).getDay()]} ${formatDateToIT(date)}`}
-              onDragOver={(event) => event.preventDefault()}
+              onDragOver={(event) => handleDragOver(event, date)}
               onDrop={(event) => handleDrop(event, date)}
               className={`flex min-h-72 flex-col rounded-xl border bg-surface md:min-h-[460px] ${
                 isToday ? 'border-link ring-1 ring-link' : 'border-line'
@@ -112,7 +127,12 @@ export function WeekBoard({
                   </p>
                 )}
                 {note && (
-                  <p className="flex gap-1 rounded-sm border border-warning bg-warning-soft px-1.5 py-1 text-xs">
+                  <p
+                    draggable
+                    onDragStart={(event) => event.dataTransfer.setData(NOTE_DRAG_TYPE, date)}
+                    title="Trascina la nota su un altro giorno per spostarla"
+                    className="flex cursor-grab gap-1 rounded-sm border border-warning bg-warning-soft px-1.5 py-1 text-xs active:cursor-grabbing"
+                  >
                     <StickyNote
                       className="mt-0.5 h-3 w-3 shrink-0 text-warning"
                       aria-hidden="true"
