@@ -7,17 +7,20 @@ giornalieri.
 
 ## Funzionalità
 
-- Calendario a corsie con tre livelli di zoom (due settimane, mese, trimestre) e bacheca
-  settimanale.
+- Calendario continuo a corsie, con i mesi uno dopo l'altro, tre livelli di zoom e i giorni passati
+  in grigio o nascosti, e bacheca settimanale.
 - Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e
   checklist.
 - Note e valori giornalieri, per esempio il fatturato, allineati ai giorni del calendario. Le note
   si spostano trascinandole su un altro giorno, anche da tastiera.
+- Fatturato previsto importato da un foglio Google in CSV, con il semaforo dei rilasci e le
+  promozioni di ogni giorno.
 - Festività italiane e weekend evidenziati.
 - Tema chiaro e scuro, oppure quello del dispositivo.
 - Backup e ripristino in un file JSON dalle Impostazioni.
 - Con un progetto Firebase: piano condiviso con il team in tempo reale, anche offline, accesso con
-  GitHub, membri invitati per username, cronologia delle modifiche.
+  GitHub, membri invitati per username, cronologia delle modifiche in una pagina con grafici e
+  filtri.
 
 Senza progetto Firebase i dati restano nel browser che li ha creati. Per spostarli altrove usa
 Impostazioni → Backup.

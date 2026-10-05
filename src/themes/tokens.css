@@ -28,5 +28,12 @@
   --color-success: var(--rb-success);
   --color-holiday: var(--rb-holiday);
   --color-holiday-fg: var(--rb-holiday-fg);
+  --color-past: var(--rb-past);
+  --color-approval-green: var(--rb-approval-green);
+  --color-approval-green-soft: var(--rb-approval-green-soft);
+  --color-approval-orange: var(--rb-approval-orange);
+  --color-approval-orange-soft: var(--rb-approval-orange-soft);
+  --color-approval-red: var(--rb-approval-red);
+  --color-approval-red-soft: var(--rb-approval-red-soft);
   --color-overlay: var(--rb-overlay);
 }

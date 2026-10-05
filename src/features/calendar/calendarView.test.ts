@@ -1,71 +1,128 @@
 import { describe, expect, it } from 'vitest';
-import { calendarViewReducer, periodLabel, visiblePeriod } from './calendarView';
+import {
+  calendarViewReducer,
+  initialRange,
+  initialView,
+  isNearEnd,
+  periodLabel,
+} from './calendarView';
 import type { CalendarView } from './calendarView';
 
-const month: CalendarView = { mode: 'timeline', zoom: 'month', anchor: '2026-09-29' };
+// Monday 5 October 2026.
+const today = '2026-10-05';
+const opened: CalendarView = initialView('month', today);
+
+describe('initialView', () => {
+  it('opens the timeline on today, holding three months before it and six after', () => {
+    expect(opened).toMatchObject({ mode: 'timeline', anchor: today, jump: { date: today, id: 0 } });
+    // From the Monday of the week of 1 July to the Sunday of the week of 30 April.
+    expect(initialRange(today)).toEqual({ start: '2026-06-29', end: '2027-05-02' });
+  });
+});
 
 describe('calendarViewReducer', () => {
-  it('pages by the visible period', () => {
-    expect(calendarViewReducer(month, { type: 'next' }).anchor).toBe('2026-10-29');
-    expect(calendarViewReducer({ ...month, zoom: 'detail' }, { type: 'previous' }).anchor).toBe(
-      '2026-09-15',
-    );
-    expect(calendarViewReducer({ ...month, zoom: 'quarter' }, { type: 'next' }).anchor).toBe(
-      '2026-12-29',
-    );
-    expect(calendarViewReducer({ ...month, mode: 'week' }, { type: 'next' }).anchor).toBe(
-      '2026-10-06',
-    );
-  });
-
-  it('keeps the anchor when zooming, so that zooming back returns to the same period', () => {
-    const detail = calendarViewReducer(month, { type: 'zoomBy', step: -1 });
-    expect(detail).toEqual({ ...month, zoom: 'detail' });
-    expect(calendarViewReducer(detail, { type: 'zoomBy', step: 1 })).toEqual(month);
-  });
-
-  it('stops at the closest and at the widest zoom', () => {
-    const detail = { ...month, zoom: 'detail' as const };
-    expect(calendarViewReducer(detail, { type: 'zoomBy', step: -1 })).toBe(detail);
-    const quarter = { ...month, zoom: 'quarter' as const };
-    expect(calendarViewReducer(quarter, { type: 'zoomBy', step: 1 })).toBe(quarter);
-  });
-
-  it('goes back to the timeline when a zoom level is chosen', () => {
-    const week = { ...month, mode: 'week' as const };
-    expect(calendarViewReducer(week, { type: 'setZoom', zoom: 'quarter' })).toEqual({
-      ...month,
-      zoom: 'quarter',
+  it('goes to the first day of the next and previous month, from the month in view', () => {
+    const scrolled = calendarViewReducer(opened, {
+      type: 'scrolled',
+      first: '2026-10-20',
+      last: '2026-11-15',
+      settled: true,
     });
+    const next = calendarViewReducer(scrolled, { type: 'next' });
+    expect(next.anchor).toBe('2026-11-01');
+    expect(next.jump).toEqual({ date: '2026-11-01', id: 1 });
+    expect(calendarViewReducer(scrolled, { type: 'previous' }).jump.date).toBe('2026-09-01');
   });
 
-  it('jumps to a date', () => {
-    expect(calendarViewReducer(month, { type: 'goTo', date: '2027-01-10' }).anchor).toBe(
-      '2027-01-10',
+  it('pages by a week on the board', () => {
+    const week = calendarViewReducer(opened, { type: 'setMode', mode: 'week' });
+    const next = calendarViewReducer(week, { type: 'next' });
+    expect(next.anchor).toBe('2026-10-12');
+    expect(next.jump).toBe(week.jump);
+  });
+
+  it('jumps again to the same day, so that "today" always scrolls back to it', () => {
+    const first = calendarViewReducer(opened, { type: 'goTo', date: today });
+    const second = calendarViewReducer(first, { type: 'goTo', date: today });
+    expect(second.jump).toEqual({ date: today, id: 2 });
+  });
+
+  it('grows the timeline so that a far day can be shown with months after it', () => {
+    const far = calendarViewReducer(opened, { type: 'goTo', date: '2028-01-15' });
+    expect(far.range).toEqual({ start: '2026-06-29', end: '2028-08-06' });
+    const past = calendarViewReducer(opened, { type: 'goTo', date: '2025-12-10' });
+    expect(past.range.start).toBe('2025-12-01');
+    expect(past.range.end).toBe(opened.range.end);
+  });
+
+  it('shows the days of a week from the quarter view, zoomed in', () => {
+    const quarter = { ...opened, zoom: 'quarter' as const };
+    const days = calendarViewReducer(quarter, { type: 'goTo', date: '2026-11-09', zoom: 'detail' });
+    expect(days).toMatchObject({ zoom: 'detail', anchor: '2026-11-09', jump: { id: 1 } });
+  });
+
+  it('remembers the first day in view, and grows near either end', () => {
+    const middle = calendarViewReducer(opened, {
+      type: 'scrolled',
+      first: '2026-11-02',
+      last: '2026-11-28',
+      settled: true,
+    });
+    expect(middle.anchor).toBe('2026-11-02');
+    expect(middle.range).toBe(opened.range);
+
+    const end = calendarViewReducer(opened, {
+      type: 'scrolled',
+      first: '2027-03-01',
+      last: '2027-04-01',
+      settled: false,
+    });
+    expect(end.range).toEqual({ start: '2026-06-29', end: '2027-09-05' });
+    expect(isNearEnd(opened.range, '2027-04-01')).toBe(true);
+  });
+
+  it('grows at the start only once scrolling has stopped', () => {
+    const scroll = { type: 'scrolled' as const, first: '2026-07-01', last: '2026-07-28' };
+    expect(calendarViewReducer(opened, { ...scroll, settled: false }).range).toBe(opened.range);
+    expect(calendarViewReducer(opened, { ...scroll, settled: true }).range.start).toBe(
+      '2026-02-23',
     );
+  });
+
+  it('returns the same view when nothing changes', () => {
+    const report = { type: 'scrolled' as const, first: today, last: '2026-10-30', settled: true };
+    expect(calendarViewReducer(opened, report)).toBe(opened);
+    expect(calendarViewReducer(opened, { type: 'setMode', mode: 'timeline' })).toBe(opened);
+  });
+
+  it('opens the timeline on the week of the board', () => {
+    const week = calendarViewReducer(
+      { ...opened, mode: 'week', anchor: '2026-12-02' },
+      { type: 'setMode', mode: 'timeline' },
+    );
+    expect(week).toMatchObject({ mode: 'timeline', jump: { date: '2026-12-02', id: 1 } });
+    expect(
+      calendarViewReducer({ ...opened, mode: 'week' }, { type: 'setZoom', zoom: 'quarter' }),
+    ).toMatchObject({ mode: 'timeline', zoom: 'quarter', jump: { id: 1 } });
+  });
+
+  it('keeps the place when zooming, and stops at the closest and the widest zoom', () => {
+    const detail = calendarViewReducer(opened, { type: 'zoomBy', step: -1 });
+    expect(detail).toEqual({ ...opened, zoom: 'detail' });
+    expect(calendarViewReducer(detail, { type: 'zoomBy', step: -1 })).toBe(detail);
+    const quarter = { ...opened, zoom: 'quarter' as const };
+    expect(calendarViewReducer(quarter, { type: 'zoomBy', step: 1 })).toBe(quarter);
   });
 });
 
 describe('periodLabel', () => {
-  it('names the visible period', () => {
-    expect(periodLabel(month)).toBe('Settembre 2026');
-    expect(periodLabel({ ...month, zoom: 'detail' })).toBe('28 set – 11 ott 2026');
-    expect(periodLabel({ ...month, zoom: 'quarter' })).toBe('Settembre – Novembre 2026');
-    expect(periodLabel({ ...month, mode: 'week' })).toBe('28 set – 4 ott 2026');
-  });
-
-  it('shows both years when the period crosses the new year', () => {
-    const december = { ...month, anchor: '2026-12-30' };
-    expect(periodLabel({ ...december, zoom: 'detail' })).toBe('28 dic 2026 – 10 gen 2027');
-    expect(periodLabel({ ...december, zoom: 'quarter' })).toBe('Dicembre 2026 – Febbraio 2027');
-  });
-});
-
-describe('visiblePeriod', () => {
-  it('shows the week of the anchor on the board, whatever the zoom', () => {
-    expect(visiblePeriod({ ...month, mode: 'week', zoom: 'quarter' })).toEqual({
-      start: '2026-09-28',
-      end: '2026-10-04',
-    });
+  it('names the month in view, or the week of the board', () => {
+    expect(periodLabel({ ...opened, anchor: '2026-09-29' })).toBe('Settembre 2026');
+    expect(periodLabel({ ...opened, mode: 'week', anchor: '2026-09-29' })).toBe(
+      '28 set – 4 ott 2026',
+    );
+    expect(periodLabel({ ...opened, mode: 'week', anchor: '2026-12-30' })).toBe(
+      '28 dic 2026 – 3 gen 2027',
+    );
   });
 });

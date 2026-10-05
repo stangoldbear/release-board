@@ -23,6 +23,13 @@
     "success": "#1E7A34",
     "holiday": "#FBE7EA",
     "holiday-fg": "#9B1C31",
+    "past": "#EBEBEB",
+    "approval-green": "#166534",
+    "approval-green-soft": "#DCFCE7",
+    "approval-orange": "#9A3412",
+    "approval-orange-soft": "#FFEDD5",
+    "approval-red": "#B91C1C",
+    "approval-red-soft": "#FEE2E2",
     "overlay": "#000000"
   },
   "tasks": {

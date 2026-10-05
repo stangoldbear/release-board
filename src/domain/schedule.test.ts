@@ -6,45 +6,13 @@ import {
   rangeColumns,
   rangeDays,
   resizeTask,
-  shiftAnchor,
   tasksOnDay,
-  visibleRange,
   weekRange,
 } from './schedule';
 
 function task(id: string, startDate: string, endDate: string) {
   return { id, startDate, endDate };
 }
-
-describe('visibleRange', () => {
-  it('shows two weeks from the Monday of the anchor week', () => {
-    expect(visibleRange('detail', '2026-09-30')).toEqual({
-      start: '2026-09-28',
-      end: '2026-10-11',
-    });
-  });
-
-  it('shows the whole month of the anchor', () => {
-    expect(visibleRange('month', '2026-02-14')).toEqual({ start: '2026-02-01', end: '2026-02-28' });
-  });
-
-  it('shows three months widened to whole weeks', () => {
-    // September 2026 starts on a Tuesday, November ends on a Monday.
-    expect(visibleRange('quarter', '2026-09-29')).toEqual({
-      start: '2026-08-31',
-      end: '2026-12-06',
-    });
-  });
-});
-
-describe('shiftAnchor', () => {
-  it('moves by one page of the zoom level', () => {
-    expect(shiftAnchor('detail', '2026-09-29', 1)).toBe('2026-10-13');
-    expect(shiftAnchor('month', '2026-01-31', 1)).toBe('2026-02-28');
-    expect(shiftAnchor('month', '2026-01-15', -1)).toBe('2025-12-15');
-    expect(shiftAnchor('quarter', '2026-11-10', 1)).toBe('2027-02-10');
-  });
-});
 
 describe('ranges', () => {
   it('lists the days of a week', () => {
@@ -60,7 +28,7 @@ describe('ranges', () => {
   });
 
   it('cuts a range into week columns', () => {
-    const columns = rangeColumns(visibleRange('quarter', '2026-09-01'), 'week');
+    const columns = rangeColumns({ start: '2026-08-31', end: '2026-12-06' }, 'week');
     expect(columns).toHaveLength(14);
     expect(columns[0]).toEqual({ start: '2026-08-31', end: '2026-09-06' });
     expect(columns.at(-1)).toEqual({ start: '2026-11-30', end: '2026-12-06' });
@@ -75,7 +43,7 @@ describe('ranges', () => {
 });
 
 describe('placeTasks', () => {
-  const september = visibleRange('month', '2026-09-01');
+  const september = { start: '2026-09-01', end: '2026-09-30' };
 
   it('keeps only the tasks that fall in the range', () => {
     const { placed } = placeTasks(

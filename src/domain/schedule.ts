@@ -1,12 +1,5 @@
 import type { TaskItem } from './types';
-import {
-  addDaysIso,
-  addMonthsIso,
-  diffDays,
-  endOfMonth,
-  startOfMonth,
-  startOfWeek,
-} from '../utils/dateUtils';
+import { addDaysIso, diffDays, startOfWeek } from '../utils/dateUtils';
 
 /** How much of the calendar is visible at once, from the closest to the widest. */
 export type ZoomLevel = 'detail' | 'month' | 'quarter';
@@ -28,40 +21,6 @@ export interface DateRange {
 
 /** The dates of a task, the only part of it that scheduling looks at. */
 type Dated = Pick<TaskItem, 'startDate' | 'endDate'>;
-
-/**
- * The days shown at a zoom level for an anchor date: the two weeks from the Monday of its week,
- * its month, or its month and the next two widened to whole weeks.
- */
-export function visibleRange(zoom: ZoomLevel, anchor: string): DateRange {
-  switch (zoom) {
-    case 'detail': {
-      const start = startOfWeek(anchor);
-      return { start, end: addDaysIso(start, 13) };
-    }
-    case 'month':
-      return { start: startOfMonth(anchor), end: endOfMonth(anchor) };
-    case 'quarter': {
-      const lastMonthEnd = endOfMonth(addMonthsIso(anchor, 2));
-      return {
-        start: startOfWeek(startOfMonth(anchor)),
-        end: addDaysIso(startOfWeek(lastMonthEnd), 6),
-      };
-    }
-  }
-}
-
-/** The anchor one page earlier (step -1) or later (step 1): two weeks, one month or three months. */
-export function shiftAnchor(zoom: ZoomLevel, anchor: string, step: number): string {
-  switch (zoom) {
-    case 'detail':
-      return addDaysIso(anchor, 14 * step);
-    case 'month':
-      return addMonthsIso(anchor, step);
-    case 'quarter':
-      return addMonthsIso(anchor, 3 * step);
-  }
-}
 
 /** Monday to Sunday of the week that contains the date. */
 export function weekRange(date: string): DateRange {

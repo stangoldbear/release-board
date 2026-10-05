@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import {
+  CalendarCheck,
   CalendarRange,
   ChevronLeft,
   ChevronRight,
+  History,
   Plus,
   Search,
   Settings,
@@ -15,7 +17,7 @@ import type { TaskStatus } from '../domain/types';
 import { periodLabel } from '../features/calendar/calendarView';
 import type { CalendarAction, CalendarView } from '../features/calendar/calendarView';
 import { Button } from '../shared/ui/Button';
-import { todayIso } from '../utils/dateUtils';
+import { startOfMonth, todayIso } from '../utils/dateUtils';
 
 interface HeaderProps {
   view: CalendarView;
@@ -24,11 +26,14 @@ interface HeaderProps {
   onFilterChange: (filters: TaskFilter) => void;
   highlightWeekends: boolean;
   showMetrics: boolean;
+  hidePastDays: boolean;
   onToggleWeekends: () => void;
   onToggleMetrics: () => void;
+  onToggleHidePastDays: () => void;
   onNewTask: () => void;
   onOpenSettings: () => void;
   onOpenMetrics: () => void;
+  onImportMetrics: () => void;
   /** The synchronization indicator, in a shared instance. */
   syncIndicator?: ReactNode;
 }
@@ -39,9 +44,9 @@ const VIEW_OPTIONS: {
   label: string;
   title: string;
 }[] = [
-  { key: 'detail', label: 'Dettaglio', title: 'Due settimane, con colonne larghe' },
-  { key: 'month', label: 'Mese', title: 'Il mese intero, un giorno per colonna' },
-  { key: 'quarter', label: 'Trimestre', title: 'Tre mesi, una settimana per colonna' },
+  { key: 'detail', label: 'Dettaglio', title: 'Colonne larghe, un giorno per colonna' },
+  { key: 'month', label: 'Mese', title: 'Un giorno per colonna' },
+  { key: 'quarter', label: 'Trimestre', title: 'Una settimana per colonna' },
   { key: 'week', label: 'Bacheca', title: 'Una settimana, con le attività in schede' },
 ];
 
@@ -82,19 +87,26 @@ export function Header({
   onFilterChange,
   highlightWeekends,
   showMetrics,
+  hidePastDays,
   onToggleWeekends,
   onToggleMetrics,
+  onToggleHidePastDays,
   onNewTask,
   onOpenSettings,
   onOpenMetrics,
+  onImportMetrics,
   syncIndicator,
 }: HeaderProps) {
   const activeView = view.mode === 'week' ? 'week' : view.zoom;
+  const onBoard = view.mode === 'week';
+  // Without the past, the timeline has nothing before the current month.
+  const canGoBack =
+    onBoard || !hidePastDays || startOfMonth(view.anchor) > startOfMonth(todayIso());
 
   return (
     // On phones the header wraps to several lines: it scrolls away instead of covering the calendar.
     <header className="z-40 border-b border-line bg-surface shadow-xs sm:sticky sm:top-0">
-      <div className="mx-auto max-w-7xl space-y-3 px-4 py-3 sm:px-6">
+      <div className="space-y-3 px-4 py-3 sm:px-6">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-on-accent">
@@ -111,8 +123,9 @@ export function Header({
               variant="ghost"
               size="icon"
               className="p-1.5"
+              disabled={!canGoBack}
               onClick={() => onViewAction({ type: 'previous' })}
-              aria-label="Periodo precedente"
+              aria-label={onBoard ? 'Settimana precedente' : 'Mese precedente'}
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </Button>
@@ -127,15 +140,16 @@ export function Header({
               size="icon"
               className="p-1.5"
               onClick={() => onViewAction({ type: 'next' })}
-              aria-label="Periodo successivo"
+              aria-label={onBoard ? 'Settimana successiva' : 'Mese successivo'}
             >
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
-              variant="ghost"
               size="sm"
               onClick={() => onViewAction({ type: 'goTo', date: todayIso() })}
+              title={onBoard ? 'Mostra la settimana di oggi' : 'Porta oggi al bordo sinistro'}
             >
+              <CalendarCheck className="h-3.5 w-3.5" aria-hidden="true" />
               Oggi
             </Button>
           </nav>
@@ -219,18 +233,33 @@ export function Header({
               <span className="h-2 w-2 rounded-full bg-holiday-fg" aria-hidden="true" />
               Festivi e weekend
             </ToggleChip>
+            {!onBoard && (
+              <ToggleChip pressed={hidePastDays} onClick={onToggleHidePastDays}>
+                <History className="h-3.5 w-3.5" aria-hidden="true" />
+                Nascondi giorni passati
+              </ToggleChip>
+            )}
             <ToggleChip pressed={showMetrics} onClick={onToggleMetrics}>
               <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
               {DAILY_METRIC.label}
             </ToggleChip>
             {showMetrics && (
-              <button
-                type="button"
-                onClick={onOpenMetrics}
-                className="cursor-pointer text-xs font-semibold text-link underline"
-              >
-                Modifica valori
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={onOpenMetrics}
+                  className="cursor-pointer text-xs font-semibold text-link underline"
+                >
+                  Modifica valori
+                </button>
+                <button
+                  type="button"
+                  onClick={onImportMetrics}
+                  className="cursor-pointer text-xs font-semibold text-link underline"
+                >
+                  Importa da file
+                </button>
+              </>
             )}
           </div>
         </div>

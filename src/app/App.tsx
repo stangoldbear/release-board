@@ -4,32 +4,34 @@ import type { TaskFilter } from '../domain/filters';
 import { copyOfTask, diffTask, isPlanEmpty } from '../domain/plan';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
 import { buildSamplePlan } from '../domain/sample';
-import { isInRange } from '../domain/schedule';
-import type { PlanSnapshot, TaskItem } from '../domain/types';
+import { ZOOM_COLUMN_UNIT, isInRange, weekRange } from '../domain/schedule';
+import type { DailyMetric, PlanSnapshot, TaskItem } from '../domain/types';
 import { RowVisibilityBar } from '../features/calendar/RowVisibilityBar';
 import { Timeline } from '../features/calendar/Timeline';
 import { WeekBoard } from '../features/calendar/WeekBoard';
-import { visiblePeriod } from '../features/calendar/calendarView';
 import { useCalendarView } from '../features/calendar/useCalendarView';
 import {
   ALL_ROWS_VISIBLE,
   parseRowVisibility,
   toggleLane,
 } from '../features/calendar/rowVisibility';
+import { HistoryPage } from '../features/history/HistoryPage';
 import { DailyMetricsDialog } from '../features/metrics/DailyMetricsDialog';
+import { ImportForecastDialog } from '../features/metrics/ImportForecastDialog';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { TaskDialog } from '../features/tasks/TaskDialog';
 import { TaskSummary } from '../features/tasks/TaskSummary';
 import { isBoolean, usePreference } from '../infra/preferences';
 import { useToast } from '../shared/ui/Toast';
 import { VersionStamp } from '../shared/ui/VersionStamp';
-import { parseISODate, todayIso } from '../utils/dateUtils';
+import { parseISODate, startOfMonth, startOfWeek, todayIso } from '../utils/dateUtils';
 import { EmptyPlanNotice } from './EmptyPlanNotice';
 import { Header } from './Header';
 import type { Instance } from './Instance';
 import type { PlanRepository } from './PlanRepository';
 import { SyncIndicator } from './SyncIndicator';
 import { useThemeSetting } from './ThemeProvider';
+import { useHashPage } from './useHashPage';
 
 /** The dialog on screen, if any: only one at a time. */
 type OpenDialog =
@@ -37,6 +39,7 @@ type OpenDialog =
   /** A new task, with suggested date and lane. */
   | { kind: 'task'; task: null; date: string; laneId: string }
   | { kind: 'metrics' }
+  | { kind: 'import' }
   | { kind: 'settings' };
 
 function oneLine(text: string): string {
@@ -73,18 +76,39 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     true,
   );
   const [showMetrics, setShowMetrics] = usePreference('show-metrics', isBoolean, true);
+  const [hidePastDays, setHidePastDays] = usePreference('hide-past-days', isBoolean, false);
   const { theme, setTheme } = useThemeSetting();
 
   const [view, dispatchView] = useCalendarView();
+  const [page, goToPage] = useHashPage();
   const [filters, setFilters] = useState<TaskFilter>(NO_FILTER);
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
 
   const allTasks = plan?.tasks;
   const filteredTasks = useMemo(() => filterTasks(allTasks ?? [], filters), [allTasks, filters]);
 
+  // Without the past, the timeline starts today, or on the Monday of this week in weekly columns.
+  const today = todayIso();
+  const firstShownDay = ZOOM_COLUMN_UNIT[view.zoom] === 'week' ? startOfWeek(today) : today;
+  const timelineStart = hidePastDays ? firstShownDay : view.range.start;
+  const timelineRange = useMemo(
+    () => ({ start: timelineStart, end: view.range.end }),
+    [timelineStart, view.range.end],
+  );
+
   if (!plan) return null;
 
-  const period = visiblePeriod(view);
+  if (page === 'history') {
+    return (
+      <HistoryPage
+        history={instance.kind === 'cloud' ? instance.history : null}
+        lanes={plan.lanes}
+        onBack={() => goToPage('calendar')}
+      />
+    );
+  }
+
+  const week = weekRange(view.anchor);
   const anchorDate = parseISODate(view.anchor);
 
   // Tasks
@@ -118,15 +142,30 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     setDialog({ kind: 'task', task: null, date, laneId });
   };
 
+  // A new task starts today when today is in view, otherwise on the first day in view.
   const handleNewTask = () => {
-    const today = todayIso();
-    const date = isInRange(today, period) ? today : period.start;
+    const date =
+      view.mode === 'week'
+        ? isInRange(today, week)
+          ? today
+          : week.start
+        : startOfMonth(view.anchor) === startOfMonth(today)
+          ? today
+          : view.anchor;
     handleAddTaskAt(date, plan.lanes[0]?.id ?? '');
   };
 
   const handleSaveMetrics = (changes: MetricValueChange[]) => {
     repository.setMetricValues(changes);
     showToast('Valori giornalieri aggiornati');
+  };
+
+  // The imported days come into view, so that their colors confirm the import.
+  const handleImportForecast = (days: DailyMetric[]) => {
+    repository.importDailyValues(days);
+    showToast(`${days.length} ${days.length === 1 ? 'giorno' : 'giorni'} di fatturato importati`);
+    const [first] = days;
+    if (first && view.mode === 'timeline') dispatchView({ type: 'goTo', date: first.date });
   };
 
   // Whole plan
@@ -152,11 +191,14 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
         onFilterChange={setFilters}
         highlightWeekends={highlightWeekends}
         showMetrics={showMetrics}
+        hidePastDays={hidePastDays}
         onToggleWeekends={() => setHighlightWeekends((value) => !value)}
         onToggleMetrics={() => setShowMetrics((value) => !value)}
+        onToggleHidePastDays={() => setHidePastDays((value) => !value)}
         onNewTask={handleNewTask}
         onOpenSettings={() => setDialog({ kind: 'settings' })}
         onOpenMetrics={() => setDialog({ kind: 'metrics' })}
+        onImportMetrics={() => setDialog({ kind: 'import' })}
         syncIndicator={instance.kind === 'cloud' && <SyncIndicator repository={repository} />}
       />
 
@@ -173,7 +215,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
         </p>
       )}
 
-      <main className="mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 py-5 sm:px-6">
+      <main className="w-full flex-1 space-y-4 px-4 py-5 sm:px-6">
         <TaskSummary
           tasks={plan.tasks}
           shownCount={isFiltering(filters) ? filteredTasks.length : null}
@@ -190,8 +232,13 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
 
         {view.mode === 'timeline' ? (
           <Timeline
-            range={period}
+            range={timelineRange}
             zoom={view.zoom}
+            anchor={view.anchor}
+            jump={view.jump}
+            onScrolled={(first, last, settled) =>
+              dispatchView({ type: 'scrolled', first, last, settled })
+            }
             tasks={filteredTasks}
             lanes={plan.lanes}
             metrics={plan.metrics}
@@ -201,10 +248,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             visibility={visibility}
             onShowAllRows={handleShowAllRows}
             onZoom={(step) => dispatchView({ type: 'zoomBy', step })}
-            onShowDays={(date) => {
-              dispatchView({ type: 'goTo', date });
-              dispatchView({ type: 'setZoom', zoom: 'detail' });
-            }}
+            onShowDays={(date) => dispatchView({ type: 'goTo', date, zoom: 'detail' })}
             onChangeTask={handleChangeTask}
             onOpenTask={openTask}
             onDuplicateTask={handleDuplicateTask}
@@ -215,7 +259,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           />
         ) : (
           <WeekBoard
-            week={period}
+            week={week}
             tasks={filteredTasks}
             lanes={plan.lanes}
             metrics={plan.metrics}
@@ -241,7 +285,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
         />
       </main>
 
-      <footer className="mx-auto w-full max-w-7xl px-4 pb-5 sm:px-6">
+      <footer className="w-full px-4 pb-5 sm:px-6">
         <VersionStamp />
       </footer>
 
@@ -268,6 +312,14 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
         />
       )}
 
+      {dialog?.kind === 'import' && (
+        <ImportForecastDialog
+          metrics={plan.metrics}
+          onImport={handleImportForecast}
+          onClose={() => setDialog(null)}
+        />
+      )}
+
       {dialog?.kind === 'settings' && (
         <SettingsDialog
           plan={plan}
@@ -276,6 +328,10 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           onChangeTheme={setTheme}
           onClose={() => setDialog(null)}
           onReplacePlan={handleReplacePlan}
+          onOpenHistory={() => {
+            setDialog(null);
+            goToPage('history');
+          }}
         />
       )}
     </div>

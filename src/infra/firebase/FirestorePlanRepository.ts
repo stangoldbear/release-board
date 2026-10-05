@@ -7,6 +7,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 import type {
@@ -17,11 +18,12 @@ import type {
   Timestamp,
   WriteBatch,
 } from 'firebase/firestore';
-import type { HistoryReader } from '../../app/HistoryReader';
+import type { HistoryQuery, HistoryReader } from '../../app/HistoryReader';
 import type { PlanRepository, SyncStatus } from '../../app/PlanRepository';
 import type { HistoryAction, HistoryEntity, HistoryEntry } from '../../domain/history';
 import type { MetricValueChange, TaskChanges } from '../../domain/plan';
 import type { DailyMetric, Lane, PlanSnapshot, TaskItem } from '../../domain/types';
+import { formatDateToIT } from '../../utils/dateUtils';
 import {
   METRIC_ID,
   buildPlan,
@@ -30,6 +32,7 @@ import {
   contentWrites,
   importSummary,
   metricContent,
+  valueContent,
   readLane,
   readNote,
   readTask,
@@ -166,12 +169,14 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     return this.lastError;
   }
 
-  subscribeHistory(limit: number, listener: (entries: HistoryEntry[]) => void): () => void {
-    const entries = query(
-      collection(this.db, `${this.planPath}/history`),
-      orderBy('at', 'desc'),
-      limitTo(limit),
-    );
+  subscribeHistory(
+    { limit, since }: HistoryQuery,
+    listener: (entries: HistoryEntry[]) => void,
+  ): () => void {
+    const history = collection(this.db, `${this.planPath}/history`);
+    const entries = since
+      ? query(history, where('at', '>=', since), orderBy('at', 'desc'), limitTo(limit))
+      : query(history, orderBy('at', 'desc'), limitTo(limit));
     return onSnapshot(entries, (snapshot) => listener(mapDocs(snapshot, readHistoryEntry)));
   }
 
@@ -268,10 +273,41 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       for (const { date, value } of group) {
         const ref = this.ref(`metrics/${METRIC_ID}/values/${date}`);
         if (value === null) batch.delete(ref);
-        else batch.set(ref, { value, ...this.audit(historyId) });
+        // Merged: the day keeps the approval light and promotions of an imported forecast.
+        else batch.set(ref, { value, ...this.audit(historyId) }, { merge: true });
       }
       this.commit(batch);
     }
+  }
+
+  importDailyValues(days: readonly DailyMetric[]): void {
+    const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date));
+    const first = sorted[0];
+    const last = sorted.at(-1);
+    if (!first || !last) return;
+    const what = `${sorted.length} ${sorted.length === 1 ? 'giorno' : 'giorni'} di fatturato previsto, dal ${formatDateToIT(first.date)} al ${formatDateToIT(last.date)}`;
+    const groups = chunk(sorted, CHUNK_SIZE - 1);
+    groups.forEach((group, index) => {
+      const batch = writeBatch(this.db);
+      const part = groups.length > 1 ? ` (parte ${index + 1} di ${groups.length})` : '';
+      const historyId = this.record(batch, 'metric', METRIC_ID, 'import', {
+        summary: `${what}${part}`,
+      });
+      if (index === 0 && !this.parts.metricIds?.has(METRIC_ID)) {
+        batch.set(this.ref(`metrics/${METRIC_ID}`), {
+          ...metricContent(),
+          ...this.audit(historyId),
+        });
+      }
+      // Not merged: each day takes exactly what the forecast says, details included.
+      for (const day of group) {
+        batch.set(this.ref(`metrics/${METRIC_ID}/values/${day.date}`), {
+          ...valueContent(day),
+          ...this.audit(historyId),
+        });
+      }
+      this.commit(batch);
+    });
   }
 
   replacePlan(plan: PlanSnapshot): void {

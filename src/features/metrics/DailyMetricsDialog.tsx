@@ -36,14 +36,19 @@ export function DailyMetricsDialog({
     weekend: isWeekend(date),
   }));
 
-  const [drafts, setDrafts] = useState<Record<string, string>>(() =>
+  // As precise as saved: an imported value keeps its cents.
+  const [initial] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       metrics.map((metric) => [
         metric.date,
-        formatLocaleNumber(metric.value, DAILY_METRIC.decimals),
+        formatLocaleNumber(
+          metric.value,
+          Number.isInteger(metric.value) ? DAILY_METRIC.decimals : 2,
+        ),
       ]),
     ),
   );
+  const [drafts, setDrafts] = useState(initial);
 
   const invalidDates = days
     .map((day) => day.iso)
@@ -52,9 +57,14 @@ export function DailyMetricsDialog({
       return draft !== undefined && draft !== '' && parseLocaleNumber(draft) === null;
     });
 
+  // Only the days edited here: the others keep their value exactly as it is.
   const handleSave = () => {
     if (invalidDates.length > 0) return;
-    onSave(days.map((day) => ({ date: day.iso, value: parseLocaleNumber(drafts[day.iso] ?? '') })));
+    onSave(
+      days
+        .filter((day) => (drafts[day.iso] ?? '').trim() !== (initial[day.iso] ?? ''))
+        .map((day) => ({ date: day.iso, value: parseLocaleNumber(drafts[day.iso] ?? '') })),
+    );
     onClose();
   };
 

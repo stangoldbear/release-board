@@ -232,6 +232,27 @@ describe('invalid backups', () => {
     ]);
   });
 
+  it('reject an unknown approval light and a promotion that is not text', () => {
+    const [metric] = valid.metrics;
+    const broken = {
+      ...valid,
+      metrics: [
+        {
+          ...metric,
+          values: [
+            { date: '2026-09-02', value: 1, approval: 'yellow' },
+            { date: '2026-09-03', value: 2, promoEu: 3 },
+            { date: '2026-09-04', value: 3, approval: 'red', promoNonEu: 'Saldi' },
+          ],
+        },
+      ],
+    };
+    expect(errorsOf(broken)).toEqual([
+      'Metrica del 02/09/2026: semaforo non valido.',
+      'Metrica del 03/09/2026: promozione non valida.',
+    ]);
+  });
+
   it('list at most twenty problems', () => {
     const tasks = Array.from({ length: 25 }, (_, index) => ({
       ...plan.tasks[1],

@@ -7,6 +7,7 @@ import { moveTask, moveTaskTo, rangeDays, tasksOnDay } from '../../domain/schedu
 import type { DateRange } from '../../domain/schedule';
 import type { DailyMetric, DailyNotes, Lane, RowVisibility, TaskItem } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
+import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
 import { taskColorStyle } from '../../themes';
 import {
   ITALIAN_DAYS_SHORT,
@@ -15,6 +16,7 @@ import {
   parseISODate,
   todayIso,
 } from '../../utils/dateUtils';
+import { APPROVAL_TONE, ApprovalIcon, DayDetails, describeDay } from '../metrics/MetricDetails';
 
 interface WeekBoardProps {
   week: DateRange;
@@ -51,6 +53,7 @@ export function WeekBoard({
   onMoveNote,
 }: WeekBoardProps) {
   const today = todayIso();
+  const { card, triggerProps, cardProps } = useHoverCard<DailyMetric>();
   const visibleTasks = tasks.filter((task) => !visibility.hiddenLaneIds.includes(task.laneId));
   const laneNames = new Map(lanes.map((lane) => [lane.id, lane.name]));
 
@@ -119,12 +122,22 @@ export function WeekBoard({
                   </p>
                 )}
                 {metric && (
-                  <p className="flex justify-between gap-2 text-xs">
-                    <span className="text-fg-muted">{DAILY_METRIC.label}</span>
-                    <strong className="tabular-nums">
+                  <button
+                    type="button"
+                    aria-label={describeDay(metric)}
+                    {...triggerProps(metric)}
+                    className={`-mx-1.5 flex w-[calc(100%+0.75rem)] cursor-pointer items-center justify-between gap-2 rounded-md px-1.5 py-0.5 text-xs hover:brightness-95 ${
+                      metric.approval ? APPROVAL_TONE[metric.approval] : ''
+                    }`}
+                  >
+                    <span className={metric.approval ? '' : 'text-fg-muted'}>
+                      {DAILY_METRIC.label}
+                    </span>
+                    <strong className="flex items-center gap-1 tabular-nums">
+                      {metric.approval && <ApprovalIcon light={metric.approval} />}
                       {formatLocaleNumber(metric.value, DAILY_METRIC.decimals)}
                     </strong>
-                  </p>
+                  </button>
                 )}
                 {note && (
                   <p
@@ -231,6 +244,17 @@ export function WeekBoard({
           );
         })}
       </div>
+
+      {card && (
+        <HoverCard
+          anchor={card.anchor}
+          cardRef={cardProps.cardRef}
+          onPointerEnter={cardProps.onPointerEnter}
+          onPointerLeave={cardProps.onPointerLeave}
+        >
+          <DayDetails metric={card.item} />
+        </HoverCard>
+      )}
     </div>
   );
 }

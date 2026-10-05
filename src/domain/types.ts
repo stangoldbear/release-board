@@ -25,10 +25,20 @@ export interface Lane {
   name: string;
 }
 
+/**
+ * How freely work can be released on a day, from the revenue forecast: green without limits, red
+ * only with the approval of several stakeholders.
+ */
+export type ApprovalLight = 'green' | 'orange' | 'red';
+
 export interface DailyMetric {
   /** YYYY-MM-DD */
   date: string;
   value: number;
+  /** From an imported revenue forecast, with the promotions running on the day. */
+  approval?: ApprovalLight;
+  promoEu?: string;
+  promoNonEu?: string;
 }
 
 /** Note text by date (YYYY-MM-DD). */

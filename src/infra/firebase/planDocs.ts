@@ -1,4 +1,5 @@
 import type { DocumentData } from 'firebase/firestore';
+import { APPROVAL_LIGHTS } from '../../domain/approval';
 import { DEFAULT_COLOR_ID, isKnownColorId } from '../../domain/colors';
 import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES } from '../../domain/plan';
 import type { DailyMetric, DailyNotes, Lane, PlanSnapshot, TaskItem } from '../../domain/types';
@@ -8,7 +9,7 @@ import { isIsoDate } from '../../utils/dateUtils';
 //   lanes/{laneId}                    name, position
 //   tasks/{taskId}                    the task without its id
 //   metrics/{metricId}                label, unit, decimals, position, visible
-//   metrics/{metricId}/values/{date}  value
+//   metrics/{metricId}/values/{date}  value, and from a forecast approval, promoEu, promoNonEu
 //   notes/{date}                      text
 // Every document also carries updatedAt, updatedBy and lastHistoryId, added by the repository.
 // Reading is lenient: the rules validate writes, and a document that does not fit is skipped.
@@ -83,7 +84,20 @@ export function readLane(id: string, data: DocumentData): { lane: Lane; position
 export function readValue(date: string, data: DocumentData): DailyMetric | null {
   if (!isIsoDate(date) || typeof data.value !== 'number' || !Number.isFinite(data.value))
     return null;
-  return { date, value: data.value };
+  const metric: DailyMetric = { date, value: data.value };
+  if (oneOf(data.approval, APPROVAL_LIGHTS)) metric.approval = data.approval;
+  if (isText(data.promoEu)) metric.promoEu = data.promoEu;
+  if (isText(data.promoNonEu)) metric.promoNonEu = data.promoNonEu;
+  return metric;
+}
+
+/** A daily value without its date, which is the document id, and without empty details. */
+export function valueContent(metric: DailyMetric): DocumentData {
+  const data: DocumentData = { value: metric.value };
+  if (metric.approval) data.approval = metric.approval;
+  if (metric.promoEu) data.promoEu = metric.promoEu;
+  if (metric.promoNonEu) data.promoNonEu = metric.promoNonEu;
+  return data;
 }
 
 export function readNote(date: string, data: DocumentData): [string, string] | null {
@@ -130,9 +144,9 @@ export function contentWrites(plan: PlanSnapshot): ContentWrite[] {
       data: { name: lane.name, position },
     })),
     { path: `metrics/${METRIC_ID}`, data: metricContent() },
-    ...plan.metrics.map(({ date, value }) => ({
-      path: `metrics/${METRIC_ID}/values/${date}`,
-      data: { value },
+    ...plan.metrics.map((metric) => ({
+      path: `metrics/${METRIC_ID}/values/${metric.date}`,
+      data: valueContent(metric),
     })),
     ...Object.entries(plan.dailyNotes).map(([date, text]) => ({
       path: `notes/${date}`,

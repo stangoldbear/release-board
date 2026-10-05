@@ -4,6 +4,7 @@ import {
   copyOfTask,
   createEmptyPlan,
   diffTask,
+  importDailyValues,
   isPlanEmpty,
   moveNote,
   removeTask,
@@ -63,11 +64,9 @@ describe('task changes', () => {
     expect(updateTask(removeTask(plan, 'task-1'), 'task-1', { title: 'X' }).tasks).toEqual([]);
   });
 
-  it('copies the content of a task, without its id', () => {
+  it('copies the content of a task, title included, without its id', () => {
     const { id, ...content } = task;
-    const copy = copyOfTask(task);
-    expect(copy).toEqual({ ...content, title: 'Nuovo carrello (Copia)' });
-    expect(copyOfTask({ ...copy, id: 'task-2' }).title).toBe('Nuovo carrello (Copia)');
+    expect(copyOfTask(task)).toEqual(content);
   });
 });
 
@@ -100,6 +99,33 @@ describe('notes and values', () => {
     expect(moveNote(twoNotes, '2026-09-15', '2026-09-15')).toBe(twoNotes);
     expect(moveNote(twoNotes, '2026-09-20', '2026-09-21')).toBe(twoNotes);
     expect(moveNote(twoNotes, '2026-09-15', '2026-09-16', '  ')).toBe(twoNotes);
+  });
+
+  it('keeps the approval light and promotions of a day when its value changes', () => {
+    const imported = importDailyValues(plan, [
+      { date: '2026-09-10', value: 5, approval: 'red', promoEu: 'Saldi' },
+    ]);
+    expect(setMetricValues(imported, [{ date: '2026-09-10', value: 7 }]).metrics).toEqual([
+      { date: '2026-09-10', value: 7, approval: 'red', promoEu: 'Saldi' },
+    ]);
+    expect(setMetricValues(imported, [{ date: '2026-09-10', value: null }]).metrics).toEqual([]);
+  });
+
+  it('replaces whole days with an import, and leaves the other days alone', () => {
+    const start = importDailyValues(plan, [
+      { date: '2026-09-10', value: 5, approval: 'red', promoEu: 'Saldi' },
+      { date: '2026-09-12', value: 9 },
+    ]);
+    expect(
+      importDailyValues(start, [
+        { date: '2026-09-11', value: 6 },
+        { date: '2026-09-10', value: 8, approval: 'green' },
+      ]).metrics,
+    ).toEqual([
+      { date: '2026-09-10', value: 8, approval: 'green' },
+      { date: '2026-09-11', value: 6 },
+      { date: '2026-09-12', value: 9 },
+    ]);
   });
 
   it('sets and removes daily values, keeping them sorted by date', () => {

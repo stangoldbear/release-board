@@ -88,6 +88,8 @@ export function getItalianHolidayName(date: Date): string | null {
   if (month === 4 && day === 1) return 'Festa del Lavoro'; // 1 Maggio
   if (month === 5 && day === 2) return 'Festa della Repubblica'; // 2 Giugno
   if (month === 7 && day === 15) return 'Ferragosto / Assunzione'; // 15 Agosto
+  // National holiday again from 2026, by the law that restored it.
+  if (month === 9 && day === 4 && year >= 2026) return "San Francesco d'Assisi"; // 4 Ottobre
   if (month === 10 && day === 1) return 'Tutti i Santi'; // 1 Novembre
   if (month === 11 && day === 8) return 'Immacolata Concezione'; // 8 Dicembre
   if (month === 11 && day === 25) return 'Natale'; // 25 Dicembre

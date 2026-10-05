@@ -1,48 +1,48 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
-import { EyeOff, MoveHorizontal, Plus, StickyNote } from 'lucide-react';
-import { sumInRange } from '../../domain/metrics';
-import { formatLocaleNumber, formatShortNumber } from '../../domain/numberFormat';
-import { DAILY_METRIC } from '../../domain/plan';
+import { EyeOff, MoveHorizontal } from 'lucide-react';
 import type { TaskChanges } from '../../domain/plan';
-import { ZOOM_COLUMN_UNIT, placeTasks, rangeColumns } from '../../domain/schedule';
+import { ZOOM_COLUMN_UNIT, placeTasks } from '../../domain/schedule';
 import type { DateRange, ZoomLevel } from '../../domain/schedule';
 import type { DailyMetric, DailyNotes, Lane, RowVisibility, TaskItem } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
-import {
-  ITALIAN_DAYS_SHORT,
-  ITALIAN_MONTHS_SHORT,
-  addDaysIso,
-  diffDays,
-  formatDateToIT,
-  getItalianHolidayName,
-  isWeekend,
-  parseISODate,
-  todayIso,
-} from '../../utils/dateUtils';
+import { useStableCallback } from '../../shared/useStableCallback';
+import { addDaysIso, diffDays, todayIso } from '../../utils/dateUtils';
 import { DailyNoteDialog } from '../notes/DailyNoteDialog';
+import type { CalendarJump } from './calendarView';
+import { MetricsRow } from './MetricsRow';
+import { NotesRow } from './NotesRow';
 import { TaskBar } from './TaskBar';
 import { TaskContextMenu } from './TaskContextMenu';
+import { DayHeaderRow, MonthBand } from './TimelineHeader';
+import {
+  LABEL_CELL,
+  LABEL_WIDTH,
+  SCALES,
+  buildColumns,
+  columnEdge,
+  dayName,
+} from './timelineLayout';
+import type { Column } from './timelineLayout';
 import { useNoteDrag } from './useNoteDrag';
 import { draggedTask, useTaskDrag } from './useTaskDrag';
+import { useTimelineScroll } from './useTimelineScroll';
 import { useZoomGestures } from './useZoomGestures';
 
-/** Width of the sticky column with the row names. */
-const LABEL_WIDTH = 96;
-
-/** Pixels per day and height of a task bar at each zoom level. */
-const SCALES: Record<ZoomLevel, { dayWidth: number; barHeight: number }> = {
-  detail: { dayWidth: 112, barHeight: 46 },
-  month: { dayWidth: 56, barHeight: 46 },
-  quarter: { dayWidth: 12, barHeight: 28 },
-};
 const TRACK_GAP = 6;
 const LANE_PADDING = 8;
 
 interface TimelineProps {
+  /** The days the timeline holds; it scrolls through them. */
   range: DateRange;
   zoom: ZoomLevel;
+  /** The first day in view when the timeline opens, where the user left it. */
+  anchor: string;
+  /** The last navigation: the timeline scrolls so that its day is at the left edge. */
+  jump: CalendarJump;
+  /** First and last day in view, as the user scrolls; `settled` once scrolling has stopped. */
+  onScrolled: (first: string, last: string, settled: boolean) => void;
   tasks: TaskItem[];
   lanes: Lane[];
   metrics: DailyMetric[];
@@ -65,59 +65,6 @@ interface TimelineProps {
   onMoveNote: (from: string, to: string, text?: string) => void;
 }
 
-interface Column {
-  start: string;
-  end: string;
-  width: number;
-  /** Weekend or holiday shown in red; day columns only. */
-  red: boolean;
-  holidays: string[];
-  isToday: boolean;
-}
-
-function buildColumns(
-  range: DateRange,
-  zoom: ZoomLevel,
-  highlightWeekends: boolean,
-  today: string,
-): Column[] {
-  const { dayWidth } = SCALES[zoom];
-  return rangeColumns(range, ZOOM_COLUMN_UNIT[zoom]).map(({ start, end }) => {
-    const days = diffDays(start, end) + 1;
-    const holidays: string[] = [];
-    for (let offset = 0; offset < days; offset += 1) {
-      const date = parseISODate(start);
-      date.setDate(date.getDate() + offset);
-      const name = getItalianHolidayName(date);
-      if (name) holidays.push(name);
-    }
-    const weekend = days === 1 && isWeekend(parseISODate(start));
-    return {
-      start,
-      end,
-      width: days * dayWidth,
-      red: days === 1 && (holidays.length > 0 || (highlightWeekends && weekend)),
-      holidays,
-      isToday: start <= today && today <= end,
-    };
-  });
-}
-
-function dayLabel(iso: string): { weekday: string; day: number; month: string } {
-  const date = parseISODate(iso);
-  return {
-    weekday: ITALIAN_DAYS_SHORT[date.getDay()] ?? '',
-    day: date.getDate(),
-    month: ITALIAN_MONTHS_SHORT[date.getMonth()] ?? '',
-  };
-}
-
-function columnTone(column: Column): string {
-  if (column.red) return 'bg-holiday text-holiday-fg';
-  if (column.isToday) return 'bg-accent-soft text-link';
-  return '';
-}
-
 /** What a drag is about to do, at the bottom of the screen. */
 function DragHint({ children }: { children: ReactNode }) {
   return (
@@ -129,15 +76,37 @@ function DragHint({ children }: { children: ReactNode }) {
   );
 }
 
-function dayName(iso: string): string {
-  const { weekday, day, month } = dayLabel(iso);
-  return `${weekday.toLowerCase()} ${day} ${month}`;
+interface LaneCellsProps {
+  columns: Column[];
+  laneId: string;
+  onAdd: (date: string, laneId: string) => void;
 }
 
-/** The lanes as rows of task bars over columns of days, or of weeks when zoomed out. */
+/** The days of a lane: a click adds a task there. Memoized, since a drag redraws only the bars. */
+const LaneCells = memo(function LaneCells({ columns, laneId, onAdd }: LaneCellsProps) {
+  return columns.map((column) => (
+    <div
+      key={column.start}
+      onClick={() => onAdd(column.start, laneId)}
+      style={{ width: column.width }}
+      // The plus is drawn by CSS: one icon element per day would weigh on long timelines.
+      className={`flex shrink-0 cursor-pointer items-center justify-center text-base text-link after:opacity-0 after:content-['+'] hover:bg-accent-soft hover:after:opacity-100 pointer-coarse:after:hidden ${columnEdge(column)} ${
+        column.past ? 'bg-past' : column.red ? 'bg-holiday' : ''
+      }`}
+    />
+  ));
+});
+
+/**
+ * The lanes as rows of task bars over a continuous run of days, or of weeks when zoomed out, under
+ * the months and the daily values.
+ */
 export function Timeline({
   range,
   zoom,
+  anchor,
+  jump,
+  onScrolled,
   tasks,
   lanes,
   metrics,
@@ -159,11 +128,15 @@ export function Timeline({
   const { dayWidth, barHeight } = SCALES[zoom];
   const today = todayIso();
   const columns = useMemo(
-    () => buildColumns(range, zoom, highlightWeekends, today),
-    [range, zoom, highlightWeekends, today],
+    () => buildColumns({ start: range.start, end: range.end }, zoom, highlightWeekends, today),
+    [range.start, range.end, zoom, highlightWeekends, today],
   );
-  const isWeekColumns = ZOOM_COLUMN_UNIT[zoom] === 'week';
+  const weekColumns = ZOOM_COLUMN_UNIT[zoom] === 'week';
   const totalWidth = columns.reduce((sum, column) => sum + column.width, 0);
+  const todayOffset =
+    range.start <= today && today <= range.end
+      ? (diffDays(range.start, today) + 0.5) * dayWidth
+      : null;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const helpId = useId();
@@ -176,16 +149,34 @@ export function Timeline({
   const noteDrag = useNoteDrag(dayWidth, range, isDayFree, onMoveNote);
 
   useZoomGestures(scrollRef, onZoom);
+  useTimelineScroll(scrollRef, {
+    range,
+    dayWidth,
+    labelWidth: LABEL_WIDTH,
+    openOn: anchor,
+    jump,
+    onScrolled,
+  });
 
-  // Each new period opens on today when it is visible, otherwise on its first day.
-  useLayoutEffect(() => {
-    const container = scrollRef.current;
-    if (!container) return;
-    const visibleWidth = container.clientWidth - LABEL_WIDTH;
-    const todayOffset = diffDays(range.start, today) * dayWidth;
-    const inRange = range.start <= today && today <= range.end;
-    container.scrollLeft = inRange ? todayOffset - visibleWidth / 2 + dayWidth / 2 : 0;
-  }, [range.start, range.end, dayWidth, today]);
+  // Stable handlers for the memoized rows, which a drag or a scroll does not redraw.
+  const addTaskAt = useStableCallback((date: string, laneId: string) => {
+    if (!isClickAfterDrag()) onAddTaskAt(date, laneId);
+  });
+  const showDays = useStableCallback(onShowDays);
+  const openNote = useStableCallback((date: string) => {
+    if (!noteDrag.isClickAfterDrag()) setEditingNoteDate(date);
+  });
+  const startNoteDrag = useStableCallback(noteDrag.startDrag);
+  // Arrows move a note by a day, within the timeline and only to a day without a note; the focus
+  // follows the note to its new cell.
+  const moveNoteByKey = useStableCallback((event: KeyboardEvent, date: string) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const to = addDaysIso(date, event.key === 'ArrowRight' ? 1 : -1);
+    if (to < range.start || to > range.end || !isDayFree(to)) return;
+    onMoveNote(date, to);
+    window.requestAnimationFrame(() => document.getElementById(`note-cell-${to}`)?.focus());
+  });
 
   // While dragging, the task is drawn where it would land.
   const shownTasks = drag
@@ -193,34 +184,19 @@ export function Timeline({
     : tasks;
   const visibleLanes = lanes.filter((lane) => !visibility.hiddenLaneIds.includes(lane.id));
   const allRowsHidden = visibleLanes.length === 0 && !visibility.showNotes;
-  const periodTotal = sumInRange(metrics, range);
-  // Roughly how many characters of a number fit in a column.
-  const maxDigits = Math.floor((columns[0]?.width ?? dayWidth) / 7);
 
   const focusBar = (taskId: string) => document.getElementById(`task-rect-${taskId}`)?.focus();
-
-  // Arrows move a note by a day, within the period and only to a day without a note; the focus
-  // follows the note to its new cell.
-  const handleNoteKeyDown = (event: KeyboardEvent, date: string) => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-    event.preventDefault();
-    const to = addDaysIso(date, event.key === 'ArrowRight' ? 1 : -1);
-    if (to < range.start || to > range.end || !isDayFree(to)) return;
-    onMoveNote(date, to);
-    window.requestAnimationFrame(() => document.getElementById(`note-cell-${to}`)?.focus());
-  };
-
-  const labelCell = 'sticky left-0 z-20 shrink-0 border-r border-line-strong p-2';
 
   return (
     <div className="w-full overflow-hidden rounded-xl border border-line bg-surface shadow-xs select-none">
       <p className="border-b border-line bg-surface-muted px-4 py-1.5 text-xs text-fg-muted">
         <span className="pointer-coarse:hidden">
           Trascina un&apos;attività o una nota per spostarla; un&apos;attività anche dai bordi, per
-          cambiarne le date. Ctrl + rotellina cambia lo zoom.
+          cambiarne le date. Maiusc + rotellina scorre i giorni, Ctrl + rotellina cambia lo zoom.
         </span>
         <span className="hidden pointer-coarse:inline">
-          Tocca un&apos;attività per modificarla. Avvicina o allontana due dita per lo zoom.
+          Tocca un&apos;attività per modificarla. Scorri con un dito per vedere gli altri giorni,
+          avvicina o allontana due dita per lo zoom.
         </span>
       </p>
       <p id={helpId} className="sr-only">
@@ -232,102 +208,26 @@ export function Timeline({
         apre.
       </p>
 
-      <div ref={scrollRef} className="w-full touch-pan-x touch-pan-y overflow-x-auto">
+      {/*
+        Relative, so that hidden labels placed absolutely stay inside the scroll area instead of
+        widening the page. No scroll anchoring: the timeline keeps its place itself when it grows
+        at the start.
+      */}
+      <div
+        ref={scrollRef}
+        className="relative w-full touch-pan-x touch-pan-y overflow-x-auto [overflow-anchor:none]"
+      >
         <div style={{ width: LABEL_WIDTH + totalWidth }}>
+          <MonthBand range={range} dayWidth={dayWidth} metrics={showMetrics ? metrics : null} />
           {showMetrics && (
-            <div className="flex border-b border-line bg-surface-muted text-xs">
-              <div
-                className={`${labelCell} bg-surface-muted font-bold`}
-                style={{ width: LABEL_WIDTH }}
-                title={periodTotal === null ? undefined : formatLocaleNumber(periodTotal)}
-              >
-                <span className="block truncate">{DAILY_METRIC.label}</span>
-                {periodTotal !== null && (
-                  <span className="block truncate font-normal text-fg-muted tabular-nums">
-                    Tot. {formatShortNumber(periodTotal, DAILY_METRIC.decimals, 9)}
-                  </span>
-                )}
-              </div>
-              {columns.map((column) => {
-                const value = sumInRange(metrics, column);
-                const full = value === null ? '' : formatLocaleNumber(value, DAILY_METRIC.decimals);
-                return (
-                  <div
-                    key={column.start}
-                    style={{ width: column.width }}
-                    title={
-                      full
-                        ? `${formatDateToIT(column.start)}: ${full} ${DAILY_METRIC.unit}`
-                        : undefined
-                    }
-                    className={`flex shrink-0 items-center justify-center truncate border-r border-line px-0.5 tabular-nums ${columnTone(column)}`}
-                  >
-                    {value === null
-                      ? ''
-                      : formatShortNumber(value, DAILY_METRIC.decimals, maxDigits)}
-                  </div>
-                );
-              })}
-            </div>
+            <MetricsRow columns={columns} metrics={metrics} weekColumns={weekColumns} />
           )}
-
-          <div className="flex border-b border-line-strong">
-            <div
-              className={`${labelCell} flex items-center bg-surface text-xs font-bold uppercase`}
-              style={{ width: LABEL_WIDTH }}
-            >
-              {isWeekColumns ? 'Settimana' : 'Giorno'}
-            </div>
-            {columns.map((column) => {
-              const start = dayLabel(column.start);
-              const holidayText = column.holidays.join(', ');
-              if (isWeekColumns) {
-                const end = dayLabel(column.end);
-                return (
-                  <button
-                    key={column.start}
-                    type="button"
-                    onClick={() => onShowDays(column.start)}
-                    style={{ width: column.width }}
-                    title={`Mostra i giorni dal ${formatDateToIT(column.start)} al ${formatDateToIT(column.end)}${holidayText ? ` · ${holidayText}` : ''}`}
-                    className={`shrink-0 cursor-pointer border-r border-line py-1 text-center text-xs hover:bg-surface-strong ${columnTone(column)}`}
-                  >
-                    <span className="block font-bold">
-                      {start.day} {start.month}
-                      {holidayText && (
-                        <>
-                          <span className="ml-0.5 text-holiday-fg" aria-hidden="true">
-                            •
-                          </span>
-                          <span className="sr-only">, festività: {holidayText}</span>
-                        </>
-                      )}
-                    </span>
-                    <span className="block text-fg-muted">
-                      – {end.day} {end.month}
-                    </span>
-                  </button>
-                );
-              }
-              return (
-                <div
-                  key={column.start}
-                  style={{ width: column.width }}
-                  title={`${formatDateToIT(column.start)}${holidayText ? ` · Festività: ${holidayText}` : ''}`}
-                  className={`shrink-0 border-r border-line py-1 text-center ${columnTone(column)} ${column.isToday ? 'font-bold' : ''}`}
-                >
-                  <span className="block text-xs uppercase">
-                    {start.weekday}
-                    {holidayText && <span aria-hidden="true"> •</span>}
-                  </span>
-                  <span className="block text-sm leading-tight font-bold">
-                    {start.day}
-                    {zoom === 'detail' && ` ${start.month}`}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <DayHeaderRow
+            columns={columns}
+            weekColumns={weekColumns}
+            showMonth={zoom === 'detail'}
+            onShowDays={showDays}
+          />
 
           <div className="divide-y divide-line">
             {visibleLanes.map((lane) => {
@@ -344,7 +244,7 @@ export function Timeline({
                   style={{ minHeight: height }}
                 >
                   <div
-                    className={`${labelCell} flex flex-col justify-center bg-surface-muted`}
+                    className={`${LABEL_CELL} flex flex-col justify-center bg-surface-muted`}
                     style={{ width: LABEL_WIDTH }}
                     title={lane.name}
                   >
@@ -355,21 +255,14 @@ export function Timeline({
                   </div>
 
                   <div className="relative flex">
-                    {columns.map((column) => (
+                    <LaneCells columns={columns} laneId={lane.id} onAdd={addTaskAt} />
+                    {todayOffset !== null && (
                       <div
-                        key={column.start}
-                        onClick={() => {
-                          if (!isClickAfterDrag()) onAddTaskAt(column.start, lane.id);
-                        }}
-                        style={{ width: column.width }}
-                        className={`group/cell flex shrink-0 cursor-pointer items-center justify-center border-r border-line hover:bg-accent-soft ${column.red ? 'bg-holiday' : ''}`}
-                      >
-                        <Plus
-                          className="h-4 w-4 text-link opacity-0 group-hover/cell:opacity-100 pointer-coarse:hidden"
-                          aria-hidden="true"
-                        />
-                      </div>
-                    ))}
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-link/40"
+                        style={{ left: todayOffset }}
+                      />
+                    )}
 
                     <div className="pointer-events-none absolute inset-0">
                       {placed.map((item) => (
@@ -400,101 +293,17 @@ export function Timeline({
           </div>
 
           {visibility.showNotes && (
-            <div className="flex border-t-2 border-warning">
-              <div
-                className={`${labelCell} flex flex-col justify-center bg-warning-soft`}
-                style={{ width: LABEL_WIDTH }}
-              >
-                <span className="flex items-center gap-1 text-xs font-bold uppercase">
-                  <StickyNote className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
-                  Note
-                </span>
-                <span className="text-xs text-fg-muted">
-                  {isWeekColumns ? 'Per settimana' : 'Per giorno'}
-                </span>
-              </div>
-              {columns.map((column) => {
-                const notes = Object.entries(dailyNotes)
-                  .filter(([date]) => column.start <= date && date <= column.end)
-                  .sort(([a], [b]) => a.localeCompare(b));
-                if (isWeekColumns) {
-                  return (
-                    <button
-                      key={column.start}
-                      type="button"
-                      onClick={() => onShowDays(column.start)}
-                      style={{ width: column.width }}
-                      title={
-                        notes.length > 0
-                          ? notes
-                              .map(([date, text]) => `${formatDateToIT(date)}: ${text}`)
-                              .join('\n')
-                          : `Mostra i giorni dal ${formatDateToIT(column.start)}`
-                      }
-                      className="min-h-14 shrink-0 cursor-pointer border-r border-line p-1 text-xs hover:bg-warning-soft"
-                    >
-                      {notes.length > 0 && (
-                        <span className="rounded-sm bg-warning-soft px-1 font-semibold">
-                          {notes.length} {notes.length === 1 ? 'nota' : 'note'}
-                        </span>
-                      )}
-                    </button>
-                  );
-                }
-                const date = column.start;
-                const text = dailyNotes[date] ?? '';
-                const moving = noteDrag.drag;
-                const isSource = moving?.from === date;
-                const isTarget = moving !== null && moving.to === date && moving.to !== moving.from;
-                // Where the note would land: its text, faded, in the free day under the pointer.
-                const preview = isTarget && moving.allowed ? dailyNotes[moving.from] : undefined;
-                return (
-                  <button
-                    key={date}
-                    id={`note-cell-${date}`}
-                    type="button"
-                    onPointerDown={text ? (event) => noteDrag.startDrag(event, date) : undefined}
-                    onClick={() => {
-                      if (!noteDrag.isClickAfterDrag()) setEditingNoteDate(date);
-                    }}
-                    onKeyDown={text ? (event) => handleNoteKeyDown(event, date) : undefined}
-                    style={{ width: column.width }}
-                    aria-label={
-                      text
-                        ? `Nota del ${formatDateToIT(date)}: ${text}`
-                        : `Aggiungi una nota per il ${formatDateToIT(date)}`
-                    }
-                    aria-describedby={text ? noteHelpId : undefined}
-                    title={text || undefined}
-                    className={`group/note flex min-h-16 shrink-0 border-r border-line p-1 text-left ${
-                      text ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
-                    } ${column.red ? 'bg-holiday' : ''} ${
-                      isTarget
-                        ? `ring-2 ring-inset ${moving.allowed ? 'ring-link' : 'ring-danger'}`
-                        : ''
-                    }`}
-                  >
-                    {text ? (
-                      <span
-                        className={`line-clamp-3 w-full rounded-xs border border-warning bg-warning-soft p-1 text-xs leading-4 break-words group-hover/note:shadow-sm ${
-                          isSource ? 'opacity-40' : ''
-                        }`}
-                      >
-                        {text}
-                      </span>
-                    ) : preview ? (
-                      <span className="line-clamp-3 w-full rounded-xs border border-dashed border-warning bg-warning-soft p-1 text-xs leading-4 break-words opacity-80">
-                        {preview}
-                      </span>
-                    ) : (
-                      <span className="flex w-full items-center justify-center rounded-xs border border-dashed border-line text-fg-muted opacity-60 group-hover/note:border-warning group-hover/note:opacity-100">
-                        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            <NotesRow
+              columns={columns}
+              dailyNotes={dailyNotes}
+              weekColumns={weekColumns}
+              drag={noteDrag.drag}
+              describedBy={noteHelpId}
+              onStartDrag={startNoteDrag}
+              onOpen={openNote}
+              onKeyDown={moveNoteByKey}
+              onShowDays={showDays}
+            />
           )}
         </div>
 

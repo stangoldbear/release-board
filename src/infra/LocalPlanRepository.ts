@@ -3,6 +3,7 @@ import { createBackupFile, parseBackupText, serializeBackup } from '../domain/ba
 import {
   addTask,
   createEmptyPlan,
+  importDailyValues,
   moveNote,
   removeTask,
   setMetricValues,
@@ -10,7 +11,7 @@ import {
   updateTask,
 } from '../domain/plan';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
-import type { PlanSnapshot, TaskItem } from '../domain/types';
+import type { DailyMetric, PlanSnapshot, TaskItem } from '../domain/types';
 
 export const PLAN_STORAGE_KEY = 'release-board:plan';
 
@@ -88,6 +89,10 @@ export class LocalPlanRepository implements PlanRepository {
 
   setMetricValues(changes: readonly MetricValueChange[]): void {
     this.change(setMetricValues(this.plan, changes));
+  }
+
+  importDailyValues(days: readonly DailyMetric[]): void {
+    this.change(importDailyValues(this.plan, days));
   }
 
   replacePlan(plan: PlanSnapshot): void {

@@ -39,6 +39,15 @@ export const COLOR_TOKENS = [
   /** Weekends and holidays. */
   'holiday',
   'holiday-fg',
+  /** Days before today. */
+  'past',
+  /** Approval light of a day in the revenue forecast: text, and the background of its cell. */
+  'approval-green',
+  'approval-green-soft',
+  'approval-orange',
+  'approval-orange-soft',
+  'approval-red',
+  'approval-red-soft',
   /** Behind modal dialogs, used with transparency. */
   'overlay',
 ] as const;

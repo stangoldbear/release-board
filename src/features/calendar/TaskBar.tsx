@@ -6,6 +6,7 @@ import type { PlacedTask } from '../../domain/schedule';
 import type { TaskItem } from '../../domain/types';
 import { taskColorStyle } from '../../themes';
 import { daysBetween, formatDateToIT } from '../../utils/dateUtils';
+import { LABEL_WIDTH } from './timelineLayout';
 import type { DragKind } from './useTaskDrag';
 
 /** Bars narrower than this have no resize handles: the whole bar moves. */
@@ -101,7 +102,8 @@ export function TaskBar({
         top,
         height,
       }}
-      className={`group/bar pointer-events-auto absolute flex cursor-grab flex-col justify-center overflow-hidden border-2 text-left active:cursor-grabbing ${
+      // Clipped rather than hidden: a hidden overflow would keep the title from sticking.
+      className={`group/bar pointer-events-auto absolute flex cursor-grab flex-col justify-center overflow-clip border-2 text-left active:cursor-grabbing ${
         width < MIN_DETAILED_WIDTH ? 'px-1' : 'px-2.5'
       } ${
         task.borderStyle === 'dashed' ? 'border-dashed' : 'border-solid'
@@ -110,10 +112,12 @@ export function TaskBar({
       } ${dragging ? 'z-30 opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'}`}
     >
       {resizable && !continuesBefore && handle('start')}
+      {/* The title stays in view while the start of a long bar scrolls past the left edge. */}
       <span
-        className={`block text-xs leading-4 font-semibold wrap-break-word ${
+        className={`sticky block w-fit max-w-full text-xs leading-4 font-semibold wrap-break-word ${
           detailed || height < 40 ? 'truncate' : 'line-clamp-2'
         }`}
+        style={{ left: LABEL_WIDTH + 6 }}
       >
         {task.title}
       </span>

@@ -1,4 +1,4 @@
-import type { BorderStyle, Lane, PlanSnapshot, TaskItem, TaskStatus } from './types';
+import type { BorderStyle, DailyMetric, Lane, PlanSnapshot, TaskItem, TaskStatus } from './types';
 
 export const DEFAULT_LANES: readonly Lane[] = [
   { id: 'lane-1', name: 'Frontend' },
@@ -62,12 +62,9 @@ export function diffTask(before: TaskItem, after: TaskItem): TaskChanges {
   return changes;
 }
 
-/** The content of a new task equal to this one, marked as a copy in the title. */
+/** The content of a new task equal to this one, title included. */
 export function copyOfTask({ id, ...content }: TaskItem): Omit<TaskItem, 'id'> {
-  return {
-    ...content,
-    title: content.title.includes('(Copia)') ? content.title : `${content.title} (Copia)`,
-  };
+  return content;
 }
 
 export function addTask(plan: PlanSnapshot, task: TaskItem): PlanSnapshot {
@@ -111,19 +108,26 @@ export function moveNote(
   return { ...plan, dailyNotes: { ...others, [to]: moved } };
 }
 
+function sortedMetrics(byDate: Map<string, DailyMetric>): DailyMetric[] {
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Sets or removes daily values. A day keeps its approval light and promotions. */
 export function setMetricValues(
   plan: PlanSnapshot,
   changes: readonly MetricValueChange[],
 ): PlanSnapshot {
-  const values = new Map(plan.metrics.map((metric) => [metric.date, metric.value]));
-  for (const change of changes) {
-    if (change.value === null) values.delete(change.date);
-    else values.set(change.date, change.value);
+  const byDate = new Map(plan.metrics.map((metric) => [metric.date, metric]));
+  for (const { date, value } of changes) {
+    if (value === null) byDate.delete(date);
+    else byDate.set(date, { ...byDate.get(date), date, value });
   }
-  return {
-    ...plan,
-    metrics: [...values]
-      .map(([date, value]) => ({ date, value }))
-      .sort((a, b) => a.date.localeCompare(b.date)),
-  };
+  return { ...plan, metrics: sortedMetrics(byDate) };
+}
+
+/** Days of an imported forecast: each replaces what its day had, details included. */
+export function importDailyValues(plan: PlanSnapshot, days: readonly DailyMetric[]): PlanSnapshot {
+  const byDate = new Map(plan.metrics.map((metric) => [metric.date, metric]));
+  for (const day of days) byDate.set(day.date, { ...day });
+  return { ...plan, metrics: sortedMetrics(byDate) };
 }

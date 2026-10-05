@@ -315,6 +315,24 @@ describe('values, notes and history', () => {
     await assertFails(attempt(`${PLAN}/notes/2026-09-15`, { text: '' }));
   });
 
+  it('accepts the approval light and promotions of a forecast day, and nothing else', async () => {
+    const attempt = (data: Record<string, unknown>) => {
+      const path = `${PLAN}/metrics/metric-1/values/2026-10-05`;
+      const batch = writeBatch(editor);
+      batch.set(doc(editor, path), { value: 3210123.45, ...data, ...audit(EDITOR, 'h6') });
+      batch.set(
+        doc(editor, `${PLAN}/history/h6`),
+        historyEntry(EDITOR, 'metric', 'metric-1', 'import'),
+      );
+      return batch.commit();
+    };
+    await assertSucceeds(attempt({ approval: 'red', promoEu: 'Saldi', promoNonEu: 'Singles Day' }));
+    await assertFails(attempt({ approval: 'yellow' }));
+    await assertFails(attempt({ promoEu: '' }));
+    await assertFails(attempt({ promoNonEu: 'x'.repeat(201) }));
+    await assertFails(attempt({ note: 'campo sconosciuto' }));
+  });
+
   it('never lets history entries change or disappear', async () => {
     await assertFails(updateDoc(doc(owner, `${PLAN}/history/h0`), { action: 'update' }));
     await assertFails(deleteDoc(doc(owner, `${PLAN}/history/h0`)));

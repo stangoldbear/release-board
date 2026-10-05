@@ -1,3 +1,4 @@
+import { APPROVAL_LIGHTS } from './approval';
 import { DEFAULT_COLOR_ID, isKnownColorId, normalizeColorId } from './colors';
 import type { DailyMetric, DailyNotes, Lane, PlanSnapshot, TaskItem } from './types';
 import { formatDateToIT, formatDateToISO, isIsoDate } from '../utils/dateUtils';
@@ -280,12 +281,27 @@ function readMetrics(value: unknown, errors: string[]): DailyMetric[] {
       isObject(entry) && typeof entry.value === 'number' && Number.isFinite(entry.value)
         ? entry.value
         : null;
+    const approval =
+      isObject(entry) && entry.approval !== undefined
+        ? oneOf(entry.approval, APPROVAL_LIGHTS)
+        : undefined;
+    const promoEu = isObject(entry) ? optionalString(entry.promoEu) : undefined;
+    const promoNonEu = isObject(entry) ? optionalString(entry.promoNonEu) : undefined;
     const where = date ? `Metrica del ${formatDateToIT(date)}` : `Metrica ${index + 1}`;
     if (!date) errors.push(`${where}: data non valida.`);
     else if (values.some((existing) => existing.date === date))
       errors.push(`${where}: data ripetuta.`);
     else if (amount === null) errors.push(`${where}: valore non numerico.`);
-    else values.push({ date, value: amount });
+    else if (approval === null) errors.push(`${where}: semaforo non valido.`);
+    else if (promoEu === null || promoNonEu === null)
+      errors.push(`${where}: promozione non valida.`);
+    else {
+      const day: DailyMetric = { date, value: amount };
+      if (approval) day.approval = approval;
+      if (promoEu) day.promoEu = promoEu;
+      if (promoNonEu) day.promoNonEu = promoNonEu;
+      values.push(day);
+    }
   });
   return values;
 }

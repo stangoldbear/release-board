@@ -271,6 +271,43 @@ describe('changes', () => {
     expect(values.metrics.length).toBe(sample.metrics.length);
   });
 
+  it('imports forecast days, keeps their details on a manual edit, replaces them on a new import', async () => {
+    const dayOf = (plan: PlanSnapshot, date: string) =>
+      plan.metrics.find((metric) => metric.date === date);
+    repository.importDailyValues([
+      { date: '2026-10-06', value: 2100000, approval: 'green' },
+      { date: '2026-10-05', value: 3210123.45, approval: 'red', promoEu: 'Saldi' },
+    ]);
+    const imported = await planWhere(repository, (plan) => dayOf(plan, '2026-10-06') !== undefined);
+    expect(dayOf(imported, '2026-10-05')).toEqual({
+      date: '2026-10-05',
+      value: 3210123.45,
+      approval: 'red',
+      promoEu: 'Saldi',
+    });
+
+    repository.setMetricValues([{ date: '2026-10-05', value: 1 }]);
+    const edited = await planWhere(repository, (plan) => dayOf(plan, '2026-10-05')?.value === 1);
+    expect(dayOf(edited, '2026-10-05')).toMatchObject({ approval: 'red', promoEu: 'Saldi' });
+
+    repository.importDailyValues([{ date: '2026-10-05', value: 2 }]);
+    const replaced = await planWhere(repository, (plan) => dayOf(plan, '2026-10-05')?.value === 2);
+    expect(dayOf(replaced, '2026-10-05')).toEqual({ date: '2026-10-05', value: 2 });
+
+    await whenSynced(repository);
+    const entries = await new Promise<HistoryEntry[]>((resolve) => {
+      const stop = repository.subscribeHistory({ limit: 50 }, (items) => {
+        if (items.length >= 5 && items.every((item) => item.at !== null)) {
+          stop();
+          resolve(items);
+        }
+      });
+    });
+    expect(describeHistoryEntry(entries.at(-3) as HistoryEntry)).toMatch(
+      /ha importato: 2 giorni di fatturato previsto, dal 05\/10\/2026 al 06\/10\/2026$/,
+    );
+  });
+
   it('moves a note in one change, and leaves a day that has a note alone', async () => {
     const [from, taken] = Object.keys(sample.dailyNotes).sort() as [string, string];
     const text = sample.dailyNotes[from];
@@ -291,7 +328,7 @@ describe('changes', () => {
     repository.moveNote('2026-09-26', created, 'Rilascio');
     await whenSynced(repository);
     const entries = await new Promise<HistoryEntry[]>((resolve) => {
-      const stop = repository.subscribeHistory(50, (items) => {
+      const stop = repository.subscribeHistory({ limit: 50 }, (items) => {
         if (items.length === 4 && items.every((item) => item.at !== null)) {
           stop();
           resolve(items);
@@ -327,7 +364,7 @@ describe('changes', () => {
     expect(await statuses).toEqual(['synced', 'saving', 'synced']);
 
     const entries = await new Promise<HistoryEntry[]>((resolve) => {
-      const stop = repository.subscribeHistory(50, (items) => {
+      const stop = repository.subscribeHistory({ limit: 50 }, (items) => {
         if (items.length === 3 && items.every((item) => item.at !== null)) {
           stop();
           resolve(items);
@@ -352,6 +389,17 @@ describe('changes', () => {
         )
         .sort(),
     ).toEqual(['create:note:2026-09-10', 'import:plan:main', 'setup:plan:main']);
+
+    // A start in time keeps only the later changes.
+    const since = (date: Date) =>
+      new Promise<HistoryEntry[]>((resolve) => {
+        const stop = repository.subscribeHistory({ limit: 50, since: date }, (items) => {
+          stop();
+          resolve(items);
+        });
+      });
+    expect(await since(new Date(Date.now() + 60 * 60 * 1000))).toEqual([]);
+    expect(await since(new Date(Date.now() - 60 * 60 * 1000))).toHaveLength(3);
   });
 
   it('turns a refused change into an error status', async () => {

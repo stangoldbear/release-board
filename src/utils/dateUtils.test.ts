@@ -32,12 +32,17 @@ describe('getItalianHolidayName', () => {
     ['2026-04-06', "Lunedì dell'Angelo (Pasquetta)"],
     ['2026-06-02', 'Festa della Repubblica'],
     ['2026-12-25', 'Natale'],
+    ['2027-10-04', "San Francesco d'Assisi"],
   ])('knows %s', (date, name) => {
     expect(getItalianHolidayName(parseISODate(date))).toBe(name);
   });
 
   it('returns null on a working day', () => {
     expect(getItalianHolidayName(parseISODate('2026-09-28'))).toBeNull();
+  });
+
+  it('counts 4 October as a holiday only from 2026, when it became one again', () => {
+    expect(getItalianHolidayName(parseISODate('2025-10-04'))).toBeNull();
   });
 });
 

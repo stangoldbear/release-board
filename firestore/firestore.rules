@@ -173,12 +173,18 @@ service cloud.firestore {
         allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validMetric();
         allow delete: if isMember(planId);
 
+        // A daily value; from a revenue forecast also the day's approval light and promotions.
         match /values/{date} {
           allow read: if isMember(planId);
           function validValue() {
+            let data = request.resource.data;
             return isIsoDate(date)
-              && request.resource.data.keys().hasOnly(['value', 'updatedAt', 'updatedBy', 'lastHistoryId'])
-              && request.resource.data.value is number;
+              && data.keys().hasOnly(
+                ['value', 'approval', 'promoEu', 'promoNonEu', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+              && data.value is number
+              && (!('approval' in data) || data.approval in ['green', 'orange', 'red'])
+              && (!('promoEu' in data) || isText(data.promoEu, 200))
+              && (!('promoNonEu' in data) || isText(data.promoNonEu, 200));
           }
 
           allow create: if isMemberAfter(planId) && audited(planId) && validValue();

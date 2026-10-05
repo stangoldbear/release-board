@@ -1,5 +1,5 @@
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
-import type { PlanSnapshot, TaskItem } from '../domain/types';
+import type { DailyMetric, PlanSnapshot, TaskItem } from '../domain/types';
 
 /** Whether the changes made here have reached where the plan is kept. */
 export type SyncStatus = 'synced' | 'saving' | 'offline' | 'error';
@@ -28,7 +28,10 @@ export interface PlanRepository {
    * `to` already has one, nothing changes.
    */
   moveNote(from: string, to: string, text?: string): void;
+  /** Sets or removes daily values; a day keeps its approval light and promotions. */
   setMetricValues(changes: readonly MetricValueChange[]): void;
+  /** Saves the days of an imported forecast: each replaces what its day had, details included. */
+  importDailyValues(days: readonly DailyMetric[]): void;
   /** Replaces everything, as when a backup is restored. */
   replacePlan(plan: PlanSnapshot): void;
 }

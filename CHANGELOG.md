@@ -6,6 +6,54 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-05
+
+### Aggiunto
+
+- Calendario continuo: i mesi si susseguono in un'unica linea del tempo che scorre in orizzontale e
+  si allunga quando ci si avvicina alla fine, o all'inizio appena ci si ferma. Sopra i giorni c'è la
+  riga dei mesi, con il nome che resta in vista e il totale del fatturato del mese.
+  - Le frecce in alto portano al primo giorno del mese precedente o successivo e «Oggi» porta oggi
+    al bordo sinistro, con uno scorrimento breve, immediato se il sistema chiede meno movimento.
+    In alto c'è il mese che si sta guardando.
+  - Oggi ha il numero sottolineato e una linea sottile lungo le corsie.
+  - «Nascondi giorni passati» fa iniziare il calendario da oggi; altrimenti i giorni passati sono
+    in grigio.
+  - Il titolo di un'attività resta leggibile anche quando il suo inizio è uscito a sinistra.
+- Import del fatturato previsto dal foglio Google scaricato in CSV («File» → «Scarica» → «Valori
+  separati da virgola»), con «Importa da file» accanto a «Modifica valori».
+  - Servono le colonne Date (per esempio 5-ott-26) e OV (per esempio 3.210.123,45). MONTH e day
+    controllano le date, EU MARKETS e NON EU MARKETS sono le promozioni, Approval light (Green,
+    Orange, Red) è il semaforo dei rilasci.
+  - Prima di salvare, un'anteprima mostra i giorni trovati, quanti valori vengono sostituiti, i
+    semafori, le promozioni e le righe scartate con il motivo.
+  - Nella riga del fatturato e nella bacheca il valore prende il colore del semaforo, su uno sfondo
+    più chiaro dello stesso colore e con una forma diversa per ogni semaforo. Passandoci sopra con
+    il mouse, arrivandoci con la tastiera o toccandolo compaiono il valore esatto, il semaforo e le
+    promozioni EU e non EU.
+- La cronologia ha una pagina sua, da Impostazioni → «Apri la cronologia», al posto della finestra
+  con le ultime 100 modifiche: filtri per periodo, autore e tipo di modifica, un riepilogo, il
+  grafico delle modifiche per giorno con la sua tabella, le modifiche per autore e per tipo e
+  l'elenco per giorno con ora, autore e campi cambiati.
+
+### Modificato
+
+- L'app usa tutta la larghezza della finestra: sugli schermi larghi il calendario mostra più giorni.
+- La copia di un'attività ha lo stesso titolo, senza «(Copia)».
+- I dati di esempio hanno semafori e promozioni.
+
+### Corretto
+
+- «Modifica valori» salva solo i giorni cambiati: prima riscriveva tutto il mese e arrotondava i
+  valori con i centesimi.
+- Il 4 ottobre, San Francesco d'Assisi, è festa nazionale dal 2026.
+- Sul telefono la pagina non è più larga dello schermo: succedeva nello zoom Trimestre con una
+  festività in vista.
+
+Con un'istanza condivisa le regole di Firestore sono cambiate, perché il valore di un giorno può
+avere semaforo e promozioni: ripubblicale come nel passo «Pubblica le regole di sicurezza» della
+guida prima di importare il fatturato.
+
 ## [0.3.0] - 2026-10-05
 
 ### Aggiunto
@@ -188,7 +236,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/stangoldbear/release-board/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/stangoldbear/release-board/compare/v0.2.5...v0.3.0
 [0.2.5]: https://github.com/stangoldbear/release-board/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/stangoldbear/release-board/compare/v0.2.3...v0.2.4

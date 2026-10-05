@@ -73,6 +73,17 @@ describe('LocalPlanRepository', () => {
     expect(reopened.latest()).toEqual(latest());
   });
 
+  it('imports forecast days and keeps them in the browser', () => {
+    const { repository, storage, latest } = setup();
+    repository.importDailyValues([
+      { date: '2026-10-05', value: 3210123.45, approval: 'red', promoNonEu: 'Singles Day' },
+    ]);
+    expect(latest().metrics).toEqual([
+      { date: '2026-10-05', value: 3210123.45, approval: 'red', promoNonEu: 'Singles Day' },
+    ]);
+    expect(setup(storage).latest().metrics).toEqual(latest().metrics);
+  });
+
   it('moves a note to a free day, and leaves a day that has a note alone', () => {
     const { repository, storage, latest } = setup();
     repository.setNote('2026-09-15', 'Congelamento');

@@ -121,6 +121,12 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
 ];
 
+/** Invented promotions, by days of the month. */
+const SAMPLE_PROMOS: { from: number; to: number; eu?: string; nonEu?: string }[] = [
+  { from: 12, to: 16, eu: 'Settimana del cliente', nonEu: 'Spedizione gratuita' },
+  { from: 26, to: 28, eu: 'Saldi di fine mese' },
+];
+
 const SAMPLE_NOTES: { day: number; text: string }[] = [
   { day: 1, text: 'Inizio lavori sulla versione 2.8' },
   { day: 15, text: 'Congelamento del codice alle 12:00' },
@@ -149,13 +155,24 @@ export function buildSamplePlan(year: number, month: number): PlanSnapshot {
     return task;
   });
 
-  // Plausible weekday values: a base amount with a deterministic variation per day.
+  // Plausible weekday values: a base amount with a deterministic variation per day. The busiest
+  // days are the most delicate for releases, as in a revenue forecast.
   const metrics: DailyMetric[] = getDaysInMonth(year, month)
     .filter((date) => !isWeekend(date))
-    .map((date) => ({
-      date: formatDateToISO(date),
-      value: 90_000 + ((date.getDate() * 7_919) % 45_000),
-    }));
+    .map((date) => {
+      const value = 90_000 + ((date.getDate() * 7_919) % 45_000);
+      const metric: DailyMetric = {
+        date: formatDateToISO(date),
+        value,
+        approval: value >= 125_000 ? 'red' : value >= 110_000 ? 'orange' : 'green',
+      };
+      const promo = SAMPLE_PROMOS.find(
+        ({ from, to }) => from <= date.getDate() && date.getDate() <= to,
+      );
+      if (promo?.eu) metric.promoEu = promo.eu;
+      if (promo?.nonEu) metric.promoNonEu = promo.nonEu;
+      return metric;
+    });
 
   const dailyNotes = Object.fromEntries(SAMPLE_NOTES.map((note) => [dateOf(note.day), note.text]));
 
