@@ -143,11 +143,15 @@ export function SetupGuideDialog({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       className="max-w-2xl"
       footer={
-        <>
-          {/* The guide covers the page: it shows which build it describes on its own. */}
-          <VersionStamp className="mr-auto" />
-          <Button onClick={onClose}>Chiudi</Button>
-        </>
+        // The guide covers the page: it shows which build it describes on its own, centered like
+        // everywhere else, with the button at the end. On phones they take a line each.
+        <div className="grid w-full items-center gap-2 sm:grid-cols-[1fr_auto_1fr]">
+          <span aria-hidden="true" className="hidden sm:block" />
+          <VersionStamp />
+          <Button onClick={onClose} className="justify-self-end">
+            Chiudi
+          </Button>
+        </div>
       }
     >
       <SetupGuide />

@@ -1,10 +1,19 @@
-import { CalendarRange, ListTodo, Rows3, StickyNote, TrendingUp, Users } from 'lucide-react';
+import {
+  CalendarRange,
+  ListTodo,
+  NotebookPen,
+  Rows3,
+  StickyNote,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
 import type { HistoryKind } from '../../domain/history';
 import { addDaysIso, parseISODate } from '../../utils/dateUtils';
 
 const KIND_ICONS = {
   task: ListTodo,
   note: StickyNote,
+  memo: NotebookPen,
   revenue: TrendingUp,
   lane: Rows3,
   member: Users,

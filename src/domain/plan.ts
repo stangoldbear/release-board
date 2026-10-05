@@ -1,4 +1,14 @@
-import type { BorderStyle, DailyMetric, Lane, PlanSnapshot, TaskItem, TaskStatus } from './types';
+import { applyMemoChanges, memoMoves, sortMemos } from './memos';
+import type { MemoChanges } from './memos';
+import type {
+  BorderStyle,
+  DailyMetric,
+  Lane,
+  Memo,
+  PlanSnapshot,
+  TaskItem,
+  TaskStatus,
+} from './types';
 
 export const DEFAULT_LANES: readonly Lane[] = [
   { id: 'lane-1', name: 'Frontend' },
@@ -27,14 +37,33 @@ export function createEmptyPlan(): PlanSnapshot {
     tasks: [],
     metrics: [],
     dailyNotes: {},
+    memos: [],
   };
+}
+
+/**
+ * What a plan holds, in words: "3 corsie", "11 attività"… for imports, backups and the history.
+ * Private notes are not counted: they stay with their author and no backup carries them.
+ */
+export function planContentSummary(plan: PlanSnapshot): string[] {
+  const values = plan.metrics.length;
+  const notes = Object.keys(plan.dailyNotes).length;
+  const memos = plan.memos.filter((memo) => !memo.private).length;
+  return [
+    `${plan.lanes.length} ${plan.lanes.length === 1 ? 'corsia' : 'corsie'}`,
+    `${plan.tasks.length} attività`,
+    `${values} ${values === 1 ? 'valore giornaliero' : 'valori giornalieri'}`,
+    `${notes} ${notes === 1 ? 'nota' : 'note'}`,
+    `${memos} ${memos === 1 ? 'nota libera' : 'note libere'}`,
+  ];
 }
 
 export function isPlanEmpty(plan: PlanSnapshot): boolean {
   return (
     plan.tasks.length === 0 &&
     plan.metrics.length === 0 &&
-    Object.keys(plan.dailyNotes).length === 0
+    Object.keys(plan.dailyNotes).length === 0 &&
+    plan.memos.length === 0
   );
 }
 
@@ -130,4 +159,41 @@ export function importDailyValues(plan: PlanSnapshot, days: readonly DailyMetric
   const byDate = new Map(plan.metrics.map((metric) => [metric.date, metric]));
   for (const day of days) byDate.set(day.date, { ...day });
   return { ...plan, metrics: sortedMetrics(byDate) };
+}
+
+export function addMemo(plan: PlanSnapshot, memo: Memo): PlanSnapshot {
+  return { ...plan, memos: sortMemos([...plan.memos, memo]) };
+}
+
+/** Applies the changes to the note; a note that no longer exists stays deleted. */
+export function updateMemo(plan: PlanSnapshot, memoId: string, changes: MemoChanges): PlanSnapshot {
+  return {
+    ...plan,
+    memos: sortMemos(
+      plan.memos.map((memo) => (memo.id === memoId ? applyMemoChanges(memo, changes) : memo)),
+    ),
+  };
+}
+
+export function removeMemo(plan: PlanSnapshot, memoId: string): PlanSnapshot {
+  return { ...plan, memos: plan.memos.filter((memo) => memo.id !== memoId) };
+}
+
+/** Moves a note right before `beforeId`, or to the end of the strip when it is null. */
+export function moveMemo(
+  plan: PlanSnapshot,
+  memoId: string,
+  beforeId: string | null,
+): PlanSnapshot {
+  const moves = memoMoves(plan.memos, memoId, beforeId);
+  if (moves.size === 0) return plan;
+  return {
+    ...plan,
+    memos: sortMemos(
+      plan.memos.map((memo) => {
+        const position = moves.get(memo.id);
+        return position === undefined ? memo : { ...memo, position };
+      }),
+    ),
+  };
 }

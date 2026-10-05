@@ -4,6 +4,7 @@ import type { PlanSnapshot } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import type { ThemePreference } from '../../themes';
+import type { TextScale } from '../calendar/timelineLayout';
 import { AboutSection } from './AboutSection';
 import { AccountSection } from './AccountSection';
 import { AppearanceSection } from './AppearanceSection';
@@ -16,6 +17,8 @@ interface SettingsDialogProps {
   instance: Instance;
   theme: ThemePreference;
   onChangeTheme: (theme: ThemePreference) => void;
+  textScale: TextScale;
+  onTextScaleChange: (scale: TextScale) => void;
   onReplacePlan: (plan: PlanSnapshot) => void;
   /** Opens the page with every change to the plan. */
   onOpenHistory: () => void;
@@ -28,6 +31,8 @@ export function SettingsDialog({
   instance,
   theme,
   onChangeTheme,
+  textScale,
+  onTextScaleChange,
   onReplacePlan,
   onOpenHistory,
   onClose,
@@ -35,7 +40,12 @@ export function SettingsDialog({
   return (
     <Dialog title="Impostazioni" onClose={onClose} className="max-w-lg">
       <div className="space-y-6">
-        <AppearanceSection theme={theme} onChangeTheme={onChangeTheme} />
+        <AppearanceSection
+          theme={theme}
+          onChangeTheme={onChangeTheme}
+          textScale={textScale}
+          onTextScaleChange={onTextScaleChange}
+        />
         {instance.kind === 'cloud' && (
           <AccountSection
             user={instance.user}
@@ -45,7 +55,11 @@ export function SettingsDialog({
           />
         )}
         {instance.kind === 'cloud' && instance.role === 'owner' && (
-          <MembersSection members={instance.members} selfGithubId={instance.user.githubId} />
+          <MembersSection
+            members={instance.members}
+            selfGithubId={instance.user.githubId}
+            plan={plan}
+          />
         )}
         {instance.kind === 'cloud' && (
           <section aria-labelledby="settings-history" className="space-y-2">

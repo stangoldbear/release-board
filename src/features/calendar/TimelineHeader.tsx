@@ -6,14 +6,7 @@ import type { DateRange } from '../../domain/schedule';
 import type { DailyMetric } from '../../domain/types';
 import { formatDateToIT } from '../../utils/dateUtils';
 import { monthLabel } from './calendarView';
-import {
-  LABEL_CELL,
-  LABEL_WIDTH,
-  columnEdge,
-  columnTone,
-  dayLabel,
-  monthSpans,
-} from './timelineLayout';
+import { LABEL_CELL, columnEdge, columnTone, dayLabel, monthSpans } from './timelineLayout';
 import type { Column } from './timelineLayout';
 
 interface MonthBandProps {
@@ -27,12 +20,7 @@ interface MonthBandProps {
 export const MonthBand = memo(function MonthBand({ range, dayWidth, metrics }: MonthBandProps) {
   return (
     <div className="flex border-b border-line bg-surface text-xs">
-      <div
-        className={`${LABEL_CELL} flex items-center bg-surface font-bold uppercase`}
-        style={{ width: LABEL_WIDTH }}
-      >
-        Mese
-      </div>
+      <div className={`${LABEL_CELL} flex items-center bg-surface font-bold uppercase`}>Mese</div>
       {monthSpans(range, dayWidth).map((span) => {
         const total = metrics ? sumInRange(metrics, span.days) : null;
         return (
@@ -40,12 +28,9 @@ export const MonthBand = memo(function MonthBand({ range, dayWidth, metrics }: M
           <div
             key={span.month}
             style={{ width: span.width }}
-            className="shrink-0 overflow-clip border-r border-line-strong py-1.5"
+            className="shrink-0 overflow-clip border-r border-line-strong py-1.5 in-data-compact:py-1"
           >
-            <span
-              className="sticky inline-flex items-baseline gap-2 px-2 whitespace-nowrap"
-              style={{ left: LABEL_WIDTH }}
-            >
+            <span className="sticky left-(--gantt-label-width) inline-flex items-baseline gap-2 px-2 whitespace-nowrap">
               <span className="font-bold tracking-wide uppercase">{monthLabel(span.month)}</span>
               {total !== null && (
                 <span className="text-fg-muted tabular-nums">
@@ -80,10 +65,7 @@ export const DayHeaderRow = memo(function DayHeaderRow({
 }: DayHeaderRowProps) {
   return (
     <div className="flex border-b border-line-strong">
-      <div
-        className={`${LABEL_CELL} flex items-center bg-surface text-xs font-bold uppercase`}
-        style={{ width: LABEL_WIDTH }}
-      >
+      <div className={`${LABEL_CELL} flex items-center bg-surface text-xs font-bold uppercase`}>
         {weekColumns ? 'Settimana' : 'Giorno'}
       </div>
       {columns.map((column) => {
@@ -99,7 +81,7 @@ export const DayHeaderRow = memo(function DayHeaderRow({
               onClick={() => onShowDays(column.start)}
               style={{ width: column.width }}
               title={`Mostra i giorni dal ${formatDateToIT(column.start)} al ${formatDateToIT(column.end)}${column.isToday ? ' · Settimana di oggi' : ''}${holidayText ? ` · ${holidayText}` : ''}`}
-              className={`shrink-0 cursor-pointer py-1 text-center text-xs hover:bg-surface-strong ${columnEdge(column)} ${columnTone(column)}`}
+              className={`shrink-0 cursor-pointer py-1 text-center text-xs hover:bg-surface-strong in-data-compact:py-0.5 ${columnEdge(column)} ${columnTone(column)}`}
             >
               <span className={`block font-bold ${todayMark}`}>
                 {start.day} {start.month}
@@ -123,7 +105,7 @@ export const DayHeaderRow = memo(function DayHeaderRow({
             key={column.start}
             style={{ width: column.width }}
             title={`${formatDateToIT(column.start)}${column.isToday ? ' · Oggi' : ''}${holidayText ? ` · Festività: ${holidayText}` : ''}`}
-            className={`shrink-0 py-1 text-center ${columnEdge(column)} ${columnTone(column)} ${column.isToday ? 'font-bold' : ''}`}
+            className={`shrink-0 py-1 text-center in-data-compact:py-0.5 ${columnEdge(column)} ${columnTone(column)} ${column.isToday ? 'font-bold' : ''}`}
           >
             <span className="block text-xs uppercase">
               {start.weekday}

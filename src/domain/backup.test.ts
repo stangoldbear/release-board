@@ -43,6 +43,18 @@ const plan: PlanSnapshot = {
     { date: '2026-09-02', value: 1250.5 },
   ],
   dailyNotes: { '2026-09-15': 'Congelamento del codice' },
+  memos: [
+    { id: 'memo-1', title: 'App mobile: rilascio a gennaio', position: 1 },
+    {
+      id: 'memo-2',
+      title: 'Stima del fornitore',
+      body: 'Entro il 17',
+      colorId: 'yellow',
+      remindOn: '2026-07-17',
+      position: 1.5,
+      author: { id: '1002', login: 'editor' },
+    },
+  ],
 };
 
 /** A file written by the previous app version, with invented content. */
@@ -173,6 +185,7 @@ describe('files of the previous app version', () => {
         { date: '2026-09-11', value: 98765 },
       ],
       dailyNotes: { '2026-09-10': 'Nota di prova' },
+      memos: [],
     });
   });
 
@@ -195,9 +208,51 @@ describe('invalid backups', () => {
   it('reject unknown files and newer versions', () => {
     expect(errorsOf([])).toEqual(['Il file non contiene un backup.']);
     expect(errorsOf({ hello: 'world' })).toEqual(['Il file non è un backup di Release Board.']);
-    expect(errorsOf({ ...valid, schemaVersion: 4 })).toEqual([
+    expect(errorsOf({ ...valid, schemaVersion: 5 })).toEqual([
       'Il backup è stato creato con una versione più recente di Release Board.',
     ]);
+    expect(errorsOf({ ...valid, schemaVersion: 2 })).toEqual([
+      'Versione del backup non supportata.',
+    ]);
+  });
+
+  it('read the backups of 0.4, which have no free notes', () => {
+    const { memos, ...withoutMemos } = valid;
+    const result = parseBackup({ ...withoutMemos, schemaVersion: 3 });
+    expect(memos).toHaveLength(2);
+    expect(result).toMatchObject({
+      ok: true,
+      plan: { lanes: plan.lanes, tasks: plan.tasks, dailyNotes: plan.dailyNotes, memos: [] },
+    });
+  });
+
+  it('explain every problem of a free note', () => {
+    const broken = {
+      ...valid,
+      memos: [
+        { id: 'memo-1', title: '', position: 1 },
+        { id: 'memo-2', title: 'Due', colorId: 'rainbow', remindOn: '2026-02-30', position: 'x' },
+        { id: 'memo-2', title: 'Tre', body: 7, position: 3 },
+        { id: 'memo-4', title: 'x'.repeat(201), position: 4 },
+        { id: 'memo-5', title: 'Cinque', position: 5, author: { id: '1002' } },
+      ],
+    };
+    expect(errorsOf(broken)).toEqual([
+      'Nota libera 1: manca il titolo.',
+      'Nota libera 2: colore non riconosciuto, data del promemoria non valida, posizione non valida.',
+      'Nota libera 3: testo non valido.',
+      'Nota libera 4: titolo troppo lungo.',
+      'Nota libera 5: autore non valido.',
+    ]);
+  });
+
+  it('never carry private notes, which belong to their author', () => {
+    const secret = { id: 'memo-3', title: 'Solo per me', position: 3, private: true as const };
+    const file = createBackupFile(
+      { ...plan, memos: [...plan.memos, secret] },
+      new Date('2026-09-28T10:00:00Z'),
+    );
+    expect(file.memos.map((memo) => memo.id)).toEqual(['memo-1', 'memo-2']);
   });
 
   it('explain every problem of a task', () => {

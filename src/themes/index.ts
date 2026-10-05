@@ -2,7 +2,9 @@ import type { CSSProperties } from 'react';
 import { TASK_COLOR_IDS } from '../domain/colors';
 import type { TaskColorId } from '../domain/colors';
 import darkModern from './dark-modern.json';
+import { deriveTheme } from './derive';
 import lightModern from './light-modern.json';
+import { VSCODE_THEME_SEEDS } from './vscodeThemes';
 
 /** The semantic colors of the interface. tokens.css turns each one into Tailwind utilities. */
 export const COLOR_TOKENS = [
@@ -68,15 +70,51 @@ export interface Theme {
   tasks: Record<TaskColorId, TaskTint>;
 }
 
-/** Every available theme, by id. Colors are #rrggbb, so that contrast can be checked. */
-export const THEMES = {
+/** The app's own themes, the ones that follow the system. */
+const BUILT_IN_THEMES = {
   'light-modern': lightModern,
   'dark-modern': darkModern,
 } satisfies Record<string, Theme>;
 
-export type ThemeId = keyof typeof THEMES;
+/** Themes inspired by Visual Studio Code, chosen in the settings among the custom ones. */
+export type CustomThemeId = (typeof VSCODE_THEME_SEEDS)[number]['id'];
 
-export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
+type BuiltInThemeId = keyof typeof BUILT_IN_THEMES;
+
+export type ThemeId = BuiltInThemeId | CustomThemeId;
+
+/** The custom themes in the order of the list: the light ones, then the dark ones. */
+export const CUSTOM_THEME_IDS: readonly CustomThemeId[] = VSCODE_THEME_SEEDS.map((seed) => seed.id);
+
+export const THEME_IDS: readonly ThemeId[] = [
+  ...(Object.keys(BUILT_IN_THEMES) as BuiltInThemeId[]),
+  ...CUSTOM_THEME_IDS,
+];
+
+const derived = new Map<ThemeId, Theme>();
+
+/**
+ * A theme by id. Colors are #rrggbb, so that contrast can be checked. The custom themes are
+ * worked out the first time they are needed: the one in use when the app opens, the others when
+ * their list does.
+ */
+export function getTheme(id: ThemeId): Theme {
+  if (id === 'light-modern' || id === 'dark-modern') return BUILT_IN_THEMES[id];
+  let theme = derived.get(id);
+  if (!theme) {
+    const seed = VSCODE_THEME_SEEDS.find((item) => item.id === id);
+    if (!seed) throw new Error(`Unknown theme ${id}`);
+    theme = deriveTheme(seed);
+    derived.set(id, theme);
+  }
+  return theme;
+}
+
+/** Whether a theme is dark, without working out its colors. */
+export function isDarkTheme(id: ThemeId): boolean {
+  if (id === 'light-modern' || id === 'dark-modern') return BUILT_IN_THEMES[id].dark;
+  return VSCODE_THEME_SEEDS.some((seed) => seed.id === id && seed.dark);
+}
 
 /** A theme, or the light or dark theme that follows the system setting. */
 export type ThemePreference = 'system' | ThemeId;
@@ -90,8 +128,8 @@ export const SYSTEM_THEMES: Record<'light' | 'dark', ThemeId> = {
 };
 
 export function resolveTheme(preference: ThemePreference, systemIsDark: boolean): Theme {
-  if (preference !== 'system') return THEMES[preference];
-  return THEMES[SYSTEM_THEMES[systemIsDark ? 'dark' : 'light']];
+  if (preference !== 'system') return getTheme(preference);
+  return getTheme(SYSTEM_THEMES[systemIsDark ? 'dark' : 'light']);
 }
 
 /** Sets the theme's colors as the --rb-* variables that tokens.css reads. */

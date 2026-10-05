@@ -19,10 +19,20 @@ import type {
   WriteBatch,
 } from 'firebase/firestore';
 import type { HistoryQuery, HistoryReader } from '../../app/HistoryReader';
-import type { PlanRepository, SyncStatus } from '../../app/PlanRepository';
+import type { PlanRepository, SyncState, SyncStatus } from '../../app/PlanRepository';
+import { isHistoryAction, isHistoryEntity } from '../../domain/history';
 import type { HistoryAction, HistoryEntity, HistoryEntry } from '../../domain/history';
+import { applyMemoChanges, endPosition, memoMoves } from '../../domain/memos';
+import type { MemoChanges, MemoContent } from '../../domain/memos';
 import type { MetricValueChange, TaskChanges } from '../../domain/plan';
-import type { DailyMetric, Lane, PlanSnapshot, TaskItem } from '../../domain/types';
+import type {
+  DailyMetric,
+  Lane,
+  Memo,
+  MemoAuthor,
+  PlanSnapshot,
+  TaskItem,
+} from '../../domain/types';
 import { formatDateToIT } from '../../utils/dateUtils';
 import {
   METRIC_ID,
@@ -31,10 +41,13 @@ import {
   contentPaths,
   contentWrites,
   importSummary,
+  memoContent,
   metricContent,
   valueContent,
   readLane,
+  readMemo,
   readNote,
+  readPrivateMemo,
   readTask,
   readValue,
   taskContent,
@@ -52,6 +65,8 @@ interface Options {
   planId: string;
   actor: Actor;
   createId: () => string;
+  /** The clock of the synchronization time; the real one unless a test needs another. */
+  now?: () => Date;
 }
 
 /** A Firestore batch holds at most 500 writes; one is the history entry. */
@@ -60,12 +75,21 @@ const CHUNK_SIZE = 499;
 /** Optional task fields: clearing one removes it from the document. */
 const OPTIONAL_TASK_FIELDS = new Set(['assignee', 'description', 'deliverables']);
 
+/**
+ * Free notes came with rules of their own. Until the owner publishes them, reading the notes is
+ * refused: the plan opens without them, and the synchronization state says why.
+ */
+const MEMOS_UNAVAILABLE =
+  "Note libere non disponibili: chi gestisce l'istanza deve pubblicare le regole di sicurezza aggiornate.";
+
 type Parts = {
   lanes?: { lane: Lane; position: number }[];
   tasks?: TaskItem[];
   metricIds?: Set<string>;
   values?: DailyMetric[];
   notes?: [string, string][];
+  memos?: Memo[];
+  privateMemos?: Memo[];
 };
 
 function mapDocs<T>(
@@ -95,26 +119,31 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
   private readonly planPath: string;
   private readonly actor: Actor;
   private readonly createId: () => string;
+  private readonly now: () => Date;
 
   private parts: Parts = {};
   private plan: PlanSnapshot | null = null;
   private readonly planListeners = new Set<(plan: PlanSnapshot) => void>();
 
-  private readonly statusListeners = new Set<(status: SyncStatus) => void>();
-  private status: SyncStatus = 'synced';
+  private readonly syncListeners = new Set<(state: SyncState) => void>();
+  private sync: SyncState = { status: 'synced', lastSyncedAt: null, error: null };
   private pendingCommits = 0;
   private lastError: string | null = null;
+  /** A part of the plan that cannot be read, and stays so until the page is reloaded. */
+  private unavailable: string | null = null;
+  private lastSyncedAt: Date | null = null;
 
   private readonly stops: (() => void)[] = [];
   private readonly ready: Promise<void>;
   private markReady!: () => void;
   private failReady!: (error: Error) => void;
 
-  constructor({ db, planId, actor, createId }: Options) {
+  constructor({ db, planId, actor, createId, now = () => new Date() }: Options) {
     this.db = db;
     this.planPath = `plans/${planId}`;
     this.actor = actor;
     this.createId = createId;
+    this.now = now;
     this.ready = new Promise((resolve, reject) => {
       this.markReady = resolve;
       this.failReady = reject;
@@ -130,8 +159,19 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       (snapshot) => (this.parts.values = mapDocs(snapshot, readValue)),
     );
     this.listen('notes', (snapshot) => (this.parts.notes = mapDocs(snapshot, readNote)));
+    this.listen('memos', (snapshot) => (this.parts.memos = mapDocs(snapshot, readMemo)), {
+      fallback: () => (this.parts.memos = []),
+    });
+    this.listen(
+      `members/${actor.githubId}/memos`,
+      (snapshot) =>
+        (this.parts.privateMemos = mapDocs(snapshot, (id, data) =>
+          readPrivateMemo(id, data, this.author),
+        )),
+      { fallback: () => (this.parts.privateMemos = []) },
+    );
     if (typeof window !== 'undefined') {
-      const refresh = () => this.updateStatus();
+      const refresh = () => this.updateSync();
       window.addEventListener('online', refresh);
       window.addEventListener('offline', refresh);
       this.stops.push(() => {
@@ -158,15 +198,10 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     return () => this.planListeners.delete(listener);
   }
 
-  subscribeStatus(listener: (status: SyncStatus) => void): () => void {
-    this.statusListeners.add(listener);
-    listener(this.status);
-    return () => this.statusListeners.delete(listener);
-  }
-
-  /** Why the status is "error", if it is. */
-  get error(): string | null {
-    return this.lastError;
+  subscribeSync(listener: (state: SyncState) => void): () => void {
+    this.syncListeners.add(listener);
+    listener(this.sync);
+    return () => this.syncListeners.delete(listener);
   }
 
   subscribeHistory(
@@ -310,8 +345,138 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     });
   }
 
+  createMemo(content: MemoContent): string {
+    const id = this.createId();
+    const memo = { ...content, position: endPosition(this.plan?.memos ?? []), author: this.author };
+    const batch = writeBatch(this.db);
+    if (memo.private) {
+      batch.set(this.privateRef(id), memoContent(memo));
+    } else {
+      const data = memoContent(memo);
+      const historyId = this.record(batch, 'memo', id, 'create', { after: data });
+      batch.set(this.ref(`memos/${id}`), { ...data, ...this.audit(historyId) });
+    }
+    this.commit(batch);
+    return id;
+  }
+
+  updateMemo(memoId: string, changes: MemoChanges, beforeId?: string | null): string {
+    const memos = this.plan?.memos ?? [];
+    const current = memos.find((memo) => memo.id === memoId);
+    if (!current) return memoId;
+    const moves =
+      beforeId === undefined ? new Map<string, number>() : memoMoves(memos, memoId, beforeId);
+    const position = moves.get(memoId);
+    const next = { ...applyMemoChanges(current, changes), position: position ?? current.position };
+    const visibility = Boolean(next.private) !== Boolean(current.private);
+    // Only the author makes a note private, or shared again.
+    if (visibility && current.author?.id !== this.author.id) return memoId;
+    // On the other side of the wall the note takes a new id. An old backup or the sample can bring
+    // back a shared note with the old one, and no private note ever has it; a window left open on
+    // the note elsewhere finds it gone, and saves nothing on the wrong side.
+    const id = visibility ? this.createId() : memoId;
+
+    const update: DocumentData = {};
+    for (const field of Object.keys(changes) as (keyof MemoChanges)[]) {
+      const value = changes[field];
+      if (field !== 'private') update[field] = value === null ? deleteField() : value;
+    }
+    if (position !== undefined) update.position = position;
+    const fields = Object.keys(update) as (keyof Memo)[];
+    if (!visibility && fields.length === 0 && moves.size === 0) return memoId;
+
+    const batch = writeBatch(this.db);
+    let historyId: string | null = null;
+    if (visibility && next.private) {
+      // The others see the note leave, under the title they knew.
+      historyId = this.record(batch, 'memo', memoId, 'update', {
+        before: { private: false },
+        after: { title: current.title, private: true },
+      });
+      batch.delete(this.ref(`memos/${memoId}`));
+      batch.set(this.privateRef(id), memoContent(next));
+    } else if (visibility) {
+      // The others see it arrive with all its content.
+      const data = memoContent(next);
+      historyId = this.record(batch, 'memo', id, 'update', {
+        before: { private: true },
+        after: { ...data, private: false },
+      });
+      batch.delete(this.privateRef(memoId));
+      batch.set(this.ref(`memos/${id}`), { ...data, ...this.audit(historyId) });
+    } else if (current.private && fields.length > 0) {
+      batch.update(this.privateRef(memoId), update);
+    } else if (fields.length > 0) {
+      historyId = this.record(batch, 'memo', memoId, 'update', {
+        before: defined(Object.fromEntries(fields.map((field) => [field, current[field]]))),
+        // The title is kept so that the history can name the note.
+        after: defined({
+          title: current.title,
+          ...Object.fromEntries(fields.map((field) => [field, next[field]])),
+        }),
+      });
+      batch.update(this.ref(`memos/${memoId}`), { ...update, ...this.audit(historyId) });
+    }
+
+    // The other notes change place only when the strip is numbered again.
+    for (const [other, renumbered] of moves) {
+      if (other === memoId) continue;
+      if (memos.find((memo) => memo.id === other)?.private) {
+        batch.update(this.privateRef(other), { position: renumbered });
+      } else {
+        // A private note is never named, not even by its id: the others read only that the order
+        // changed.
+        historyId ??= current.private
+          ? this.record(batch, 'memo', 'strip', 'update', { summary: "l'ordine delle note libere" })
+          : this.record(batch, 'memo', memoId, 'update', {
+              before: { position: current.position },
+              after: { title: current.title, position: next.position },
+            });
+        batch.update(this.ref(`memos/${other}`), {
+          position: renumbered,
+          ...this.audit(historyId),
+        });
+      }
+    }
+    this.commit(batch);
+    return id;
+  }
+
+  deleteMemo(memoId: string): void {
+    const before = this.plan?.memos.find((memo) => memo.id === memoId);
+    // Unknown, it could be a private note on its way: nothing is written about it.
+    if (!before) return;
+    const batch = writeBatch(this.db);
+    if (before.private) {
+      batch.delete(this.privateRef(memoId));
+    } else {
+      this.record(batch, 'memo', memoId, 'delete', { before: memoContent(before) });
+      batch.delete(this.ref(`memos/${memoId}`));
+    }
+    this.commit(batch);
+  }
+
+  moveMemo(memoId: string, beforeId: string | null): void {
+    this.updateMemo(memoId, {}, beforeId);
+  }
+
   replacePlan(plan: PlanSnapshot): void {
-    const writes = contentWrites(plan);
+    // Authors never change: a note already in the plan keeps its own, and one without an author,
+    // as in the local mode and the sample, becomes the importer's. Private notes are not part of
+    // the plan: contentWrites leaves them out, and a restore keeps them.
+    const authors = new Map(
+      (this.plan?.memos ?? []).flatMap((memo) =>
+        memo.private || !memo.author ? [] : [[memo.id, memo.author] as const],
+      ),
+    );
+    const imported = {
+      ...plan,
+      memos: plan.memos.map((memo) => ({
+        ...memo,
+        author: authors.get(memo.id) ?? memo.author ?? this.author,
+      })),
+    };
+    const writes = contentWrites(imported);
     const keep = new Set(writes.map((write) => write.path));
     const deletions = this.plan ? contentPaths(this.plan).filter((path) => !keep.has(path)) : [];
     const operations = [
@@ -323,7 +488,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       const batch = writeBatch(this.db);
       const part = groups.length > 1 ? ` (parte ${index + 1} di ${groups.length})` : '';
       const historyId = this.record(batch, 'plan', 'main', 'import', {
-        summary: `${importSummary(plan)}${part}`,
+        summary: `${importSummary(imported)}${part}`,
       });
       for (const operation of group) {
         if (operation.data === null) batch.delete(this.ref(operation.path));
@@ -335,6 +500,16 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
 
   private ref(path: string) {
     return doc(this.db, `${this.planPath}/${path}`);
+  }
+
+  /** A private note of the signed-in member. */
+  private privateRef(memoId: string) {
+    return this.ref(`members/${this.actor.githubId}/memos/${memoId}`);
+  }
+
+  /** The signed-in member, as the author of the notes they write. */
+  private get author(): MemoAuthor {
+    return { id: this.actor.githubId, login: this.actor.login };
   }
 
   private audit(historyId: string): DocumentData {
@@ -363,46 +538,80 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
 
   private commit(batch: WriteBatch): void {
     this.pendingCommits += 1;
-    this.updateStatus();
+    this.updateSync();
     batch.commit().then(
       () => {
         this.lastError = null;
+        this.lastSyncedAt = this.now();
         this.pendingCommits -= 1;
-        this.updateStatus();
+        this.updateSync();
       },
       (error: unknown) => {
         this.lastError = describeFirestoreError(error);
         this.pendingCommits -= 1;
-        this.updateStatus();
+        this.updateSync();
       },
     );
   }
 
-  private updateStatus(): void {
+  private updateSync(): void {
     // Node has a navigator without onLine: only an explicit false means offline.
     const online = typeof navigator === 'undefined' || navigator.onLine !== false;
-    const next: SyncStatus = this.lastError
+    const error = this.lastError ?? this.unavailable;
+    const status: SyncStatus = error
       ? 'error'
       : this.pendingCommits > 0
         ? online
           ? 'saving'
           : 'offline'
         : 'synced';
-    if (next === this.status) return;
-    this.status = next;
-    for (const listener of this.statusListeners) listener(next);
+    const current = this.sync;
+    if (
+      current.status === status &&
+      current.error === error &&
+      current.lastSyncedAt?.getTime() === this.lastSyncedAt?.getTime()
+    )
+      return;
+    this.sync = { status, lastSyncedAt: this.lastSyncedAt, error };
+    for (const listener of this.syncListeners) listener(this.sync);
   }
 
-  private listen(path: string, apply: (snapshot: QuerySnapshot) => void): void {
+  /**
+   * Keeps a part of the plan up to date. A part with a fallback is not essential: when it cannot
+   * be read, the plan opens without it.
+   */
+  private listen(
+    path: string,
+    apply: (snapshot: QuerySnapshot) => void,
+    optional?: { fallback: () => void },
+  ): void {
+    let first = true;
     const stop = onSnapshot(
       collection(this.db, `${this.planPath}/${path}`),
+      // Changes of metadata too: they tell when the server has confirmed the cached copy.
+      { includeMetadataChanges: true },
       (snapshot) => {
+        if (!snapshot.metadata.fromCache) {
+          this.lastSyncedAt = this.now();
+          this.updateSync();
+        }
+        // A change of metadata alone leaves the plan as it is.
+        if (!first && snapshot.docChanges().length === 0) return;
+        first = false;
         apply(snapshot);
         this.emitIfComplete();
       },
       (error: FirestoreError) => {
+        if (optional) {
+          this.unavailable =
+            error.code === 'permission-denied' ? MEMOS_UNAVAILABLE : describeFirestoreError(error);
+          optional.fallback();
+          this.updateSync();
+          this.emitIfComplete();
+          return;
+        }
         this.lastError = describeFirestoreError(error);
-        this.updateStatus();
+        this.updateSync();
         this.failReady(new Error(this.lastError));
       },
     );
@@ -410,9 +619,13 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
   }
 
   private emitIfComplete(): void {
-    const { lanes, tasks, metricIds, values, notes } = this.parts;
-    if (!lanes || !tasks || !metricIds || !values || !notes) return;
-    this.plan = buildPlan({ lanes, tasks, values, notes });
+    const { lanes, tasks, metricIds, values, notes, memos, privateMemos } = this.parts;
+    if (!lanes || !tasks || !metricIds || !values || !notes || !memos || !privateMemos) return;
+    // Should a shared note ever have the id of a private one, the private note wins: what the
+    // author writes there never reaches the shared one.
+    const privateIds = new Set(privateMemos.map((memo) => memo.id));
+    const shared = memos.filter((memo) => !privateIds.has(memo.id));
+    this.plan = buildPlan({ lanes, tasks, values, notes, memos: [...shared, ...privateMemos] });
     this.markReady();
     for (const listener of this.planListeners) listener(this.plan);
   }
@@ -420,15 +633,15 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
 
 function readHistoryEntry(id: string, data: DocumentData): HistoryEntry | null {
   const { entity, entityId, action, actor, at } = data;
-  if (typeof entity !== 'string' || typeof entityId !== 'string' || typeof action !== 'string')
+  if (!isHistoryEntity(entity) || typeof entityId !== 'string' || !isHistoryAction(action))
     return null;
   if (typeof actor !== 'object' || actor === null) return null;
   const who = actor as Record<string, unknown>;
   const entry: HistoryEntry = {
     id,
-    entity: entity as HistoryEntity,
+    entity,
     entityId,
-    action: action as HistoryAction,
+    action,
     actor: {
       uid: typeof who.uid === 'string' ? who.uid : '',
       githubId: typeof who.githubId === 'string' ? who.githubId : '',

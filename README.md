@@ -9,17 +9,25 @@ giornalieri.
 
 - Calendario continuo a corsie, con i mesi uno dopo l'altro, tre livelli di zoom e i giorni passati
   in grigio o nascosti, e bacheca settimanale.
+- Testo del calendario ingrandibile con le lenti, fino al 175%, e vista compatta che mostra più
+  testo in ogni casella.
 - Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e
   checklist.
 - Note e valori giornalieri, per esempio il fatturato, allineati ai giorni del calendario. Le note
   si spostano trascinandole su un altro giorno, anche da tastiera.
+- Note libere sotto la ricerca, una dopo l'altra: titolo, testo, colore, un promemoria che compare
+  il giorno scelto e un ordine che si cambia trascinandole. In un'istanza condivisa ognuno vede le
+  sue, può guardare quelle di tutti e può tenerne alcune private.
+- Ricerca in attività, note dei giorni e note libere.
 - Fatturato previsto importato da un foglio Google in CSV, con il semaforo dei rilasci e le
   promozioni di ogni giorno.
 - Festività italiane e weekend evidenziati.
-- Tema chiaro e scuro, oppure quello del dispositivo.
+- Tema chiaro e scuro, quello del dispositivo, oppure uno dei 32 temi ispirati ai temi più usati
+  di Visual Studio Code, tutti con il contrasto WCAG AA.
 - Backup e ripristino in un file JSON dalle Impostazioni.
-- Con un progetto Firebase: piano condiviso con il team in tempo reale, anche offline, accesso con
-  GitHub, membri invitati per username, cronologia delle modifiche in una pagina con grafici e
+- Con un progetto Firebase: piano condiviso con il team in tempo reale, anche offline, con l'ora
+  dell'ultima sincronizzazione; accesso con GitHub, membri invitati per username, un proprietario
+  si toglie solo scrivendo il suo username; cronologia delle modifiche in una pagina con grafici e
   filtri.
 
 Senza progetto Firebase i dati restano nel browser che li ha creati. Per spostarli altrove usa

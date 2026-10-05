@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildColumns, columnTone, monthSpans } from './timelineLayout';
+import {
+  TEXT_SCALES,
+  buildColumns,
+  calendarTextStyle,
+  columnTone,
+  monthSpans,
+  timelineMetrics,
+} from './timelineLayout';
 
 describe('buildColumns', () => {
   const range = { start: '2026-09-28', end: '2026-10-04' };
@@ -49,5 +56,58 @@ describe('monthSpans', () => {
         width: 10,
       },
     ]);
+  });
+});
+
+describe('timelineMetrics', () => {
+  it('keeps the sizes of the normal text: two lines in a bar, one when zoomed out', () => {
+    expect(timelineMetrics('month', 1, false)).toMatchObject({
+      dayWidth: 56,
+      barHeight: 46,
+      labelWidth: 96,
+      barLines: 2,
+      noteHeight: 64,
+      noteLines: 3,
+    });
+    expect(timelineMetrics('quarter', 1, false)).toMatchObject({ barHeight: 28, barLines: 1 });
+  });
+
+  it('grows bars, names and notes with the text, never the days', () => {
+    for (const scale of TEXT_SCALES) {
+      const metrics = timelineMetrics('detail', scale, false);
+      expect(metrics.dayWidth).toBe(112);
+      expect(metrics.labelWidth).toBe(Math.round(96 * scale));
+      // The same two lines fit at every size.
+      expect(metrics.barLines).toBe(2);
+    }
+  });
+
+  it('fits a third line in compact mode, with less space around the bars', () => {
+    for (const scale of TEXT_SCALES) {
+      const compact = timelineMetrics('month', scale, true);
+      expect(compact.barLines).toBe(3);
+      expect(compact.noteLines).toBe(4);
+      expect(compact.lanePadding).toBeLessThan(timelineMetrics('month', scale, false).lanePadding);
+    }
+  });
+});
+
+describe('calendarTextStyle', () => {
+  it('scales the text sizes and leaves the line height alone outside compact mode', () => {
+    expect(calendarTextStyle(1.5, false)).toEqual({
+      '--text-xs': '1.125rem',
+      '--text-sm': '1.3125rem',
+      '--text-base': '1.5rem',
+      letterSpacing: '0.02em',
+    });
+  });
+
+  it('tightens the lines in compact mode', () => {
+    expect(calendarTextStyle(1, true)).toMatchObject({
+      '--text-xs': '0.75rem',
+      '--text-xs--line-height': '1.15',
+      '--text-sm--line-height': '1.15',
+      letterSpacing: '0em',
+    });
   });
 });

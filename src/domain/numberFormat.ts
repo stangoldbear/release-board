@@ -41,16 +41,44 @@ export function formatLocaleNumber(value: number, decimals = 0): string {
   }).format(value);
 }
 
-const compactFormat = new Intl.NumberFormat('it-IT', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
+const oneDecimal = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
+const noDecimals = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
 
 /**
- * The number in full when it fits in `maxLength` characters, otherwise abbreviated:
- * 1234567 → "1,2 Mln". For narrow cells, next to a tooltip with the full value.
+ * Abbreviations of a number, from the longest. The unit is chosen on the rounded value, so that
+ * 999.700 is "1 Mln" rather than "1000K".
+ */
+function abbreviations(value: number): string[] {
+  const size = Math.abs(value);
+  if (size >= 999_500_000) {
+    const billions = value / 1e9;
+    return [`${oneDecimal.format(billions)}\u00a0Mrd`, `${noDecimals.format(billions)}\u00a0Mrd`];
+  }
+  if (size >= 999_500) {
+    const millions = value / 1e6;
+    return [
+      `${oneDecimal.format(millions)}\u00a0Mln`,
+      `${oneDecimal.format(millions)}M`,
+      `${noDecimals.format(millions)}M`,
+    ];
+  }
+  if (size >= 1e3) {
+    const thousands = value / 1e3;
+    return [`${(size < 1e4 ? oneDecimal : noDecimals).format(thousands)}K`];
+  }
+  return [];
+}
+
+/**
+ * The number in full when it fits in `maxLength` characters, otherwise the longest abbreviation
+ * that fits, or the shortest one: 1234567 → "1,2 Mln", "1,2M" or "1M"; 125000 → "125K". For
+ * narrow cells, next to a card with the full value. The abbreviations are written here rather
+ * than by Intl, whose compact notation changes with the browser ("1,2 Mio" or "1,2 Mln", "125K"
+ * or nothing for thousands).
  */
 export function formatShortNumber(value: number, decimals: number, maxLength: number): string {
   const full = formatLocaleNumber(value, decimals);
-  return full.length <= maxLength ? full : compactFormat.format(value);
+  if (full.length <= maxLength) return full;
+  const shorter = abbreviations(value).filter((text) => text.length < full.length);
+  return shorter.find((text) => text.length <= maxLength) ?? shorter.at(-1) ?? full;
 }

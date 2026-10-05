@@ -4,7 +4,8 @@ import { formatLocaleNumber } from './numberFormat';
 import { TASK_STATUS_LABELS } from './plan';
 import type { TaskStatus } from './types';
 
-export type HistoryEntity = 'plan' | 'lane' | 'task' | 'metric' | 'value' | 'note' | 'member';
+export type HistoryEntity =
+  'plan' | 'lane' | 'task' | 'metric' | 'value' | 'note' | 'memo' | 'member';
 export type HistoryAction = 'create' | 'update' | 'delete' | 'import' | 'setup';
 
 /** One change to the plan: who did what, and when. */
@@ -30,6 +31,7 @@ const ENTITY_LABELS: Record<HistoryEntity, string> = {
   metric: 'i valori giornalieri',
   value: 'il valore',
   note: 'la nota',
+  memo: 'la nota libera',
   member: 'il membro',
 };
 
@@ -40,6 +42,18 @@ const ACTION_LABELS: Record<HistoryAction, string> = {
   import: 'ha importato',
   setup: 'ha creato',
 };
+
+/** What the history records; the security rules allow the same. */
+export const HISTORY_ENTITIES = Object.keys(ENTITY_LABELS) as HistoryEntity[];
+export const HISTORY_ACTIONS = Object.keys(ACTION_LABELS) as HistoryAction[];
+
+export function isHistoryEntity(value: unknown): value is HistoryEntity {
+  return (HISTORY_ENTITIES as unknown[]).includes(value);
+}
+
+export function isHistoryAction(value: unknown): value is HistoryAction {
+  return (HISTORY_ACTIONS as unknown[]).includes(value);
+}
 
 function titleOf(entry: HistoryEntry): string | null {
   const title =
@@ -61,9 +75,33 @@ function noteMove(entry: HistoryEntry): { from: string; to: string } | null {
     : null;
 }
 
+/** The one field of a free note that a change recorded before it, if it is only one. */
+function onlyMemoField(entry: HistoryEntry): string | null {
+  const changed = Object.keys(entry.before ?? {});
+  return entry.entity === 'memo' && changed.length === 1 ? (changed[0] ?? null) : null;
+}
+
+/** What happened to a free note, when the action alone does not say it. */
+function memoVerb(entry: HistoryEntry): string {
+  switch (onlyMemoField(entry)) {
+    case 'position':
+      return 'ha spostato';
+    // The others saw the note leave, or arrive with all its content.
+    case 'private':
+      return entry.after?.private === true ? 'ha reso privata' : 'ha condiviso';
+    default:
+      return ACTION_LABELS[entry.action];
+  }
+}
+
 /** "ha fatto cosa", without who: the history page shows the author apart. */
 export function describeChange(entry: HistoryEntry): string {
   if (entry.summary) return `${ACTION_LABELS[entry.action]}: ${entry.summary}`;
+  if (entry.entity === 'memo') {
+    const title = titleOf(entry);
+    const what = title ? `${ENTITY_LABELS.memo} ${title}` : ENTITY_LABELS.memo;
+    return `${memoVerb(entry)} ${what}`;
+  }
   const move = noteMove(entry);
   if (move) {
     return `ha spostato la nota dal ${formatDateToIT(move.from)} al ${formatDateToIT(move.to)}`;
@@ -82,11 +120,12 @@ export function describeHistoryEntry(entry: HistoryEntry): string {
 }
 
 /** What a change is about, as the history page groups and filters it. */
-export type HistoryKind = 'task' | 'note' | 'revenue' | 'lane' | 'member' | 'plan';
+export type HistoryKind = 'task' | 'note' | 'memo' | 'revenue' | 'lane' | 'member' | 'plan';
 
 export const HISTORY_KIND_LABELS: Record<HistoryKind, string> = {
   task: 'Attività',
   note: 'Note',
+  memo: 'Note libere',
   revenue: 'Fatturato',
   lane: 'Corsie',
   member: 'Membri',
@@ -122,6 +161,14 @@ const TASK_FIELDS: Record<string, string> = {
 /** Fields worth showing for a task that was added or deleted. */
 const TASK_SUMMARY_FIELDS = ['laneId', 'startDate', 'endDate', 'status'];
 
+const MEMO_FIELDS: Record<string, string> = {
+  title: 'Titolo',
+  body: 'Testo',
+  colorId: 'Colore',
+  remindOn: 'Promemoria',
+  private: 'Visibilità',
+};
+
 function formatField(
   field: string,
   value: unknown,
@@ -130,11 +177,13 @@ function formatField(
   if (value === undefined || value === null || value === '') return undefined;
   if (Array.isArray(value)) return `${value.length} ${value.length === 1 ? 'voce' : 'voci'}`;
   if (typeof value === 'number') return formatLocaleNumber(value, Number.isInteger(value) ? 0 : 2);
+  if (typeof value === 'boolean' && field === 'private') return value ? 'Privata' : 'Condivisa';
   if (typeof value !== 'string') return undefined;
   switch (field) {
     case 'startDate':
     case 'endDate':
     case 'date':
+    case 'remindOn':
       return formatDateToIT(value);
     case 'status':
       return TASK_STATUS_LABELS[value as TaskStatus] ?? value;
@@ -175,6 +224,16 @@ export function fieldChanges(
         : TASK_SUMMARY_FIELDS;
     return fields
       .map((field) => pair(field, TASK_FIELDS[field] ?? field))
+      .filter((change) => change.before !== undefined || change.after !== undefined);
+  }
+  if (entry.entity === 'memo') {
+    // An update keeps the title in `after` only to name the note, as for tasks.
+    return Object.entries(MEMO_FIELDS)
+      .filter(
+        ([field]) =>
+          entry.action !== 'update' || field in before || (field !== 'title' && field in after),
+      )
+      .map(([field, label]) => pair(field, label))
       .filter((change) => change.before !== undefined || change.after !== undefined);
   }
   if (entry.entity === 'note') {

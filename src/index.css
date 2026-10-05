@@ -13,6 +13,13 @@
     outline-offset: 2px;
   }
 
+  /* From 640 pixels the header stays fixed: a focused element scrolls out from under it. */
+  @media (width >= 40rem) {
+    html {
+      scroll-padding-top: calc(var(--header-height, 0px) + 0.5rem);
+    }
+  }
+
   /* The page behind an open modal dialog stays still: on phones it would scroll in its place. */
   html:has(dialog:modal) {
     overflow: hidden;

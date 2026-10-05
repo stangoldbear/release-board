@@ -1,17 +1,23 @@
-import type { PlanRepository, SyncStatus } from '../app/PlanRepository';
+import type { PlanRepository, SyncState } from '../app/PlanRepository';
 import { createBackupFile, parseBackupText, serializeBackup } from '../domain/backup';
+import { endPosition } from '../domain/memos';
+import type { MemoChanges, MemoContent } from '../domain/memos';
 import {
+  addMemo,
   addTask,
   createEmptyPlan,
   importDailyValues,
+  moveMemo,
   moveNote,
+  removeMemo,
   removeTask,
   setMetricValues,
   setNote,
+  updateMemo,
   updateTask,
 } from '../domain/plan';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
-import type { DailyMetric, PlanSnapshot, TaskItem } from '../domain/types';
+import type { DailyMetric, Memo, PlanSnapshot, TaskItem } from '../domain/types';
 
 export const PLAN_STORAGE_KEY = 'release-board:plan';
 
@@ -49,9 +55,9 @@ export class LocalPlanRepository implements PlanRepository {
     this.loadWarning = loaded.warning;
   }
 
-  /** Local data is saved at once: there is never anything in flight. */
-  subscribeStatus(listener: (status: SyncStatus) => void): () => void {
-    listener('synced');
+  /** Local data is saved at once: there is never anything in flight, nor anywhere to sync with. */
+  subscribeSync(listener: (state: SyncState) => void): () => void {
+    listener({ status: 'synced', lastSyncedAt: null, error: null });
     return () => {};
   }
 
@@ -93,6 +99,31 @@ export class LocalPlanRepository implements PlanRepository {
 
   importDailyValues(days: readonly DailyMetric[]): void {
     this.change(importDailyValues(this.plan, days));
+  }
+
+  // One browser, one person: notes have no author, and nothing is private from anyone.
+  createMemo(content: MemoContent): string {
+    const id = this.createId();
+    const memo: Memo = { ...content, id, position: endPosition(this.plan.memos) };
+    delete memo.private;
+    this.change(addMemo(this.plan, memo));
+    return id;
+  }
+
+  updateMemo(memoId: string, changes: MemoChanges, beforeId?: string | null): string {
+    const kept = { ...changes };
+    delete kept.private;
+    const changed = updateMemo(this.plan, memoId, kept);
+    this.change(beforeId === undefined ? changed : moveMemo(changed, memoId, beforeId));
+    return memoId;
+  }
+
+  deleteMemo(memoId: string): void {
+    this.change(removeMemo(this.plan, memoId));
+  }
+
+  moveMemo(memoId: string, beforeId: string | null): void {
+    this.change(moveMemo(this.plan, memoId, beforeId));
   }
 
   replacePlan(plan: PlanSnapshot): void {

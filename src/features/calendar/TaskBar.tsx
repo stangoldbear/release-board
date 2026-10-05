@@ -6,12 +6,12 @@ import type { PlacedTask } from '../../domain/schedule';
 import type { TaskItem } from '../../domain/types';
 import { taskColorStyle } from '../../themes';
 import { daysBetween, formatDateToIT } from '../../utils/dateUtils';
-import { LABEL_WIDTH } from './timelineLayout';
+import { clampLines } from './timelineLayout';
 import type { DragKind } from './useTaskDrag';
 
 /** Bars narrower than this have no resize handles: the whole bar moves. */
 const MIN_RESIZABLE_WIDTH = 40;
-/** Bars at least this wide show assignee and length under the title. */
+/** Bars at least this wide, and two lines tall, show assignee and length under the title. */
 const MIN_DETAILED_WIDTH = 100;
 
 interface TaskBarProps {
@@ -19,6 +19,8 @@ interface TaskBarProps {
   dayWidth: number;
   top: number;
   height: number;
+  /** Lines of text that fit in the bar. */
+  lines: number;
   dragging: boolean;
   /** Id of the text that explains the keyboard commands. */
   describedBy: string;
@@ -41,6 +43,7 @@ export function TaskBar({
   dayWidth,
   top,
   height,
+  lines,
   dragging,
   describedBy,
   onPointerDown,
@@ -51,7 +54,9 @@ export function TaskBar({
   const { task, first, last, continuesBefore, continuesAfter } = placed;
   const width = (last - first + 1) * dayWidth - 4;
   const resizable = width >= MIN_RESIZABLE_WIDTH;
-  const detailed = width >= MIN_DETAILED_WIDTH && height >= 40;
+  const detailed = width >= MIN_DETAILED_WIDTH && lines >= 2;
+  // The details take the last line.
+  const titleLines = detailed ? lines - 1 : lines;
   const length = daysBetween(task.startDate, task.endDate);
   const period = `dal ${formatDateToIT(task.startDate)} al ${formatDateToIT(task.endDate)}`;
 
@@ -104,7 +109,7 @@ export function TaskBar({
       }}
       // Clipped rather than hidden: a hidden overflow would keep the title from sticking.
       className={`group/bar pointer-events-auto absolute flex cursor-grab flex-col justify-center overflow-clip border-2 text-left active:cursor-grabbing ${
-        width < MIN_DETAILED_WIDTH ? 'px-1' : 'px-2.5'
+        width < MIN_DETAILED_WIDTH ? 'px-1 in-data-compact:px-0.5' : 'px-2.5 in-data-compact:px-1.5'
       } ${
         task.borderStyle === 'dashed' ? 'border-dashed' : 'border-solid'
       } ${continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'} ${
@@ -114,15 +119,15 @@ export function TaskBar({
       {resizable && !continuesBefore && handle('start')}
       {/* The title stays in view while the start of a long bar scrolls past the left edge. */}
       <span
-        className={`sticky block w-fit max-w-full text-xs leading-4 font-semibold wrap-break-word ${
-          detailed || height < 40 ? 'truncate' : 'line-clamp-2'
+        className={`sticky left-[calc(var(--gantt-label-width)+6px)] block w-fit max-w-full text-xs font-semibold wrap-break-word hyphens-auto ${
+          titleLines === 1 ? 'truncate' : ''
         }`}
-        style={{ left: LABEL_WIDTH + 6 }}
+        style={titleLines === 1 ? undefined : clampLines(titleLines)}
       >
         {task.title}
       </span>
       {detailed && (
-        <span className="flex items-center gap-1.5 text-xs leading-4 opacity-85">
+        <span className="flex items-center gap-1.5 text-xs">
           {task.assignee && <span className="truncate">{task.assignee}</span>}
           {length > 1 && <span className="ml-auto shrink-0 tabular-nums">{length} g</span>}
         </span>

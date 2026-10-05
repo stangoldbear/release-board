@@ -371,3 +371,133 @@ describe('values, notes and history', () => {
     await assertSucceeds(batch.commit());
   });
 });
+
+describe('free notes', () => {
+  beforeEach(seedPlan);
+
+  const AUTHOR = { id: EDITOR.githubId, login: EDITOR.login };
+  const MEMO = { title: 'Stima del fornitore', position: 1, author: AUTHOR };
+
+  function writeMemo(
+    db: Firestore,
+    identity: Identity,
+    data: Record<string, unknown>,
+    id = 'm1',
+    action = 'create',
+  ) {
+    const historyId = `h-${id}-${Math.random().toString(36).slice(2)}`;
+    const batch = writeBatch(db);
+    batch.set(doc(db, `${PLAN}/memos/${id}`), { ...data, ...audit(identity, historyId) });
+    batch.set(doc(db, `${PLAN}/history/${historyId}`), historyEntry(identity, 'memo', id, action));
+    return batch.commit();
+  }
+
+  function updateMemo(db: Firestore, identity: Identity, data: Record<string, unknown>, id = 'm1') {
+    const historyId = `h-${id}-${Math.random().toString(36).slice(2)}`;
+    const batch = writeBatch(db);
+    batch.update(doc(db, `${PLAN}/memos/${id}`), { ...data, ...audit(identity, historyId) });
+    batch.set(
+      doc(db, `${PLAN}/history/${historyId}`),
+      historyEntry(identity, 'memo', id, 'update'),
+    );
+    return batch.commit();
+  }
+
+  const privatePath = (identity: Identity, id = 'p1') =>
+    `${PLAN}/members/${identity.githubId}/memos/${id}`;
+
+  it('accepts a note with its author and history entry, with or without the optional fields', async () => {
+    await assertSucceeds(writeMemo(editor, EDITOR, MEMO));
+    await assertSucceeds(
+      writeMemo(
+        editor,
+        EDITOR,
+        { ...MEMO, body: 'Entro il 17', colorId: 'yellow', remindOn: '2026-07-17', position: 2.5 },
+        'm2',
+      ),
+    );
+    await assertSucceeds(getDocs(collection(editor, `${PLAN}/memos`)));
+  });
+
+  it('refuses a note without a history entry, and bad fields', async () => {
+    await assertFails(setDoc(doc(editor, `${PLAN}/memos/m1`), { ...MEMO, ...audit(EDITOR, 'h9') }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, title: '' }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, title: 'x'.repeat(201) }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, body: '' }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, colorId: 'pink' }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, remindOn: '17/07/2026' }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, position: '1' }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, pinned: true }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, private: true }));
+  });
+
+  it('wants the writer as author, keeps it, and lets only an import keep other authors', async () => {
+    const { author: _author, ...anonymous } = MEMO;
+    await assertFails(writeMemo(editor, EDITOR, anonymous));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, author: { id: '', login: 'x' } }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, author: { ...AUTHOR, role: 'owner' } }));
+    // Nobody writes a note in someone else's name, nor with someone else's username.
+    await assertFails(writeMemo(owner, OWNER, MEMO));
+    await assertFails(
+      writeMemo(editor, EDITOR, { ...MEMO, author: { id: EDITOR.githubId, login: OWNER.login } }),
+    );
+    // A backup restored by the owner keeps the notes the editor wrote, and the history says so.
+    await assertSucceeds(writeMemo(owner, OWNER, MEMO, 'm1', 'import'));
+    // Every member changes a shared note, never its author.
+    await assertSucceeds(updateMemo(owner, OWNER, { title: 'Stima rivista', position: 3 }));
+    await assertFails(
+      updateMemo(editor, EDITOR, { author: { id: OWNER.githubId, login: OWNER.login } }),
+    );
+  });
+
+  it('renumbers several notes under one history entry, and keeps strangers out', async () => {
+    const byOwner = { ...MEMO, author: { id: OWNER.githubId, login: OWNER.login } };
+    await assertSucceeds(writeMemo(owner, OWNER, byOwner, 'm1'));
+    await assertSucceeds(writeMemo(owner, OWNER, { ...byOwner, position: 2 }, 'm2'));
+    const batch = writeBatch(editor);
+    batch.update(doc(editor, `${PLAN}/memos/m1`), { position: 2, ...audit(EDITOR, 'move-1') });
+    batch.update(doc(editor, `${PLAN}/memos/m2`), { position: 1, ...audit(EDITOR, 'move-1') });
+    batch.set(doc(editor, `${PLAN}/history/move-1`), historyEntry(EDITOR, 'memo', 'm2', 'update'));
+    await assertSucceeds(batch.commit());
+    await assertFails(writeMemo(stranger, STRANGER, MEMO, 'm3'));
+    await assertFails(getDocs(collection(stranger, `${PLAN}/memos`)));
+    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/memos/m1`)));
+  });
+
+  it('keeps private notes to their author, without history', async () => {
+    const note = { title: 'Solo per me', position: 1.5, body: 'Testo', colorId: 'red' };
+    await assertSucceeds(setDoc(doc(editor, privatePath(EDITOR)), note));
+    await assertSucceeds(updateDoc(doc(editor, privatePath(EDITOR)), { remindOn: '2026-07-17' }));
+    await assertSucceeds(getDocs(collection(editor, `${PLAN}/members/${EDITOR.githubId}/memos`)));
+    // Nobody else reads, lists, writes or deletes them, the owner included.
+    await assertFails(getDoc(doc(owner, privatePath(EDITOR))));
+    await assertFails(getDocs(collection(owner, `${PLAN}/members/${EDITOR.githubId}/memos`)));
+    await assertFails(setDoc(doc(owner, privatePath(EDITOR, 'p2')), note));
+    await assertFails(updateDoc(doc(owner, privatePath(EDITOR)), { title: 'Letta' }));
+    await assertFails(deleteDoc(doc(owner, privatePath(EDITOR))));
+    // A stranger has no private notes in the plan, even under their own id.
+    await assertFails(setDoc(doc(stranger, privatePath(STRANGER)), note));
+    // The same content as a shared note, without author or audit.
+    await assertFails(setDoc(doc(editor, privatePath(EDITOR, 'p3')), { ...note, author: AUTHOR }));
+    await assertFails(
+      setDoc(doc(editor, privatePath(EDITOR, 'p4')), { ...note, ...audit(EDITOR, 'h1') }),
+    );
+    await assertFails(setDoc(doc(editor, privatePath(EDITOR, 'p5')), { ...note, title: '' }));
+    await assertSucceeds(deleteDoc(doc(editor, privatePath(EDITOR))));
+  });
+
+  it('moves a note between shared and private in one batch', async () => {
+    await assertSucceeds(writeMemo(editor, EDITOR, MEMO, 'm1'));
+    const hide = writeBatch(editor);
+    hide.delete(doc(editor, `${PLAN}/memos/m1`));
+    hide.set(doc(editor, privatePath(EDITOR, 'm1')), { title: MEMO.title, position: 1 });
+    hide.set(doc(editor, `${PLAN}/history/hide-1`), historyEntry(EDITOR, 'memo', 'm1', 'update'));
+    await assertSucceeds(hide.commit());
+
+    const share = writeBatch(editor);
+    share.delete(doc(editor, privatePath(EDITOR, 'm1')));
+    share.set(doc(editor, `${PLAN}/memos/m1`), { ...MEMO, ...audit(EDITOR, 'share-1') });
+    share.set(doc(editor, `${PLAN}/history/share-1`), historyEntry(EDITOR, 'memo', 'm1', 'update'));
+    await assertSucceeds(share.commit());
+  });
+});

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CalendarRange } from 'lucide-react';
+import { AppLogo } from './AppLogo';
 import { VersionStamp } from './VersionStamp';
 
 interface ScreenProps {
@@ -21,9 +21,7 @@ export function Screen({ title, description, children, wide = false }: ScreenPro
           }`}
         >
           <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-on-accent">
-              <CalendarRange className="h-5 w-5" aria-hidden="true" />
-            </div>
+            <AppLogo size={40} />
             <div>
               <p className="text-xs font-semibold tracking-wide text-fg-muted uppercase">
                 Release Board
@@ -35,7 +33,7 @@ export function Screen({ title, description, children, wide = false }: ScreenPro
           {children}
         </div>
       </div>
-      <VersionStamp className="mt-8 text-center" />
+      <VersionStamp className="mt-8" />
     </main>
   );
 }
@@ -48,7 +46,7 @@ export function LoadingScreen({ message }: { message: string }) {
         <span className="mr-3 inline-block h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-accent" />
         {message}
       </p>
-      <VersionStamp className="text-center" />
+      <VersionStamp />
     </main>
   );
 }

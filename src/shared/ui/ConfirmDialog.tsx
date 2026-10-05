@@ -32,7 +32,10 @@ export function ConfirmDialog({
       className="max-w-md"
       footer={
         <>
-          <Button onClick={onCancel}>Annulla</Button>
+          {/* The safe choice comes first. */}
+          <Button onClick={onCancel} data-autofocus>
+            Annulla
+          </Button>
           <Button variant="danger" onClick={onConfirm}>
             <Trash className="h-4 w-4" aria-hidden="true" />
             {confirmLabel}

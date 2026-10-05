@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { ZOOM_COLUMN_UNIT, rangeColumns } from '../../domain/schedule';
 import type { DateRange, ZoomLevel } from '../../domain/schedule';
 import {
@@ -12,18 +13,113 @@ import {
   startOfMonth,
 } from '../../utils/dateUtils';
 
-/** Width of the sticky column with the row names. */
-export const LABEL_WIDTH = 96;
+/**
+ * The sticky cell with the name of a row; it stays in view while the days scroll by. Its width is
+ * --gantt-label-width, which the timeline sets for the size of its text.
+ */
+export const LABEL_CELL =
+  'sticky left-0 z-20 w-(--gantt-label-width) shrink-0 border-r border-line-strong p-2 in-data-compact:px-1.5 in-data-compact:py-1';
 
-/** The sticky cell with the name of a row; it stays in view while the days scroll by. */
-export const LABEL_CELL = 'sticky left-0 z-20 shrink-0 border-r border-line-strong p-2';
-
-/** Pixels per day and height of a task bar at each zoom level. */
-export const SCALES: Record<ZoomLevel, { dayWidth: number; barHeight: number }> = {
+/** Pixels per day and height of a task bar at each zoom level, with text of the normal size. */
+const SCALES: Record<ZoomLevel, { dayWidth: number; barHeight: number }> = {
   detail: { dayWidth: 112, barHeight: 46 },
   month: { dayWidth: 56, barHeight: 46 },
   quarter: { dayWidth: 12, barHeight: 28 },
 };
+
+/** Width of the column with the row names, with text of the normal size. */
+const LABEL_WIDTH = 96;
+
+/**
+ * Sizes of the calendar's text, as multiples of the normal one: the magnifiers in the header step
+ * through them. Never below 1, which keeps the smallest text at 12 pixels.
+ */
+export const TEXT_SCALES = [1, 1.15, 1.3, 1.5, 1.75] as const;
+export type TextScale = (typeof TEXT_SCALES)[number];
+
+/** Most of the calendar's text, in pixels at the normal size (text-xs). */
+const TEXT_SIZE = 12;
+
+/** Line height of the calendar's text, as a multiple of its size; compact mode tightens it. */
+const LINE_HEIGHT = { normal: 4 / 3, compact: 1.15 };
+
+/** The sizes of the timeline for a zoom level, a text size and a density. */
+export interface TimelineMetrics {
+  dayWidth: number;
+  barHeight: number;
+  /** Space between two rows of bars in a lane, and above and below them. */
+  trackGap: number;
+  lanePadding: number;
+  /** Width of the sticky column with the row names. */
+  labelWidth: number;
+  /** Lines of text that fit in a task bar. */
+  barLines: number;
+  /** Least height of a day of the notes row, and the lines of a note it shows. */
+  noteHeight: number;
+  noteLines: number;
+  /** Least height of a week of the notes row, in the quarter view. */
+  weekNoteHeight: number;
+  /** Rough width of one character of the daily values, to shorten the numbers that do not fit. */
+  digitWidth: number;
+}
+
+/**
+ * Bigger text makes the bars, the names column and the notes taller or wider with it, not the
+ * days, which the zoom level sets. Compact mode tightens lines and spacing, so that every box
+ * shows more of its text.
+ */
+export function timelineMetrics(
+  zoom: ZoomLevel,
+  textScale: number,
+  compact: boolean,
+): TimelineMetrics {
+  const { dayWidth, barHeight: normalBarHeight } = SCALES[zoom];
+  const barHeight = Math.round(normalBarHeight * textScale);
+  const line = TEXT_SIZE * textScale * (compact ? LINE_HEIGHT.compact : LINE_HEIGHT.normal);
+  return {
+    dayWidth,
+    barHeight,
+    trackGap: compact ? 3 : 6,
+    lanePadding: compact ? 3 : 8,
+    labelWidth: Math.round(LABEL_WIDTH * textScale),
+    // The border of a bar takes 2 pixels at the top and 2 at the bottom.
+    barLines: Math.max(1, Math.floor((barHeight - 4) / line)),
+    noteHeight: Math.round(64 * textScale),
+    noteLines: compact ? 4 : 3,
+    weekNoteHeight: Math.round(56 * textScale),
+    digitWidth: 7 * textScale,
+  };
+}
+
+/**
+ * The text of the calendar at a size and a density, for the element around its rows. Tailwind's
+ * text-xs, text-sm and text-base read these variables, so they scale only inside it, while the
+ * header, the buttons and the dialogs keep their size. Letters spread a little as they grow.
+ */
+export function calendarTextStyle(textScale: number, compact: boolean): CSSProperties {
+  const style: Record<string, string> = {
+    '--text-xs': `${0.75 * textScale}rem`,
+    '--text-sm': `${0.875 * textScale}rem`,
+    '--text-base': `${textScale}rem`,
+    letterSpacing: `${Math.round((textScale - 1) * 40) / 1000}em`,
+  };
+  if (compact) {
+    for (const size of ['xs', 'sm', 'base']) {
+      style[`--text-${size}--line-height`] = String(LINE_HEIGHT.compact);
+    }
+  }
+  return style;
+}
+
+/** The lines of text that a style clamps to, with an ellipsis on the last one. */
+export function clampLines(lines: number): CSSProperties {
+  return {
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: lines,
+    overflow: 'hidden',
+  };
+}
 
 export interface Column {
   start: string;

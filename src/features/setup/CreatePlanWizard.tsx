@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { FileJson, Laptop, Sparkles } from 'lucide-react';
 import { MAX_BACKUP_BYTES, parseBackupText } from '../../domain/backup';
-import { createEmptyPlan, isPlanEmpty } from '../../domain/plan';
+import { createEmptyPlan, isPlanEmpty, planContentSummary } from '../../domain/plan';
 import type { PlanSnapshot } from '../../domain/types';
 import { isValidGitHubLogin } from '../../infra/github/users';
 import { Button } from '../../shared/ui/Button';
@@ -22,8 +22,7 @@ interface CreatePlanWizardProps {
 type Source = 'empty' | 'local' | 'file';
 
 function summary(plan: PlanSnapshot): string {
-  const notes = Object.keys(plan.dailyNotes).length;
-  return `${plan.lanes.length} corsie, ${plan.tasks.length} attività, ${plan.metrics.length} valori, ${notes} note`;
+  return planContentSummary(plan).join(', ');
 }
 
 /** First access to a new instance: the person names the plan, picks its content and becomes owner. */

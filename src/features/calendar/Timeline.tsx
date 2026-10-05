@@ -1,5 +1,5 @@
 import { memo, useId, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { EyeOff, MoveHorizontal } from 'lucide-react';
 import type { TaskChanges } from '../../domain/plan';
 import { ZOOM_COLUMN_UNIT, placeTasks } from '../../domain/schedule';
@@ -18,20 +18,18 @@ import { TaskContextMenu } from './TaskContextMenu';
 import { DayHeaderRow, MonthBand } from './TimelineHeader';
 import {
   LABEL_CELL,
-  LABEL_WIDTH,
-  SCALES,
   buildColumns,
+  calendarTextStyle,
   columnEdge,
   dayName,
+  timelineMetrics,
 } from './timelineLayout';
+import type { TextScale } from './timelineLayout';
 import type { Column } from './timelineLayout';
 import { useNoteDrag } from './useNoteDrag';
 import { draggedTask, useTaskDrag } from './useTaskDrag';
 import { useTimelineScroll } from './useTimelineScroll';
 import { useZoomGestures } from './useZoomGestures';
-
-const TRACK_GAP = 6;
-const LANE_PADDING = 8;
 
 interface TimelineProps {
   /** The days the timeline holds; it scrolls through them. */
@@ -47,8 +45,13 @@ interface TimelineProps {
   lanes: Lane[];
   metrics: DailyMetric[];
   dailyNotes: DailyNotes;
+  /** The days whose note the search finds; null while nothing is searched. */
+  noteMatches: Set<string> | null;
   showMetrics: boolean;
   highlightWeekends: boolean;
+  /** Size of the calendar's text, 1 being the normal one, and whether it is compact. */
+  textScale: TextScale;
+  compact: boolean;
   visibility: RowVisibility;
   onShowAllRows: () => void;
   /** -1 zooms in, 1 zooms out. */
@@ -111,8 +114,11 @@ export function Timeline({
   lanes,
   metrics,
   dailyNotes,
+  noteMatches,
   showMetrics,
   highlightWeekends,
+  textScale,
+  compact,
   visibility,
   onShowAllRows,
   onZoom,
@@ -125,7 +131,8 @@ export function Timeline({
   onSaveNote,
   onMoveNote,
 }: TimelineProps) {
-  const { dayWidth, barHeight } = SCALES[zoom];
+  const sizes = timelineMetrics(zoom, textScale, compact);
+  const { dayWidth, barHeight, trackGap, lanePadding, labelWidth } = sizes;
   const today = todayIso();
   const columns = useMemo(
     () => buildColumns({ start: range.start, end: range.end }, zoom, highlightWeekends, today),
@@ -152,7 +159,7 @@ export function Timeline({
   useTimelineScroll(scrollRef, {
     range,
     dayWidth,
-    labelWidth: LABEL_WIDTH,
+    labelWidth,
     openOn: anchor,
     jump,
     onScrolled,
@@ -215,12 +222,24 @@ export function Timeline({
       */}
       <div
         ref={scrollRef}
+        data-compact={compact || undefined}
+        style={
+          {
+            ...calendarTextStyle(textScale, compact),
+            '--gantt-label-width': `${labelWidth}px`,
+          } as CSSProperties
+        }
         className="relative w-full touch-pan-x touch-pan-y overflow-x-auto [overflow-anchor:none]"
       >
-        <div style={{ width: LABEL_WIDTH + totalWidth }}>
+        <div style={{ width: labelWidth + totalWidth }}>
           <MonthBand range={range} dayWidth={dayWidth} metrics={showMetrics ? metrics : null} />
           {showMetrics && (
-            <MetricsRow columns={columns} metrics={metrics} weekColumns={weekColumns} />
+            <MetricsRow
+              columns={columns}
+              metrics={metrics}
+              weekColumns={weekColumns}
+              digitWidth={sizes.digitWidth}
+            />
           )}
           <DayHeaderRow
             columns={columns}
@@ -233,7 +252,7 @@ export function Timeline({
             {visibleLanes.map((lane) => {
               const laneTasks = shownTasks.filter((task) => task.laneId === lane.id);
               const { placed, tracks } = placeTasks(laneTasks, range);
-              const height = Math.max(1, tracks) * (barHeight + TRACK_GAP) + LANE_PADDING * 2;
+              const height = Math.max(1, tracks) * (barHeight + trackGap) + lanePadding * 2;
               const isDropTarget =
                 drag !== null && drag.laneId !== drag.task.laneId && drag.laneId === lane.id;
               return (
@@ -245,7 +264,6 @@ export function Timeline({
                 >
                   <div
                     className={`${LABEL_CELL} flex flex-col justify-center bg-surface-muted`}
-                    style={{ width: LABEL_WIDTH }}
                     title={lane.name}
                   >
                     <span className="text-xs font-bold tracking-wide break-words uppercase">
@@ -270,8 +288,9 @@ export function Timeline({
                           key={item.task.id}
                           placed={item}
                           dayWidth={dayWidth}
-                          top={LANE_PADDING + item.track * (barHeight + TRACK_GAP)}
+                          top={lanePadding + item.track * (barHeight + trackGap)}
                           height={barHeight}
+                          lines={sizes.barLines}
                           dragging={drag?.task.id === item.task.id}
                           describedBy={helpId}
                           onPointerDown={(event, kind) => {
@@ -296,7 +315,11 @@ export function Timeline({
             <NotesRow
               columns={columns}
               dailyNotes={dailyNotes}
+              matches={noteMatches}
               weekColumns={weekColumns}
+              dayHeight={sizes.noteHeight}
+              weekHeight={sizes.weekNoteHeight}
+              lines={sizes.noteLines}
               drag={noteDrag.drag}
               describedBy={noteHelpId}
               onStartDrag={startNoteDrag}

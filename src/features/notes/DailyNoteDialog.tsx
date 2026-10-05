@@ -1,9 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import { StickyNote, Trash } from 'lucide-react';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
-import { FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
-import { formatDateToIT } from '../../utils/dateUtils';
+import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
+import { formatDateToIT, isIsoDate } from '../../utils/dateUtils';
 
 const SUGGESTED_NOTES = [
   'Kickoff Deploy',
@@ -40,17 +40,12 @@ export function DailyNoteDialog({
 }: DailyNoteDialogProps) {
   const [draft, setDraft] = useState(note);
   const [day, setDay] = useState(date);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const textareaId = useId();
   const dayId = useId();
   const dayErrorId = useId();
 
-  // `autoFocus` would run before the dialog opens, and a closed dialog cannot take focus.
-  useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
-
-  const otherDay = day !== '' && day !== date;
+  const dayInvalid = day !== '' && !isIsoDate(day);
+  const otherDay = day !== '' && day !== date && !dayInvalid;
   const dayTaken = otherDay && !isDayFree(day);
 
   const save = (text: string) => {
@@ -78,7 +73,11 @@ export function DailyNoteDialog({
             </Button>
           )}
           <Button onClick={onClose}>Annulla</Button>
-          <Button variant="primary" disabled={dayTaken || day === ''} onClick={() => save(draft)}>
+          <Button
+            variant="primary"
+            disabled={dayTaken || dayInvalid || day === ''}
+            onClick={() => save(draft)}
+          >
             Salva nota
           </Button>
         </>
@@ -91,11 +90,11 @@ export function DailyNoteDialog({
           </label>
           <textarea
             id={textareaId}
-            ref={textareaRef}
+            data-autofocus
             rows={4}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Promemoria, eventi, scadenze o note operative per questo giorno…"
+            placeholder="Eventi, scadenze o note operative per questo giorno…"
             className={FIELD_CLASS}
           />
         </div>
@@ -121,18 +120,21 @@ export function DailyNoteDialog({
             id={dayId}
             type="date"
             required
+            max={DATE_MAX}
             value={day}
             onChange={(event) => setDay(event.target.value)}
-            aria-invalid={dayTaken}
+            aria-invalid={dayTaken || dayInvalid}
             aria-describedby={dayErrorId}
             className={FIELD_CLASS}
           />
           <p id={dayErrorId} className="mt-1 text-xs text-fg-muted" aria-live="polite">
-            {dayTaken
-              ? `Il ${formatDateToIT(day)} ha già una nota: scegli un altro giorno.`
-              : note
-                ? 'Cambia il giorno per spostare la nota, anche fuori dal periodo visibile.'
-                : 'La nota va su questo giorno; puoi sceglierne un altro.'}
+            {dayInvalid
+              ? 'Data non valida: scegli un giorno entro il 9999.'
+              : dayTaken
+                ? `Il ${formatDateToIT(day)} ha già una nota: scegli un altro giorno.`
+                : note
+                  ? 'Cambia il giorno per spostare la nota, anche fuori dal periodo visibile.'
+                  : 'La nota va su questo giorno; puoi sceglierne un altro.'}
           </p>
         </div>
       </div>

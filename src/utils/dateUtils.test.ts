@@ -5,6 +5,7 @@ import {
   daysBetween,
   diffDays,
   endOfMonth,
+  formatDateTimeLongIT,
   formatDateToISO,
   formatDateToIT,
   getDaysInMonth,
@@ -14,6 +15,7 @@ import {
   parseISODate,
   startOfMonth,
   startOfWeek,
+  timeAgo,
 } from './dateUtils';
 
 describe('getEasterSunday', () => {
@@ -102,5 +104,29 @@ describe('ISO date arithmetic', () => {
     expect(startOfWeek('2026-11-01')).toBe('2026-10-26');
     expect(startOfMonth('2026-09-29')).toBe('2026-09-01');
     expect(endOfMonth('2028-02-10')).toBe('2028-02-29');
+  });
+});
+
+describe('times', () => {
+  const now = new Date(2026, 9, 5, 10, 52, 30);
+  const before = (milliseconds: number) => new Date(now.getTime() - milliseconds);
+  const MINUTE = 60_000;
+
+  it('says how long ago a moment was', () => {
+    expect(timeAgo(before(20_000), now)).toBe('meno di un minuto fa');
+    expect(timeAgo(before(MINUTE), now)).toBe('1 minuto fa');
+    expect(timeAgo(before(59 * MINUTE), now)).toBe('59 minuti fa');
+    expect(timeAgo(before(60 * MINUTE), now)).toBe('1 ora fa');
+    expect(timeAgo(before(23 * 60 * MINUTE + 59 * MINUTE), now)).toBe('23 ore fa');
+    expect(timeAgo(before(24 * 60 * MINUTE), now)).toBe('1 giorno fa');
+    expect(timeAgo(before(3 * 24 * 60 * MINUTE), now)).toBe('3 giorni fa');
+  });
+
+  it('treats a moment ahead of the clock as just now', () => {
+    expect(timeAgo(new Date(now.getTime() + 5 * MINUTE), now)).toBe('meno di un minuto fa');
+  });
+
+  it('writes a moment in full', () => {
+    expect(formatDateTimeLongIT(now)).toBe('lunedì 5 ottobre 2026 alle ore 10:52');
   });
 });

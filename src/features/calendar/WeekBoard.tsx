@@ -1,5 +1,6 @@
 import type { DragEvent } from 'react';
 import { ArrowLeft, ArrowRight, Copy, Plus, StickyNote, User } from 'lucide-react';
+import { isNoteShown } from '../../domain/filters';
 import { formatLocaleNumber } from '../../domain/numberFormat';
 import { DAILY_METRIC } from '../../domain/plan';
 import type { TaskChanges } from '../../domain/plan';
@@ -17,6 +18,8 @@ import {
   todayIso,
 } from '../../utils/dateUtils';
 import { APPROVAL_TONE, ApprovalIcon, DayDetails, describeDay } from '../metrics/MetricDetails';
+import { calendarTextStyle } from './timelineLayout';
+import type { TextScale } from './timelineLayout';
 
 interface WeekBoardProps {
   week: DateRange;
@@ -24,7 +27,12 @@ interface WeekBoardProps {
   lanes: Lane[];
   metrics: DailyMetric[];
   dailyNotes: DailyNotes;
+  /** The days whose note the search finds; null while nothing is searched. */
+  noteMatches: Set<string> | null;
   highlightWeekends: boolean;
+  /** Size of the calendar's text, 1 being the normal one, and whether it is compact. */
+  textScale: TextScale;
+  compact: boolean;
   visibility: RowVisibility;
   onChangeTask: (taskId: string, changes: TaskChanges) => void;
   onOpenTask: (task: TaskItem) => void;
@@ -44,7 +52,10 @@ export function WeekBoard({
   lanes,
   metrics,
   dailyNotes,
+  noteMatches,
   highlightWeekends,
+  textScale,
+  compact,
   visibility,
   onChangeTask,
   onOpenTask,
@@ -86,11 +97,16 @@ export function WeekBoard({
       <p className="text-xs text-fg-muted pointer-coarse:hidden">
         Trascina una scheda o una nota su un altro giorno per spostarla.
       </p>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-7">
+      <div
+        data-compact={compact || undefined}
+        style={calendarTextStyle(textScale, compact)}
+        className="grid grid-cols-1 gap-3 md:grid-cols-7 in-data-compact:gap-2"
+      >
         {rangeDays(week).map((date) => {
           const red = isRedDay(parseISODate(date), highlightWeekends);
           const metric = metrics.find((item) => item.date === date);
-          const note = visibility.showNotes ? dailyNotes[date] : undefined;
+          const note =
+            visibility.showNotes && isNoteShown(noteMatches, date) ? dailyNotes[date] : undefined;
           const dayTasks = tasksOnDay(visibleTasks, date);
           const isToday = date === today;
 
@@ -100,16 +116,16 @@ export function WeekBoard({
               aria-label={`${ITALIAN_DAYS_SHORT[parseISODate(date).getDay()]} ${formatDateToIT(date)}`}
               onDragOver={(event) => handleDragOver(event, date)}
               onDrop={(event) => handleDrop(event, date)}
-              className={`flex min-h-72 flex-col rounded-xl border bg-surface md:min-h-[460px] ${
+              className={`flex min-h-72 min-w-0 flex-col rounded-xl border bg-surface md:min-h-[460px] in-data-compact:min-h-40 md:in-data-compact:min-h-80 ${
                 isToday ? 'border-link ring-1 ring-link' : 'border-line'
               }`}
             >
               <header
-                className={`space-y-1 rounded-t-xl border-b border-line p-3 ${
+                className={`space-y-1 rounded-t-xl border-b border-line p-3 in-data-compact:space-y-0.5 in-data-compact:p-2 ${
                   red.isRed ? 'bg-holiday' : isToday ? 'bg-accent-soft' : 'bg-surface-muted'
                 }`}
               >
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 text-xs">
                   <span className="font-bold uppercase">
                     {ITALIAN_DAYS_SHORT[parseISODate(date).getDay()]}
                     {isToday && <span className="ml-1 font-normal normal-case">(oggi)</span>}
@@ -126,7 +142,7 @@ export function WeekBoard({
                     type="button"
                     aria-label={describeDay(metric)}
                     {...triggerProps(metric)}
-                    className={`-mx-1.5 flex w-[calc(100%+0.75rem)] cursor-pointer items-center justify-between gap-2 rounded-md px-1.5 py-0.5 text-xs hover:brightness-95 ${
+                    className={`-mx-1.5 flex w-[calc(100%+0.75rem)] cursor-pointer flex-wrap items-center justify-between gap-x-2 rounded-md px-1.5 py-0.5 text-xs hover:brightness-95 ${
                       metric.approval ? APPROVAL_TONE[metric.approval] : ''
                     }`}
                   >
@@ -150,40 +166,40 @@ export function WeekBoard({
                       className="mt-0.5 h-3 w-3 shrink-0 text-warning"
                       aria-hidden="true"
                     />
-                    <span className="break-words">{note}</span>
+                    <span className="break-words hyphens-auto">{note}</span>
                   </p>
                 )}
               </header>
 
-              <ul className="flex-1 space-y-2 p-2">
+              <ul className="flex-1 space-y-2 p-2 in-data-compact:space-y-1 in-data-compact:p-1">
                 {dayTasks.map((task) => (
                   <li
                     key={task.id}
                     draggable
                     onDragStart={(event) => event.dataTransfer.setData(DRAG_TYPE, task.id)}
                     style={taskColorStyle(task.colorId)}
-                    className={`group rounded-lg border-2 p-2 shadow-xs ${
+                    className={`group rounded-lg border-2 p-2 shadow-xs in-data-compact:p-1.5 ${
                       task.borderStyle === 'dashed' ? 'border-dashed' : 'border-solid'
                     }`}
                   >
-                    <p className="mb-1 truncate text-xs font-semibold opacity-80">
+                    <p className="mb-1 truncate text-xs font-semibold in-data-compact:mb-0.5">
                       {laneNames.get(task.laneId) ?? 'Senza corsia'}
                     </p>
                     <button
                       type="button"
                       onClick={() => onOpenTask(task)}
-                      className="block w-full cursor-pointer text-left text-xs leading-snug font-bold tracking-tight whitespace-pre-line uppercase hover:underline"
+                      className="block w-full cursor-pointer text-left text-xs leading-snug font-bold tracking-tight wrap-break-word whitespace-pre-line uppercase hyphens-auto hover:underline in-data-compact:leading-tight"
                     >
                       {task.title}
                     </button>
                     {task.startDate !== task.endDate && (
-                      <p className="mt-1 font-mono text-xs">
+                      <p className="mt-1 font-mono text-xs in-data-compact:mt-0.5">
                         {formatDateToIT(task.startDate).slice(0, 5)} →{' '}
                         {formatDateToIT(task.endDate).slice(0, 5)}
                       </p>
                     )}
-                    <div className="mt-2 flex items-center justify-between border-t border-current/15 pt-1.5 text-xs">
-                      <span className="flex items-center gap-1 opacity-85">
+                    <div className="mt-2 flex items-center justify-between border-t border-current/15 pt-1.5 text-xs in-data-compact:mt-1 in-data-compact:pt-1">
+                      <span className="flex items-center gap-1">
                         <User className="h-3 w-3" aria-hidden="true" />
                         {task.assignee || 'Non assegnato'}
                       </span>
@@ -223,7 +239,7 @@ export function WeekBoard({
                   </li>
                 ))}
                 {dayTasks.length === 0 && (
-                  <li className="flex h-24 items-center justify-center rounded-lg border border-dashed border-line text-xs text-fg-muted">
+                  <li className="flex h-24 items-center justify-center rounded-lg border border-dashed border-line text-xs text-fg-muted in-data-compact:h-12">
                     Nessuna attività
                   </li>
                 )}

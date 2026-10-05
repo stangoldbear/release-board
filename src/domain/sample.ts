@@ -1,5 +1,5 @@
 import type { TaskColorId } from './colors';
-import type { BorderStyle, DailyMetric, PlanSnapshot, TaskItem, TaskStatus } from './types';
+import type { BorderStyle, DailyMetric, Memo, PlanSnapshot, TaskItem, TaskStatus } from './types';
 import { formatDateToISO, getDaysInMonth, isWeekend } from '../utils/dateUtils';
 import { DEFAULT_LANES } from './plan';
 
@@ -132,6 +132,19 @@ const SAMPLE_NOTES: { day: number; text: string }[] = [
   { day: 15, text: 'Congelamento del codice alle 12:00' },
 ];
 
+/** Free notes: one with a text, one with a reminder on a day of the month, one plain. */
+const SAMPLE_MEMOS: { title: string; body?: string; colorId?: TaskColorId; remindDay?: number }[] =
+  [
+    {
+      title: 'App mobile: rilascio a gennaio',
+      body: 'Prima la beta interna, poi la revisione degli store.',
+      colorId: 'blue',
+    },
+    // In the next month: a sample loaded after the 20th would greet with a reminder at once.
+    { title: 'Fornitore dei pagamenti: stima entro il 20', colorId: 'yellow', remindDay: 20 },
+    { title: 'Preparare le note di rilascio della 2.8' },
+  ];
+
 /**
  * An invented plan for the given month, used to try the app. The result depends only on
  * year and month, so it is stable across runs and in tests.
@@ -176,5 +189,15 @@ export function buildSamplePlan(year: number, month: number): PlanSnapshot {
 
   const dailyNotes = Object.fromEntries(SAMPLE_NOTES.map((note) => [dateOf(note.day), note.text]));
 
-  return { lanes, tasks, metrics, dailyNotes };
+  const memos: Memo[] = SAMPLE_MEMOS.map((sample, index) => {
+    const memo: Memo = { id: `sample-memo-${index + 1}`, title: sample.title, position: index + 1 };
+    if (sample.body) memo.body = sample.body;
+    if (sample.colorId) memo.colorId = sample.colorId;
+    if (sample.remindDay) {
+      memo.remindOn = formatDateToISO(new Date(year, month + 1, sample.remindDay));
+    }
+    return memo;
+  });
+
+  return { lanes, tasks, metrics, dailyNotes, memos };
 }

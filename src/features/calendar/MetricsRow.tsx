@@ -15,13 +15,15 @@ import {
   describeDay,
   preciseValue,
 } from '../metrics/MetricDetails';
-import { LABEL_CELL, LABEL_WIDTH, columnEdge } from './timelineLayout';
+import { LABEL_CELL, columnEdge } from './timelineLayout';
 import type { Column } from './timelineLayout';
 
 interface MetricsRowProps {
   columns: Column[];
   metrics: DailyMetric[];
   weekColumns: boolean;
+  /** Rough width of one character, at the calendar's text size. */
+  digitWidth: number;
 }
 
 /** A column with its values: one day, or the days of a week. */
@@ -32,6 +34,8 @@ interface ColumnValues {
 
 /** Width of the approval icon and its gap, taken from the room for the number. */
 const ICON_WIDTH = 14;
+/** The cell's padding on both sides. */
+const CELL_PADDING = 4;
 
 function cellId(date: string): string {
   return `metric-cell-${date}`;
@@ -54,6 +58,7 @@ export const MetricsRow = memo(function MetricsRow({
   columns,
   metrics,
   weekColumns,
+  digitWidth,
 }: MetricsRowProps) {
   const byDate = useMemo(() => new Map(metrics.map((metric) => [metric.date, metric])), [metrics]);
   const cells: ColumnValues[] = columns.map((column) => ({
@@ -92,8 +97,10 @@ export const MetricsRow = memo(function MetricsRow({
     window.requestAnimationFrame(() => element?.focus({ preventScroll: true }));
   };
 
-  // Roughly how many characters of a number fit in a column, next to the light's icon.
-  const maxDigits = Math.floor(((columns[0]?.width ?? 0) - ICON_WIDTH) / 7);
+  // Roughly how many characters of a number fit in a column, beside the light's icon or alone.
+  const columnWidth = columns[0]?.width ?? 0;
+  const roomBeside = Math.floor((columnWidth - CELL_PADDING - ICON_WIDTH) / digitWidth);
+  const roomAlone = Math.floor((columnWidth - CELL_PADDING) / digitWidth);
 
   return (
     <div
@@ -101,7 +108,7 @@ export const MetricsRow = memo(function MetricsRow({
       aria-label={`${DAILY_METRIC.label}: frecce per passare da un valore all'altro`}
       className="flex border-b border-line bg-surface-muted text-xs"
     >
-      <div className={`${LABEL_CELL} bg-surface-muted`} style={{ width: LABEL_WIDTH }}>
+      <div className={`${LABEL_CELL} bg-surface-muted`}>
         <span className="block truncate font-bold">{DAILY_METRIC.label}</span>
         <span className="block truncate text-fg-muted">
           {weekColumns ? 'Per settimana' : 'Per giorno'}
@@ -130,6 +137,14 @@ export const MetricsRow = memo(function MetricsRow({
               ? 'bg-accent-soft text-link'
               : '';
         const [day] = days;
+        const showIcon = light !== undefined && !column.past;
+        const beside = formatShortNumber(
+          total,
+          DAILY_METRIC.decimals,
+          showIcon ? roomBeside : roomAlone,
+        );
+        // When even the shortest number does not fit beside the icon, the icon goes above it.
+        const stacked = showIcon && beside.length > roomBeside;
         return (
           <button
             key={column.start}
@@ -140,10 +155,10 @@ export const MetricsRow = memo(function MetricsRow({
             onKeyDown={(event) => moveFocus(event, column.start)}
             {...triggerProps(cell)}
             style={{ width: column.width }}
-            className={`${base} ${tone} scroll-ml-24 cursor-pointer hover:brightness-95 focus-visible:-outline-offset-2`}
+            className={`${base} ${tone} ${stacked ? 'flex-col' : ''} scroll-ml-(--gantt-label-width) cursor-pointer hover:brightness-95 focus-visible:-outline-offset-2`}
           >
-            {light && !column.past && <ApprovalIcon light={light} />}
-            {formatShortNumber(total, DAILY_METRIC.decimals, maxDigits)}
+            {showIcon && <ApprovalIcon light={light} />}
+            {stacked ? formatShortNumber(total, DAILY_METRIC.decimals, roomAlone) : beside}
           </button>
         );
       })}

@@ -1,12 +1,23 @@
 import { APPROVAL_LIGHTS } from './approval';
 import { DEFAULT_COLOR_ID, isKnownColorId, normalizeColorId } from './colors';
-import type { DailyMetric, DailyNotes, Lane, PlanSnapshot, TaskItem } from './types';
+import { MEMO_BODY_MAX, MEMO_TITLE_MAX, sortMemos } from './memos';
+import type {
+  DailyMetric,
+  DailyNotes,
+  Lane,
+  Memo,
+  MemoAuthor,
+  PlanSnapshot,
+  TaskItem,
+} from './types';
 import { formatDateToIT, formatDateToISO, isIsoDate } from '../utils/dateUtils';
 import { parseLocaleNumber } from './numberFormat';
 import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES } from './plan';
 
 export const BACKUP_FORMAT = 'release-board/backup';
-export const BACKUP_SCHEMA_VERSION = 3;
+export const BACKUP_SCHEMA_VERSION = 4;
+/** Older schemas this version still reads: 3 had no free notes. */
+const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, BACKUP_SCHEMA_VERSION];
 /** Larger files are rejected before parsing: a real plan weighs a few hundred kilobytes. */
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 const MAX_REPORTED_ERRORS = 20;
@@ -28,6 +39,7 @@ export interface BackupFile {
   tasks: TaskItem[];
   metrics: BackupMetric[];
   notes: { date: string; text: string }[];
+  memos: Memo[];
 }
 
 /** Where a restored plan came from: a current backup or a file of the previous app version. */
@@ -50,6 +62,8 @@ export function createBackupFile(plan: PlanSnapshot, exportedAt: Date): BackupFi
     notes: Object.entries(plan.dailyNotes)
       .map(([date, text]) => ({ date, text }))
       .sort(byDate),
+    // Private notes are their author's alone: a backup of the plan never carries them.
+    memos: sortMemos(plan.memos.filter((memo) => !memo.private)),
   };
 }
 
@@ -76,7 +90,7 @@ export function parseBackup(value: unknown): BackupParseResult {
   if (!isObject(value)) return failure('Il file non contiene un backup.');
 
   if (value.format === BACKUP_FORMAT) {
-    if (value.schemaVersion === BACKUP_SCHEMA_VERSION) return readPlan(value, 'current');
+    if (READABLE_SCHEMA_VERSIONS.includes(value.schemaVersion)) return readPlan(value, 'current');
     const newer =
       typeof value.schemaVersion === 'number' && value.schemaVersion > BACKUP_SCHEMA_VERSION;
     return failure(
@@ -158,11 +172,12 @@ function readPlan(file: JsonObject, source: BackupSource): BackupParseResult {
   const tasks = readTasks(file.tasks, new Set(lanes.map((lane) => lane.id)), errors);
   const metrics = readMetrics(file.metrics, errors);
   const dailyNotes = readNotes(file.notes, errors);
+  const memos = readMemos(file.memos, errors);
 
   if (errors.length > 0) return { ok: false, errors: limitErrors(errors) };
   return {
     ok: true,
-    plan: { lanes, tasks, metrics, dailyNotes },
+    plan: { lanes, tasks, metrics, dailyNotes, memos },
     source,
     exportedAt: typeof file.exportedAt === 'string' ? file.exportedAt : null,
   };
@@ -323,6 +338,66 @@ function readNotes(value: unknown, errors: string[]): DailyNotes {
     else if (text.trim() !== '') notes[date] = text;
   });
   return notes;
+}
+
+/** The author of a note from a shared instance; undefined when absent, null when malformed. */
+function readMemoAuthor(value: unknown): MemoAuthor | undefined | null {
+  if (value === undefined) return undefined;
+  return isObject(value) && isFilledString(value.id) && isFilledString(value.login)
+    ? { id: value.id, login: value.login }
+    : null;
+}
+
+function readMemos(value: unknown, errors: string[]): Memo[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push('Note libere: formato non valido.');
+    return [];
+  }
+  const memos: Memo[] = [];
+  value.forEach((item: unknown, index) => {
+    const where = `Nota libera ${index + 1}`;
+    if (!isObject(item)) {
+      errors.push(`${where}: formato non valido.`);
+      return;
+    }
+    const body = optionalString(item.body);
+    const author = readMemoAuthor(item.author);
+    const problems: string[] = [];
+    if (!isFilledString(item.id)) problems.push("manca l'identificativo");
+    else if (memos.some((memo) => memo.id === item.id))
+      problems.push(`identificativo "${item.id}" ripetuto`);
+    if (!isFilledString(item.title)) problems.push('manca il titolo');
+    else if (item.title.length > MEMO_TITLE_MAX) problems.push('titolo troppo lungo');
+    if (body === null || (body !== undefined && body.length > MEMO_BODY_MAX))
+      problems.push('testo non valido');
+    if (
+      item.colorId !== undefined &&
+      !(typeof item.colorId === 'string' && isKnownColorId(item.colorId))
+    )
+      problems.push('colore non riconosciuto');
+    if (item.remindOn !== undefined && !isIsoDate(item.remindOn))
+      problems.push('data del promemoria non valida');
+    if (typeof item.position !== 'number' || !Number.isFinite(item.position))
+      problems.push('posizione non valida');
+    if (author === null) problems.push('autore non valido');
+    if (problems.length > 0) {
+      errors.push(`${where}: ${problems.join(', ')}.`);
+      return;
+    }
+    const memo: Memo = {
+      id: item.id as string,
+      title: item.title as string,
+      position: item.position as number,
+    };
+    if (body?.trim()) memo.body = body;
+    if (typeof item.colorId === 'string' && isKnownColorId(item.colorId))
+      memo.colorId = item.colorId;
+    if (isIsoDate(item.remindOn)) memo.remindOn = item.remindOn;
+    if (author) memo.author = author;
+    memos.push(memo);
+  });
+  return sortMemos(memos);
 }
 
 function limitErrors(errors: string[]): string[] {

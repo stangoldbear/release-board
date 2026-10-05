@@ -1,22 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { TASK_COLOR_IDS } from '../domain/colors';
-import { COLOR_TOKENS, THEMES, resolveTheme } from './index';
+import { contrast } from './color';
+import {
+  COLOR_TOKENS,
+  CUSTOM_THEME_IDS,
+  THEME_IDS,
+  getTheme,
+  isDarkTheme,
+  resolveTheme,
+} from './index';
 import type { ColorToken } from './index';
 import tokensCss from './tokens.css?raw';
-
-/** Relative luminance as defined by WCAG 2. */
-function luminance(hex: string): number {
-  const [r = 0, g = 0, b = 0] = [1, 3, 5].map((start) => {
-    const channel = parseInt(hex.slice(start, start + 2), 16) / 255;
-    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-function contrast(a: string, b: string): number {
-  const [light = 0, dark = 0] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (light + 0.05) / (dark + 0.05);
-}
 
 /** Text pairs need 4.5:1 (WCAG AA); borders of controls and the focus ring need 3:1. */
 const REQUIRED_CONTRASTS: [ColorToken, ColorToken[], number][] = [
@@ -35,10 +29,26 @@ const REQUIRED_CONTRASTS: [ColorToken, ColorToken[], number][] = [
     ],
     4.5,
   ],
-  ['fg-muted', ['canvas', 'surface', 'surface-muted', 'surface-strong', 'holiday', 'past'], 4.5],
+  [
+    'fg-muted',
+    [
+      'canvas',
+      'surface',
+      'surface-muted',
+      'surface-strong',
+      'holiday',
+      'past',
+      // Labels on a selected option, on today's column and on the row of notes.
+      'accent-soft',
+      'warning-soft',
+      'danger-soft',
+    ],
+    4.5,
+  ],
   ['on-accent', ['accent'], 4.5],
   ['on-danger', ['danger'], 4.5],
-  ['link', ['surface', 'surface-muted', 'accent-soft'], 4.5],
+  // The banner of the local mode is warning-soft.
+  ['link', ['surface', 'surface-muted', 'accent-soft', 'warning-soft'], 4.5],
   ['danger', ['surface', 'danger-soft'], 4.5],
   ['warning', ['surface', 'warning-soft'], 4.5],
   ['success', ['surface'], 4.5],
@@ -47,10 +57,25 @@ const REQUIRED_CONTRASTS: [ColorToken, ColorToken[], number][] = [
   ['approval-orange', ['surface', 'surface-muted', 'approval-orange-soft'], 4.5],
   ['approval-red', ['surface', 'surface-muted', 'approval-red-soft'], 4.5],
   ['line-strong', ['surface', 'surface-muted'], 3],
-  ['focus', ['canvas', 'surface', 'surface-muted'], 3],
+  // Segmented controls sit on surface-strong; the ring of a daily value is drawn inside its cell.
+  [
+    'focus',
+    [
+      'canvas',
+      'surface',
+      'surface-muted',
+      'surface-strong',
+      'holiday',
+      'past',
+      'approval-green-soft',
+      'approval-orange-soft',
+      'approval-red-soft',
+    ],
+    3,
+  ],
 ];
 
-describe.each(Object.entries(THEMES))('theme %s', (_id, theme) => {
+describe.each(THEME_IDS.map((id) => [id, getTheme(id)] as const))('theme %s', (_id, theme) => {
   it('defines every color as #rrggbb', () => {
     expect(Object.keys(theme.colors).sort()).toEqual([...COLOR_TOKENS].sort());
     expect(Object.keys(theme.tasks).sort()).toEqual([...TASK_COLOR_IDS].sort());
@@ -85,6 +110,15 @@ describe('themes', () => {
   it('follows the system with a light and a dark theme', () => {
     expect(resolveTheme('system', false).dark).toBe(false);
     expect(resolveTheme('system', true).dark).toBe(true);
-    expect(resolveTheme('light-modern', true)).toBe(THEMES['light-modern']);
+    expect(resolveTheme('light-modern', true)).toBe(getTheme('light-modern'));
+    expect(resolveTheme('dracula', false)).toBe(getTheme('dracula'));
+  });
+
+  it('offers about thirty custom themes, light and dark, with their own names', () => {
+    const names = CUSTOM_THEME_IDS.map((id) => getTheme(id).name);
+    expect(new Set(names).size).toBe(CUSTOM_THEME_IDS.length);
+    expect(CUSTOM_THEME_IDS.filter((id) => !isDarkTheme(id))).toHaveLength(12);
+    expect(CUSTOM_THEME_IDS.filter((id) => isDarkTheme(id))).toHaveLength(20);
+    for (const id of CUSTOM_THEME_IDS) expect(getTheme(id).dark).toBe(isDarkTheme(id));
   });
 });

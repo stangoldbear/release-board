@@ -28,21 +28,27 @@ function emulatorAddress(): { host: string; port: number } {
   return { host, port: Number(port) };
 }
 
-/** Loads the rules into the emulator and gives access to it with the rules switched off. */
-export function setupRulesEnvironment(): Promise<RulesTestEnvironment> {
+/**
+ * Loads the rules into the emulator and gives access to it with the rules switched off. Other
+ * rules go in another project, so that both can be used at once.
+ */
+export function setupRulesEnvironment(otherRules?: {
+  rules: string;
+  projectId: string;
+}): Promise<RulesTestEnvironment> {
   return initializeTestEnvironment({
-    projectId: PROJECT_ID,
-    firestore: { rules, ...emulatorAddress() },
+    projectId: otherRules?.projectId ?? PROJECT_ID,
+    firestore: { rules: otherRules?.rules ?? rules, ...emulatorAddress() },
   });
 }
 
 let clientCount = 0;
 
 /** A Firestore client that the emulator sees as the given user, or as nobody. */
-export function clientAs(identity: Identity | null): Firestore {
+export function clientAs(identity: Identity | null, projectId = PROJECT_ID): Firestore {
   const { host, port } = emulatorAddress();
   clientCount += 1;
-  const app = initializeApp({ projectId: PROJECT_ID, apiKey: 'emulator' }, `test-${clientCount}`);
+  const app = initializeApp({ projectId, apiKey: 'emulator' }, `test-${clientCount}`);
   const db = getFirestore(app);
   connectFirestoreEmulator(
     db,

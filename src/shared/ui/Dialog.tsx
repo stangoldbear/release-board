@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './Button';
+import { trackOpenDialog } from './openDialogs';
 
 interface DialogProps {
   title: string;
@@ -13,6 +14,11 @@ interface DialogProps {
   footer?: ReactNode;
   /** Extra classes for the dialog box, typically its maximum width. */
   className?: string;
+  /**
+   * Opened by the app on its own, as the reminders: it is not one of the windows the user opened,
+   * which such a window waits for (`useOpenDialogCount`).
+   */
+  unprompted?: boolean;
   onClose: () => void;
   children: ReactNode;
 }
@@ -22,6 +28,9 @@ interface DialogProps {
  * backdrop, and gives focus back to what opened it. It always fits the screen: the header and the
  * footer stay in view and only the content scrolls, while the page behind it is locked (index.css).
  *
+ * The browser focuses its first control, the close button; the element marked `data-autofocus`
+ * takes the focus instead (React's `autoFocus` runs before the dialog opens, too early).
+ *
  * Mount it only while it is open: unmounting closes it.
  */
 export function Dialog({
@@ -30,6 +39,7 @@ export function Dialog({
   icon,
   footer,
   className = '',
+  unprompted = false,
   onClose,
   children,
 }: DialogProps) {
@@ -41,9 +51,12 @@ export function Dialog({
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (!dialog.open) dialog.showModal();
+    dialog.querySelector<HTMLElement>('[data-autofocus]')?.focus();
     // Closing through the browser, rather than just removing the element, restores focus.
     return () => dialog.close();
   }, []);
+
+  useLayoutEffect(() => (unprompted ? undefined : trackOpenDialog()), [unprompted]);
 
   return (
     <dialog

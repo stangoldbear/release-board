@@ -95,6 +95,32 @@ describe('LocalPlanRepository', () => {
     expect(setup(storage).latest().dailyNotes).toEqual(latest().dailyNotes);
   });
 
+  it('adds free notes at the end, changes, moves and deletes them, and keeps them', () => {
+    const { repository, storage, latest } = setup();
+    const first = repository.createMemo({ title: 'App mobile: rilascio a gennaio' });
+    const second = repository.createMemo({
+      title: 'Stima del fornitore',
+      colorId: 'yellow',
+      remindOn: '2026-07-17',
+    });
+    repository.updateMemo(second, { body: 'Entro il 17', colorId: null });
+    repository.moveMemo(second, first);
+    expect(latest().memos).toEqual([
+      {
+        id: second,
+        title: 'Stima del fornitore',
+        body: 'Entro il 17',
+        remindOn: '2026-07-17',
+        position: 0,
+      },
+      { id: first, title: 'App mobile: rilascio a gennaio', position: 1 },
+    ]);
+    expect(setup(storage).latest().memos).toEqual(latest().memos);
+
+    repository.deleteMemo(second);
+    expect(latest().memos.map((memo) => memo.id)).toEqual([first]);
+  });
+
   it('deletes tasks and replaces the whole plan', () => {
     const { repository, latest } = setup();
     const id = repository.createTask(content);

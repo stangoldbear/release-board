@@ -2,16 +2,21 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Trash, UserPlus } from 'lucide-react';
 import type { Member, MembersRepository, Role } from '../../app/MembersRepository';
+import type { PlanSnapshot } from '../../domain/types';
 import { isValidGitHubLogin } from '../../infra/github/users';
 import { Button } from '../../shared/ui/Button';
-import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { FIELD_CLASS } from '../../shared/ui/field';
 import { useToast } from '../../shared/ui/Toast';
+import { downloadBackup } from './downloadBackup';
+import { MemberChangeDialog } from './MemberChangeDialog';
+import type { MemberChange } from './MemberChangeDialog';
 
 interface MembersSectionProps {
   members: MembersRepository;
   /** The signed-in owner, who cannot change their own membership. */
   selfGithubId: string;
+  /** The whole plan, for the backup offered before removing someone. */
+  plan: PlanSnapshot;
 }
 
 const INVITE_MESSAGES = {
@@ -21,12 +26,13 @@ const INVITE_MESSAGES = {
 };
 
 /** Who can enter the plan. Owners invite by GitHub username, change roles and remove members. */
-export function MembersSection({ members, selfGithubId }: MembersSectionProps) {
+export function MembersSection({ members, selfGithubId, plan }: MembersSectionProps) {
   const showToast = useToast();
   const [list, setList] = useState<Member[]>([]);
   const [login, setLogin] = useState('');
   const [busy, setBusy] = useState(false);
-  const [removing, setRemoving] = useState<Member | null>(null);
+  /** A change that takes access away, waiting for confirmation. */
+  const [pending, setPending] = useState<{ member: Member; change: MemberChange } | null>(null);
 
   useEffect(() => members.subscribe(setList), [members]);
 
@@ -85,9 +91,12 @@ export function MembersSection({ members, selfGithubId }: MembersSectionProps) {
                 aria-label={`Ruolo di ${member.login}`}
                 value={member.role}
                 disabled={self || busy}
-                onChange={(event) =>
-                  void run(() => members.setRole(member.githubId, event.target.value as Role))
-                }
+                onChange={(event) => {
+                  const role = event.target.value as Role;
+                  // Taking the owner role away is confirmed like a removal.
+                  if (member.role === 'owner') setPending({ member, change: 'demote' });
+                  else void run(() => members.setRole(member.githubId, role));
+                }}
                 className="rounded-lg border border-line-strong bg-surface px-2 py-1 text-xs text-fg"
               >
                 <option value="owner">Proprietario</option>
@@ -98,7 +107,7 @@ export function MembersSection({ members, selfGithubId }: MembersSectionProps) {
                 size="icon"
                 className="p-1.5"
                 disabled={self || busy}
-                onClick={() => setRemoving(member)}
+                onClick={() => setPending({ member, change: 'remove' })}
                 aria-label={`Rimuovi ${member.login}`}
               >
                 <Trash className="h-4 w-4" aria-hidden="true" />
@@ -126,21 +135,24 @@ export function MembersSection({ members, selfGithubId }: MembersSectionProps) {
         Gli invitati entrano come editor: vedono e modificano tutto, ma non i membri. Un
         proprietario può anche invitare e rimuovere.
       </p>
-      {removing && (
-        <ConfirmDialog
-          title="Rimuovere il membro?"
-          message="La persona non potrà più vedere né modificare il piano."
-          itemTitle={removing.login}
-          confirmLabel="Rimuovi"
-          onConfirm={() => {
-            const member = removing;
-            setRemoving(null);
+      {pending && (
+        <MemberChangeDialog
+          member={pending.member}
+          change={pending.change}
+          onConfirm={({ backup }) => {
+            const { member, change } = pending;
+            setPending(null);
+            if (backup) downloadBackup(plan, 'prima-della-rimozione');
             void run(async () => {
+              if (change === 'demote') {
+                await members.setRole(member.githubId, 'editor');
+                return `${member.login} ora è editor`;
+              }
               await members.remove(member.githubId);
               return `${member.login} non fa più parte del piano`;
             });
           }}
-          onCancel={() => setRemoving(null)}
+          onCancel={() => setPending(null)}
         />
       )}
     </section>

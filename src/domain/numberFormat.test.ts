@@ -42,8 +42,31 @@ describe('formatShortNumber', () => {
   });
 
   it('abbreviates numbers that do not fit', () => {
-    // Intl separates number and unit with a no-break space.
+    // A no-break space keeps number and unit together.
     expect(formatShortNumber(1234567, 0, 8)).toBe('1,2\u00a0Mln');
     expect(formatShortNumber(125000, 0, 4)).toBe('125K');
+    expect(formatShortNumber(12500, 0, 4)).toBe('13K');
+    expect(formatShortNumber(1500.5, 2, 4)).toBe('1,5K');
+    expect(formatShortNumber(-2500000, 0, 8)).toBe('-2,5\u00a0Mln');
+    expect(formatShortNumber(3_400_000_000, 0, 8)).toBe('3,4\u00a0Mrd');
+  });
+
+  it('shortens further when even the abbreviation does not fit', () => {
+    expect(formatShortNumber(1234567, 0, 4)).toBe('1,2M');
+    expect(formatShortNumber(1234567, 0, 2)).toBe('1M');
+    // Nothing shorter: the cell cuts it.
+    expect(formatShortNumber(125000, 0, 3)).toBe('125K');
+    expect(formatShortNumber(999, 0, 2)).toBe('999');
+    // Italian writes four digits without a separator, as short as "9,5K".
+    expect(formatShortNumber(9500, 0, 3)).toBe('9500');
+  });
+
+  it('moves to the next unit when the rounding reaches a thousand', () => {
+    expect(formatShortNumber(999_499, 0, 4)).toBe('999K');
+    expect(formatShortNumber(999_700, 0, 4)).toBe('1M');
+    expect(formatShortNumber(999_999, 0, 6)).toBe('1\u00a0Mln');
+    expect(formatShortNumber(-999_999, 0, 4)).toBe('-1M');
+    expect(formatShortNumber(999_499_999, 0, 6)).toBe('999,5M');
+    expect(formatShortNumber(999_960_000, 0, 8)).toBe('1\u00a0Mrd');
   });
 });

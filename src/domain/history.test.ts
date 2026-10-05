@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { describeChange, describeHistoryEntry, fieldChanges } from './history';
+import {
+  describeChange,
+  describeHistoryEntry,
+  fieldChanges,
+  isHistoryAction,
+  isHistoryEntity,
+} from './history';
 import type { HistoryEntry } from './history';
 
 const actor = { uid: 'uid-1', githubId: '1', login: 'anna' };
@@ -83,5 +89,72 @@ describe('fieldChanges', () => {
       { label: '05/10/2026', after: 'Rimosso' },
       { label: '06/10/2026', after: '1250,50' },
     ]);
+  });
+});
+
+describe('free notes in the history', () => {
+  const memoEntry = (changes: Partial<HistoryEntry>): HistoryEntry =>
+    noteEntry({ entity: 'memo', entityId: 'memo-1', ...changes });
+
+  it('names the note, and tells a move from a change', () => {
+    expect(
+      describeChange(memoEntry({ action: 'create', after: { title: 'Stima', position: 1 } })),
+    ).toBe('ha aggiunto la nota libera «Stima»');
+    expect(
+      describeChange(
+        memoEntry({ before: { position: 1 }, after: { title: 'Stima', position: 2.5 } }),
+      ),
+    ).toBe('ha spostato la nota libera «Stima»');
+    expect(
+      describeChange(memoEntry({ before: { body: 'Entro il 17' }, after: { title: 'Stima' } })),
+    ).toBe('ha modificato la nota libera «Stima»');
+  });
+
+  it('lists what changed: text, color and reminder, but not the place', () => {
+    const entry = memoEntry({
+      before: { body: 'Entro il 17', colorId: 'red', remindOn: '2026-07-17' },
+      after: { title: 'Stima', colorId: 'blue', remindOn: '2026-07-20' },
+    });
+    expect(fieldChanges(entry, () => undefined)).toEqual([
+      { label: 'Testo', before: 'Entro il 17' },
+      { label: 'Colore', before: 'Rosso', after: 'Azzurro' },
+      { label: 'Promemoria', before: '17/07/2026', after: '20/07/2026' },
+    ]);
+    expect(
+      fieldChanges(
+        memoEntry({ before: { position: 1 }, after: { title: 'Stima', position: 2 } }),
+        () => undefined,
+      ),
+    ).toEqual([]);
+  });
+
+  it('tells when a note became private, or was shared again, without its private content', () => {
+    const hidden = memoEntry({
+      before: { private: false },
+      after: { title: 'Stima', private: true },
+    });
+    expect(describeChange(hidden)).toBe('ha reso privata la nota libera «Stima»');
+    expect(fieldChanges(hidden, () => undefined)).toEqual([
+      { label: 'Visibilità', before: 'Condivisa', after: 'Privata' },
+    ]);
+    const shared = memoEntry({
+      before: { private: true },
+      after: { title: 'Stima', body: 'Entro il 17', position: 2, private: false },
+    });
+    expect(describeChange(shared)).toBe('ha condiviso la nota libera «Stima»');
+    expect(fieldChanges(shared, () => undefined)).toEqual([
+      { label: 'Testo', after: 'Entro il 17' },
+      { label: 'Visibilità', before: 'Privata', after: 'Condivisa' },
+    ]);
+  });
+});
+
+describe('entries read from the database', () => {
+  it('know their kinds of change and of entity', () => {
+    expect(isHistoryEntity('memo')).toBe(true);
+    expect(isHistoryEntity('toString')).toBe(false);
+    expect(isHistoryEntity(3)).toBe(false);
+    expect(isHistoryAction('import')).toBe(true);
+    expect(isHistoryAction('rename')).toBe(false);
   });
 });

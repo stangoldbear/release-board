@@ -233,3 +233,19 @@ export function formatDateTimeIT(iso: string): string {
     ? iso
     : date.toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
 }
+
+/** "lunedì 5 ottobre 2026 alle ore 10:52". */
+export function formatDateTimeLongIT(date: Date): string {
+  return date.toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' });
+}
+
+/** How long ago a moment was, in words: "meno di un minuto fa", "5 minuti fa", "2 ore fa". */
+export function timeAgo(then: Date, now: Date): string {
+  const minutes = Math.floor(Math.max(0, now.getTime() - then.getTime()) / 60_000);
+  if (minutes < 1) return 'meno di un minuto fa';
+  if (minutes < 60) return minutes === 1 ? '1 minuto fa' : `${minutes} minuti fa`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours === 1 ? '1 ora fa' : `${hours} ore fa`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? '1 giorno fa' : `${days} giorni fa`;
+}

@@ -1,18 +1,13 @@
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { Download, TriangleAlert, Upload } from 'lucide-react';
-import {
-  MAX_BACKUP_BYTES,
-  backupFileName,
-  createBackupFile,
-  parseBackupText,
-  serializeBackup,
-} from '../../domain/backup';
+import { MAX_BACKUP_BYTES, parseBackupText } from '../../domain/backup';
 import type { BackupSource } from '../../domain/backup';
+import { planContentSummary } from '../../domain/plan';
 import type { PlanSnapshot } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { formatDateTimeIT } from '../../utils/dateUtils';
-import { downloadTextFile } from '../../utils/download';
+import { downloadBackup } from './downloadBackup';
 
 interface BackupSectionProps {
   plan: PlanSnapshot;
@@ -36,23 +31,8 @@ const SOURCE_LABELS: Record<BackupSource, string> = {
   'legacy-v2': 'File della versione precedente',
 };
 
-function exportPlan(plan: PlanSnapshot, suffix?: string) {
-  const now = new Date();
-  downloadTextFile(
-    backupFileName(now, suffix),
-    serializeBackup(createBackupFile(plan, now)),
-    'application/json',
-  );
-}
-
 function countSummary(plan: PlanSnapshot): string {
-  const notes = Object.keys(plan.dailyNotes).length;
-  return [
-    `${plan.tasks.length} attività`,
-    `${plan.lanes.length} ${plan.lanes.length === 1 ? 'corsia' : 'corsie'}`,
-    `${plan.metrics.length} valori giornalieri`,
-    `${notes} ${notes === 1 ? 'nota' : 'note'}`,
-  ].join(' · ');
+  return planContentSummary(plan).join(' · ');
 }
 
 /** Export to a JSON file, and import one after validation, preview and confirmation. */
@@ -87,7 +67,7 @@ export function BackupSection({ plan, onReplacePlan }: BackupSectionProps) {
   };
 
   const handleConfirmReplace = (next: PlanSnapshot) => {
-    exportPlan(plan, 'prima-del-ripristino');
+    downloadBackup(plan, 'prima-del-ripristino');
     onReplacePlan(next);
   };
 
@@ -98,7 +78,7 @@ export function BackupSection({ plan, onReplacePlan }: BackupSectionProps) {
       </h3>
       <p className="text-xs text-fg-muted">{countSummary(plan)}</p>
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" onClick={() => exportPlan(plan)}>
+        <Button variant="primary" onClick={() => downloadBackup(plan)}>
           <Download className="h-4 w-4" aria-hidden="true" />
           Esporta JSON
         </Button>

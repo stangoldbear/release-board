@@ -44,12 +44,36 @@ export interface DailyMetric {
 /** Note text by date (YYYY-MM-DD). */
 export type DailyNotes = Record<string, string>;
 
+/** Who wrote a free note in a shared instance: GitHub id and username. */
+export interface MemoAuthor {
+  id: string;
+  login: string;
+}
+
+/** A free note, in the strip under the search: about anything, not tied to a day. */
+export interface Memo {
+  id: string;
+  title: string;
+  body?: string;
+  colorId?: TaskColorId;
+  /** YYYY-MM-DD: from this day on, opening the calendar shows a reminder of the note. */
+  remindOn?: string;
+  /** Order in the strip, lowest first; fractional, so that a move changes one note only. */
+  position: number;
+  /** In a shared instance; the notes of the local mode have no author. */
+  author?: MemoAuthor;
+  /** Seen by its author only; absent on the notes that every member sees. */
+  private?: true;
+}
+
 /** Everything that makes up a plan: what is saved, exported and restored. */
 export interface PlanSnapshot {
   lanes: Lane[];
   tasks: TaskItem[];
   metrics: DailyMetric[];
   dailyNotes: DailyNotes;
+  /** In the order of the strip. */
+  memos: Memo[];
 }
 
 /** Calendar rows the user chose to hide. New lanes are visible by default. */

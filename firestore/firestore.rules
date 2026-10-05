@@ -64,6 +64,17 @@ service cloud.firestore {
         && request.resource.data.lastHistoryId != resource.data.lastHistoryId;
     }
 
+    // What a free note holds, shared or private. Its position orders the strip; a move changes
+    // it alone, or the positions of all the notes when they are numbered again.
+    function validMemoContent(data) {
+      return isText(data.title, 200)
+        && (!('body' in data) || isText(data.body, 2000))
+        && (!('colorId' in data)
+          || data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple'])
+        && (!('remindOn' in data) || isIsoDate(data.remindOn))
+        && data.position is number;
+    }
+
     match /plans/{planId} {
       // Anyone signed in may learn whether the plan exists, to be offered its creation or told to
       // ask for an invitation. The document holds only the plan's name.
@@ -109,6 +120,15 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
           && request.resource.data.role in ['owner', 'editor'];
         allow delete: if isOwner(planId) && memberId != githubId();
+
+        // The member's private free notes: nobody else reads or writes them, so they leave no
+        // history and carry no author, which is the member of the path.
+        match /memos/{memoId} {
+          allow read, delete: if memberId == githubId() && isMember(planId);
+          allow create, update: if memberId == githubId() && isMember(planId)
+            && request.resource.data.keys().hasOnly(['title', 'body', 'colorId', 'remindOn', 'position'])
+            && validMemoContent(request.resource.data);
+        }
       }
 
       match /lanes/{laneId} {
@@ -206,6 +226,37 @@ service cloud.firestore {
         allow delete: if isMember(planId);
       }
 
+      // A shared free note, in the strip under the search, with the member who wrote it. The
+      // author is whoever creates the note, and never changes; only an import, which the history
+      // records as such, keeps the authors of a restored backup.
+      match /memos/{memoId} {
+        allow read: if isMember(planId);
+        function byWriter() {
+          let author = request.resource.data.author;
+          return author.id == githubId() && author.login == get(memberPath(planId)).data.login;
+        }
+        function isImport() {
+          return getAfter(historyPath(planId, request.resource.data.lastHistoryId)).data.action
+            == 'import';
+        }
+        function validMemo() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['title', 'body', 'colorId', 'remindOn', 'position',
+              'author', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && validMemoContent(data)
+            && data.author is map
+            && data.author.keys().hasOnly(['id', 'login'])
+            && isText(data.author.id, 40)
+            && isText(data.author.login, 39);
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validMemo()
+          && (byWriter() || isImport());
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validMemo()
+          && request.resource.data.author == resource.data.author;
+        allow delete: if isMember(planId);
+      }
+
       // Who changed what and when. Entries are written by the client together with the change
       // and can never be altered.
       match /history/{entryId} {
@@ -213,7 +264,8 @@ service cloud.firestore {
         allow create: if isMemberAfter(planId)
           && request.resource.data.keys().hasOnly(
             ['entity', 'entityId', 'action', 'actor', 'at', 'before', 'after', 'summary'])
-          && request.resource.data.entity in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'member']
+          && request.resource.data.entity
+            in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'memo', 'member']
           && request.resource.data.action in ['create', 'update', 'delete', 'import', 'setup']
           && request.resource.data.actor.uid == request.auth.uid
           && request.resource.data.actor.githubId == githubId()

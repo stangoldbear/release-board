@@ -5,7 +5,9 @@ import {
   chunk,
   contentWrites,
   importSummary,
+  memoContent,
   readLane,
+  readMemo,
   readNote,
   readTask,
   readValue,
@@ -43,6 +45,16 @@ describe('task documents', () => {
   });
 });
 
+describe('free note documents', () => {
+  it('keeps only the fields that are set, and skips documents without a title', () => {
+    const data = memoContent({ title: 'Stima', position: 2, body: '', colorId: 'red' });
+    expect(data).toEqual({ title: 'Stima', position: 2, colorId: 'red' });
+    expect(readMemo('m1', { ...data, remindOn: '2026-02-30' })).toEqual({ id: 'm1', ...data });
+    expect(readMemo('m1', { position: 1 })).toBeNull();
+    expect(readMemo('m1', { title: 'Senza posto' })).toBeNull();
+  });
+});
+
 describe('plan documents', () => {
   it('round-trips the sample plan through its documents', () => {
     const writes = contentWrites(plan);
@@ -59,11 +71,15 @@ describe('plan documents', () => {
       notes: writes
         .filter((write) => write.path.startsWith('notes/'))
         .map((write) => readNote(write.path.split('/')[1]!, write.data)!),
+      memos: writes
+        .filter((write) => write.path.startsWith('memos/'))
+        .map((write) => readMemo(write.path.split('/')[1]!, write.data)!),
     };
     const rebuilt = buildPlan(parts);
     expect(rebuilt.lanes).toEqual(plan.lanes);
     expect(rebuilt.metrics).toEqual(plan.metrics);
     expect(rebuilt.dailyNotes).toEqual(plan.dailyNotes);
+    expect(rebuilt.memos).toEqual(plan.memos);
     expect([...rebuilt.tasks].sort((a, b) => a.id.localeCompare(b.id))).toEqual(
       [...plan.tasks].sort((a, b) => a.id.localeCompare(b.id)),
     );
@@ -78,13 +94,16 @@ describe('plan documents', () => {
       tasks: [],
       values: [],
       notes: [],
+      memos: [],
     });
     expect(rebuilt.lanes.map((lane) => lane.name)).toEqual(['Prima', 'Terza']);
   });
 
   it('writes the metric definition along with the content', () => {
     expect(contentWrites(plan).some((write) => write.path === 'metrics/metric-1')).toBe(true);
-    expect(importSummary(plan)).toBe('3 corsie, 11 attività, 22 valori giornalieri, 2 note');
+    expect(importSummary(plan)).toBe(
+      '3 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere',
+    );
   });
 
   it('chunks lists', () => {

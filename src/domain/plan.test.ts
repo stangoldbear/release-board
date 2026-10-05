@@ -7,6 +7,7 @@ import {
   importDailyValues,
   isPlanEmpty,
   moveNote,
+  planContentSummary,
   removeTask,
   setMetricValues,
   setNote,
@@ -144,5 +145,34 @@ describe('notes and values', () => {
   it('knows when a plan is empty', () => {
     expect(isPlanEmpty(createEmptyPlan())).toBe(true);
     expect(isPlanEmpty(setNote(createEmptyPlan(), '2026-09-01', 'Nota'))).toBe(false);
+  });
+});
+
+describe('planContentSummary', () => {
+  it('counts the content in words, without the private notes', () => {
+    const plan = {
+      ...createEmptyPlan(),
+      lanes: [{ id: 'lane-1', name: 'Corsia' }],
+      metrics: [{ date: '2026-10-05', value: 1 }],
+      dailyNotes: { '2026-10-05': 'Nota' },
+      memos: [
+        { id: 'a', title: 'Condivisa', position: 1 },
+        { id: 'b', title: 'Privata', position: 2, private: true as const },
+      ],
+    };
+    expect(planContentSummary(plan)).toEqual([
+      '1 corsia',
+      '0 attività',
+      '1 valore giornaliero',
+      '1 nota',
+      '1 nota libera',
+    ]);
+    expect(planContentSummary(createEmptyPlan())).toEqual([
+      '3 corsie',
+      '0 attività',
+      '0 valori giornalieri',
+      '0 note',
+      '0 note libere',
+    ]);
   });
 });

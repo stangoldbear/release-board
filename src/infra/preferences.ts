@@ -38,10 +38,9 @@ export function isBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
 
-/** Parser for a preference that is one of a few strings. */
-export function oneOf<T extends string>(options: readonly T[]): (value: unknown) => T | null {
-  return (value) =>
-    typeof value === 'string' && (options as readonly string[]).includes(value)
-      ? (value as T)
-      : null;
+/** Parser for a preference that is one of a few strings or numbers. */
+export function oneOf<T extends string | number>(
+  options: readonly T[],
+): (value: unknown) => T | null {
+  return (value) => ((options as readonly unknown[]).includes(value) ? (value as T) : null);
 }

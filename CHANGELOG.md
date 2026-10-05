@@ -6,6 +6,85 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-05
+
+### Aggiunto
+
+- Note libere, in una fascia subito sotto la ricerca: una dopo l'altra su una riga che scorre,
+  oppure espanse con il loro testo («Espandi»). Si aggiungono scrivendo il titolo e premendo Invio,
+  e la fila mostra la nota nuova; un clic apre la nota, con titolo, testo, colore, promemoria,
+  posto nella fila e il pulsante «Salva». Sul telefono la fascia parte chiusa («Mostra»).
+  - Si riordinano trascinandole con il mouse, con Alt e le frecce dalla tastiera, e dalla finestra
+    della nota («Posizione nella fila»), che vale anche sul telefono.
+  - Con un promemoria, dal giorno scelto chi ha la nota nella fila vede un avviso aprendo il
+    calendario, una volta per browser. L'avviso aspetta che le altre finestre siano chiuse, e un
+    promemoria impostato nel browser in uso non si ripresenta.
+  - In un'istanza condivisa ogni nota ha il suo autore, cioè chi la scrive: solo il ripristino di
+    un backup conserva gli autori originali, e la cronologia lo registra. La fila mostra le tue
+    note; «Tutte» mostra anche quelle degli altri membri, con il nome di chi le ha scritte. La
+    ricerca guarda in tutte, anche per autore.
+  - Una nota privata, scelta con il lucchetto accanto al campo o nella finestra della nota, tra i
+    membri la vedi solo tu: le regole di Firestore la tengono in un'area che solo tu puoi leggere,
+    e quello che scrivi non va nella cronologia né nei backup. Una nota che era condivisa lascia
+    nella cronologia ciò che gli altri hanno già visto. Il lucchetto resta chiuso finché non lo
+    riapri, così più note private di seguito non vengono condivise per sbaglio.
+  - Un titolo come «Progetto: golive gennaio» mostra in grassetto la parte prima dei due punti,
+    accanto al pallino del colore; orari come «14:00» e link restano interi. La finestra della nota
+    ha l'anteprima del bottone e suggerisce cosa scrivere dopo i due punti: il golive di questo
+    mese e dei quattro successivi, code freeze e rollout 100%. Un suggerimento prende il posto di un
+    altro e non cancella mai il testo scritto.
+- La ricerca cerca anche nelle note dei giorni e nelle note libere: il calendario mostra solo le
+  note che contengono il testo e il riepilogo conta attività, note e note libere trovate.
+- Lenti per la dimensione del testo del calendario, accanto alle viste: da 100% a 175%, con il
+  valore in mezzo che riporta al 100%. Crescono corsie, note, attività, fatturato e date, con
+  l'interlinea e un po' di spaziatura; intestazione, pulsanti, finestre e piè di pagina restano
+  come sono. Sul telefono le lenti sono in Impostazioni → Aspetto.
+- Modalità compatta («Compatta», accanto alle lenti): meno spazio intorno alle caselle e righe più
+  strette, così ogni casella mostra più testo, per esempio tre righe del titolo di un'attività.
+- 32 temi personalizzati ispirati ai temi più usati di Visual Studio Code, 12 chiari e 20 scuri, in
+  Impostazioni → Aspetto → «Temi personalizzati». Ognuno tiene i colori del tema originale e
+  rispetta il contrasto WCAG AA.
+- Passando sopra «Sincronizzato», arrivandoci con la tastiera o toccandolo, una scheda dice quanto
+  tempo fa e in che giorno e ora il piano si è sincronizzato l'ultima volta.
+- Per togliere l'accesso a un proprietario, rimuovendolo o rendendolo editor, bisogna scrivere il
+  suo username, come su GitHub per cancellare un repository. Prima di rimuovere un membro la
+  finestra propone di scaricare il backup di tutto il piano.
+
+### Modificato
+
+- L'icona in alto è la stessa della scheda del browser.
+- Versione e commit sono centrati in fondo a ogni schermata.
+- I valori del fatturato che non entrano nella colonna si abbreviano allo stesso modo in ogni
+  browser: «130K», «3,2 Mln» e, se serve, «3,2M»; 999.700 diventa «1M», non «1000K». Prima Chrome
+  scriveva «3,2 Mio» e lasciava le migliaia per intero, tagliate dal bordo.
+- Sotto i 1536 pixel di larghezza l'intestazione resta su una riga: si nasconde il sottotitolo e
+  «Sincronizzato» mostra solo l'icona, con il testo nella scheda.
+- I backup hanno lo schema 4, con le note libere; quelli della 0.4 si aprono ancora.
+- Da 640 pixel di larghezza resta fissa solo la barra in alto, senza le note libere: occupa meno
+  schermo, e la pagina scorre in modo che l'elemento con il focus non finisca sotto la barra.
+- «Compatta» e i filtri accesi («Festivi e weekend», «Fatturato»…) mostrano una spunta, non solo
+  un altro colore. Le lenti, ai loro limiti, tengono il focus e annunciano la nuova dimensione.
+- Le finestre si aprono sul campo giusto: il titolo di attività e note, «Annulla» nelle conferme,
+  «Ho visto» nei promemoria. Dopo aver eliminato un'attività il focus va a «Nuova attività», dopo
+  una nota libera alla nota successiva.
+- Nella riga delle note il tasto Tab si ferma sulle note e sul giorno di oggi, non più su ogni
+  giorno: erano più di 300 fermate.
+- Le parole lunghe nelle caselle vanno a capo con il trattino, dove il browser conosce l'italiano.
+
+### Corretto
+
+- In Dark Modern l'anello del focus è un azzurro più chiaro: sui comandi a segmenti non arrivava al
+  contrasto 3:1. I test dei temi controllano ora anche il testo secondario sugli sfondi tenui, il
+  link della fascia della modalità locale e il focus nelle celle del fatturato.
+- I campi data accettano anni fino al 9999. Un anno di cinque cifre veniva salvato e, nella
+  modalità locale, il piano non si riapriva più.
+- La guida di creazione del piano scriveva «1 corsie» e non contava le note libere.
+
+Con un'istanza condivisa le regole di Firestore sono cambiate, per le note libere e le note private:
+pubblicale come nel passo «Pubblica le regole di sicurezza» della guida, prima di aggiornare il sito
+o subito dopo: funzionano anche con la 0.4. Finché non le pubblichi il piano si apre
+senza note libere, e «Sincronizzato» segnala un errore che spiega cosa manca.
+
 ## [0.4.0] - 2026-10-05
 
 ### Aggiunto
@@ -236,7 +315,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/stangoldbear/release-board/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/stangoldbear/release-board/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/stangoldbear/release-board/compare/v0.2.5...v0.3.0
 [0.2.5]: https://github.com/stangoldbear/release-board/compare/v0.2.4...v0.2.5

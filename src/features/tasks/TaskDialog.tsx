@@ -8,9 +8,15 @@ import type { BorderStyle, Lane, TaskItem, TaskStatus } from '../../domain/types
 import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { Dialog } from '../../shared/ui/Dialog';
-import { FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
+import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { taskColorStyle } from '../../themes';
-import { addDaysIso, daysBetween, formatDateToISO, formatDateToIT } from '../../utils/dateUtils';
+import {
+  addDaysIso,
+  daysBetween,
+  formatDateToISO,
+  formatDateToIT,
+  isIsoDate,
+} from '../../utils/dateUtils';
 
 interface TaskDialogProps {
   onClose: () => void;
@@ -64,7 +70,7 @@ export function TaskDialog({
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!title.trim() || !startDate || !endDate) return;
+    if (!title.trim() || !isIsoDate(startDate) || !isIsoDate(endDate)) return;
     onSave({
       title: title.trim(),
       laneId,
@@ -122,6 +128,7 @@ export function TaskDialog({
             </label>
             <textarea
               id="task-title-input"
+              data-autofocus
               required
               rows={2}
               placeholder="es. Rilascio versione 2.8"
@@ -163,6 +170,7 @@ export function TaskDialog({
                 id="task-start-date"
                 type="date"
                 required
+                max={DATE_MAX}
                 value={startDate}
                 onChange={(event) => {
                   setStartDate(event.target.value);
@@ -179,6 +187,7 @@ export function TaskDialog({
                 id="task-end-date"
                 type="date"
                 required
+                max={DATE_MAX}
                 value={endDate}
                 onChange={(event) => {
                   setEndDate(event.target.value);
