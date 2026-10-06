@@ -1,0 +1,112 @@
+{
+  "$comment": "How the projects of the roadmap are described when a plan starts: the custom fields, the teams and the people who work on the projects. Order matters: it is the order of the lists. Colors are the task colors (yellow, gray, blue, ice, green, indigo, red, purple), checked for contrast in every theme. Settings → Roadmap edits a copy of this in the plan; 'Carica i predefiniti' brings it back.",
+  "teams": [
+    { "id": "server", "name": "Server side", "tag": "ServerSide", "colorId": "yellow" },
+    { "id": "ios", "name": "iOS", "tag": "iOSDev", "colorId": "blue" },
+    { "id": "android", "name": "Android", "tag": "AndDev", "colorId": "green" },
+    { "id": "qa", "name": "QA", "tag": "QA", "colorId": "ice" },
+    { "id": "ba", "name": "Business analysis", "tag": "BA", "colorId": "purple" },
+    { "id": "content", "name": "Content", "tag": "CONTENT", "colorId": "indigo" }
+  ],
+  "stakeholders": [
+    { "id": "server-1", "name": "Server #1", "teamId": "server" },
+    { "id": "server-2", "name": "Server #2", "teamId": "server" },
+    { "id": "server-3", "name": "Server #3", "teamId": "server" },
+    { "id": "ios-1", "name": "iOS Dev #1", "teamId": "ios" },
+    { "id": "ios-2", "name": "iOS Dev #2", "teamId": "ios" },
+    { "id": "ios-3", "name": "iOS Dev #3", "teamId": "ios" },
+    { "id": "android-1", "name": "Android Dev #1", "teamId": "android" },
+    { "id": "android-2", "name": "Android Dev #2", "teamId": "android" },
+    { "id": "android-3", "name": "Android Dev #3", "teamId": "android" },
+    { "id": "qa-1", "name": "QA #1", "teamId": "qa" },
+    { "id": "qa-2", "name": "QA #2", "teamId": "qa" },
+    { "id": "qa-3", "name": "QA #3", "teamId": "qa" },
+    { "id": "ba-1", "name": "BA #1", "teamId": "ba" },
+    { "id": "ba-2", "name": "BA #2", "teamId": "ba" },
+    { "id": "content-1", "name": "CONTENT #1", "teamId": "content" },
+    { "id": "content-2", "name": "CONTENT #2", "teamId": "content" }
+  ],
+  "fields": [
+    {
+      "id": "impactedTeams",
+      "label": "Team impattati",
+      "description": "I team il cui lavoro serve per il progetto.",
+      "type": "choice",
+      "multiple": true,
+      "required": false,
+      "main": true,
+      "options": [
+        { "id": "ios-dev", "label": "iOS Dev" },
+        { "id": "android-dev", "label": "Android Dev" },
+        { "id": "backend-dev", "label": "Backend Dev" },
+        { "id": "backend-config", "label": "Backend Config" },
+        { "id": "content", "label": "Content" },
+        { "id": "qa", "label": "QA" },
+        { "id": "ba", "label": "BA" }
+      ]
+    },
+    {
+      "id": "jiraRequest",
+      "label": "Jira request",
+      "description": "La richiesta su Jira da cui nasce il progetto.",
+      "type": "url",
+      "multiple": false,
+      "required": false,
+      "main": false
+    },
+    {
+      "id": "jiraEpics",
+      "label": "Jira epics",
+      "description": "Le epiche su Jira che realizzano il progetto, una per riga.",
+      "type": "url",
+      "multiple": true,
+      "required": false,
+      "main": true
+    },
+    {
+      "id": "figma",
+      "label": "Figma",
+      "description": "I file di Figma con il disegno delle schermate.",
+      "type": "url",
+      "multiple": true,
+      "required": false,
+      "main": false
+    },
+    {
+      "id": "confluence",
+      "label": "Confluence",
+      "description": "Le pagine di Confluence con analisi e documentazione.",
+      "type": "url",
+      "multiple": true,
+      "required": false,
+      "main": true
+    },
+    {
+      "id": "stakeholders",
+      "label": "Stakeholder",
+      "description": "Chi chiede il progetto o ne risponde, al di fuori del team.",
+      "type": "text",
+      "multiple": true,
+      "required": false,
+      "main": false
+    },
+    {
+      "id": "rawEstimationTotal",
+      "label": "Raw estimation totale",
+      "description": "La stima grezza di tutto il progetto, come è stata scritta.",
+      "type": "text",
+      "multiple": false,
+      "required": false,
+      "main": false
+    },
+    {
+      "id": "rawEstimationElapsed",
+      "label": "Raw estimation elapsed",
+      "description": "Quanto della stima grezza è già stato consumato.",
+      "type": "text",
+      "multiple": false,
+      "required": false,
+      "main": true
+    }
+  ]
+}

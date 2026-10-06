@@ -1,10 +1,20 @@
 import type { DocumentData } from 'firebase/firestore';
 import { APPROVAL_LIGHTS } from '../../domain/approval';
+import { parseAssignment, sortAssignments } from '../../domain/assignments';
 import { DEFAULT_COLOR_ID, isKnownColorId } from '../../domain/colors';
 import { sortMemos } from '../../domain/memos';
+import { parseProjectNote, sortProjectNotes } from '../../domain/projectNotes';
 import { PROJECT_STATUSES, sortProjects } from '../../domain/projects';
+import {
+  parseFieldValues,
+  parseProjectField,
+  parseStakeholder,
+  parseTeam,
+  sortByPosition,
+} from '../../domain/roadmapConfig';
 import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES, planContentSummary } from '../../domain/plan';
 import type {
+  Assignment,
   DailyMetric,
   DailyNotes,
   Lane,
@@ -12,7 +22,11 @@ import type {
   MemoAuthor,
   PlanSnapshot,
   Project,
+  ProjectField,
+  ProjectNote,
+  Stakeholder,
   TaskItem,
+  Team,
 } from '../../domain/types';
 import { isIsoDate } from '../../utils/dateUtils';
 
@@ -24,7 +38,12 @@ import { isIsoDate } from '../../utils/dateUtils';
 //   notes/{date}                      text
 //   memos/{memoId}                    title, position, author, and body, colorId, remindOn when set
 //   members/{githubId}/memos/{memoId} a member's private free notes: the same without author
-//   projects/{projectId}              the project of the roadmap without its id
+//   projects/{projectId}              the project of the roadmap without its id, fields included
+//   projectNotes/{noteId}             projectId, text, createdAt, author, and the optional fields
+//   assignments/{assignmentId}        projectId, stakeholderId, startDate, manDays, and note when set
+//   projectFields/{fieldId}           a custom field of the projects, as the settings define it
+//   teams/{teamId}                    name, tag, colorId, position
+//   stakeholders/{stakeholderId}      name, teamId, absences, position, and info when set
 // Every document but the private notes also carries updatedAt, updatedBy and lastHistoryId,
 // added by the repository: private notes leave no history, since nobody else may read them.
 // Reading is lenient: the rules validate writes, and a document that does not fit is skipped.
@@ -168,6 +187,7 @@ export function projectContent(project: Omit<Project, 'id'>): DocumentData {
   };
   if (project.owner) data.owner = project.owner;
   if (project.description) data.description = project.description;
+  if (project.fields && Object.keys(project.fields).length > 0) data.fields = project.fields;
   return data;
 }
 
@@ -186,7 +206,94 @@ export function readProject(id: string, data: DocumentData): Project | null {
   };
   if (isText(data.owner)) project.owner = data.owner;
   if (isText(data.description)) project.description = data.description;
+  const fields = data.fields === undefined ? null : parseFieldValues(data.fields);
+  if (fields && Object.keys(fields).length > 0) project.fields = fields;
   return project;
+}
+
+/** A note of a project without its id, and without empty optional fields. */
+export function projectNoteContent(note: Omit<ProjectNote, 'id'>): DocumentData {
+  const data: DocumentData = {
+    projectId: note.projectId,
+    text: note.text,
+    createdAt: note.createdAt,
+  };
+  if (note.author) data.author = { id: note.author.id, login: note.author.login };
+  if (note.status) data.status = note.status;
+  if (note.dueOn) data.dueOn = note.dueOn;
+  if (note.remind && note.dueOn) data.remind = true;
+  if (note.owners && note.owners.length > 0) data.owners = note.owners;
+  if (note.tags && note.tags.length > 0) data.tags = note.tags;
+  return data;
+}
+
+export function readProjectNote(id: string, data: DocumentData): ProjectNote | null {
+  return parseProjectNote(id, data);
+}
+
+/** An assignment without its id, and without an empty note. */
+export function assignmentContent(assignment: Omit<Assignment, 'id'>): DocumentData {
+  const data: DocumentData = {
+    projectId: assignment.projectId,
+    stakeholderId: assignment.stakeholderId,
+    startDate: assignment.startDate,
+    manDays: assignment.manDays,
+  };
+  if (assignment.note) data.note = assignment.note;
+  return data;
+}
+
+export function readAssignment(id: string, data: DocumentData): Assignment | null {
+  return parseAssignment(id, data);
+}
+
+/** A field definition without its id; the options go with the choice fields only. */
+export function projectFieldContent(field: Omit<ProjectField, 'id'>): DocumentData {
+  const data: DocumentData = {
+    label: field.label,
+    type: field.type,
+    multiple: field.multiple,
+    required: field.required,
+    main: field.main,
+    position: field.position,
+  };
+  if (field.description) data.description = field.description;
+  if (field.type === 'choice' && field.options) {
+    data.options = field.options.map((option) => ({ id: option.id, label: option.label }));
+  }
+  return data;
+}
+
+export function readProjectField(id: string, data: DocumentData): ProjectField | null {
+  return parseProjectField(id, data, Number.MAX_SAFE_INTEGER);
+}
+
+export function teamContent(team: Omit<Team, 'id'>): DocumentData {
+  return { name: team.name, tag: team.tag, colorId: team.colorId, position: team.position };
+}
+
+export function readTeam(id: string, data: DocumentData): Team | null {
+  return parseTeam(id, data, Number.MAX_SAFE_INTEGER);
+}
+
+/** A stakeholder without their id; the absences always go, as a list, even when empty. */
+export function stakeholderContent(stakeholder: Omit<Stakeholder, 'id'>): DocumentData {
+  const data: DocumentData = {
+    name: stakeholder.name,
+    teamId: stakeholder.teamId,
+    position: stakeholder.position,
+    absences: stakeholder.absences.map((absence) => {
+      const item: DocumentData = { start: absence.start, end: absence.end };
+      if (absence.reason) item.reason = absence.reason;
+      return item;
+    }),
+  };
+  if (stakeholder.info) data.info = stakeholder.info;
+  return data;
+}
+
+export function readStakeholder(id: string, data: DocumentData): Stakeholder | null {
+  return parseStakeholder(id, data, Number.MAX_SAFE_INTEGER);
 }
 
 export interface PlanParts {
@@ -196,6 +303,11 @@ export interface PlanParts {
   notes: [string, string][];
   memos: Memo[];
   projects: Project[];
+  projectNotes: ProjectNote[];
+  assignments: Assignment[];
+  fields: ProjectField[];
+  teams: Team[];
+  stakeholders: Stakeholder[];
 }
 
 /** The plan as the app sees it: lanes in position order, values and tasks in a stable order. */
@@ -215,6 +327,13 @@ export function buildPlan(parts: PlanParts): PlanSnapshot {
     dailyNotes,
     memos: sortMemos(parts.memos),
     projects: sortProjects(parts.projects),
+    projectNotes: sortProjectNotes(parts.projectNotes),
+    assignments: sortAssignments(parts.assignments),
+    roadmap: {
+      fields: sortByPosition(parts.fields),
+      teams: sortByPosition(parts.teams),
+      stakeholders: sortByPosition(parts.stakeholders),
+    },
   };
 }
 
@@ -257,6 +376,33 @@ export function contentWrites(plan: PlanSnapshot): ContentWrite[] {
     ...plan.projects.map(({ id, ...content }) => ({
       path: `projects/${id}`,
       data: projectContent(content),
+    })),
+    ...plan.projectNotes.map(({ id, ...content }) => ({
+      path: `projectNotes/${id}`,
+      data: projectNoteContent(content),
+    })),
+    ...plan.assignments.map(({ id, ...content }) => ({
+      path: `assignments/${id}`,
+      data: assignmentContent(content),
+    })),
+    ...configWrites(plan.roadmap),
+  ];
+}
+
+/** The documents of the configuration of the roadmap: fields, teams and stakeholders. */
+export function configWrites(config: PlanSnapshot['roadmap']): ContentWrite[] {
+  return [
+    ...config.fields.map(({ id, ...content }) => ({
+      path: `projectFields/${id}`,
+      data: projectFieldContent(content),
+    })),
+    ...config.teams.map(({ id, ...content }) => ({
+      path: `teams/${id}`,
+      data: teamContent(content),
+    })),
+    ...config.stakeholders.map(({ id, ...content }) => ({
+      path: `stakeholders/${id}`,
+      data: stakeholderContent(content),
     })),
   ];
 }

@@ -7,8 +7,7 @@ import { AppLogo } from '../shared/ui/AppLogo';
 import { Button } from '../shared/ui/Button';
 import type { TextScale } from '../shared/ui/textScale';
 import { ToggleChip } from '../shared/ui/ToggleChip';
-import { AREAS } from './areas';
-import type { AreaId, AreaVisibility } from './areas';
+import type { Area, AreaId, AreaVisibility } from './areas';
 
 interface HeaderProps {
   /** Size of the text of the notes and the calendars. */
@@ -17,6 +16,8 @@ interface HeaderProps {
   /** Compact mode of the notes and the calendars. */
   compact: boolean;
   onToggleCompact: () => void;
+  /** The areas this browser can show: without the beta features, only the finished ones. */
+  availableAreas: readonly Area[];
   /** Which areas of the page are shown. */
   areas: AreaVisibility;
   onToggleArea: (area: AreaId) => void;
@@ -52,6 +53,7 @@ export function Header({
   onTextScaleChange,
   compact,
   onToggleCompact,
+  availableAreas,
   areas,
   onToggleArea,
   search,
@@ -64,6 +66,9 @@ export function Header({
 }: HeaderProps) {
   const headerRef = useRef<HTMLElement>(null);
   useStickyHeight(headerRef);
+  const searchLabel = availableAreas.some(({ id }) => id === 'roadmaps')
+    ? 'Cerca in note, attività e progetti'
+    : 'Cerca in note e attività';
 
   return (
     // On phones the header wraps to several lines: it scrolls away instead of covering the page.
@@ -95,7 +100,7 @@ export function Header({
           aria-label="Aree da mostrare"
           className="flex flex-wrap items-center gap-1.5"
         >
-          {AREAS.map(({ id, label }) => {
+          {availableAreas.map(({ id, label }) => {
             const Icon = AREA_ICONS[id];
             return (
               <ToggleChip
@@ -120,9 +125,9 @@ export function Header({
           <input
             id={SEARCH_FIELD_ID}
             type="search"
-            aria-label="Cerca in note, attività e progetti"
+            aria-label={searchLabel}
             aria-keyshortcuts="Enter Shift+Enter"
-            placeholder="Cerca in note, attività e progetti…"
+            placeholder={`${searchLabel}…`}
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             onKeyDown={(event) => {

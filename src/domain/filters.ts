@@ -95,14 +95,22 @@ export function filterMemos(
   );
 }
 
-/** The projects of the roadmap with the searched words in title, owner or description. */
+/**
+ * The projects of the roadmap with the searched words in title, owner or description, or in the
+ * other texts `moreTexts` gives for a project: its notes, the values of its fields.
+ */
 export function filterProjects(
   projects: readonly Project[],
   search: string,
   mode: SearchMode = 'all',
+  moreTexts: (project: Project) => readonly (string | undefined)[] = () => [],
 ): Project[] {
   return projects.filter((project) =>
-    matches([project.title, project.owner, project.description], search, mode),
+    matches(
+      [project.title, project.owner, project.description, ...moreTexts(project)],
+      search,
+      mode,
+    ),
   );
 }
 

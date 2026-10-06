@@ -1,28 +1,52 @@
 import { INITIAL_SYNC } from '../app/PlanRepository';
 import type { PlanRepository, SyncState } from '../app/PlanRepository';
+import type { AssignmentChanges, AssignmentContent } from '../domain/assignments';
 import { createBackupFile, parseBackupText, serializeBackup } from '../domain/backup';
 import { endPosition } from '../domain/memos';
 import type { MemoChanges, MemoContent } from '../domain/memos';
+import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
 import type { ProjectChanges, ProjectContent } from '../domain/projects';
 import {
+  addAssignment,
   addMemo,
   addProject,
+  addProjectNote,
   addTask,
   createEmptyPlan,
   importDailyValues,
   moveMemo,
   moveNote,
+  removeAssignment,
   removeMemo,
   removeProject,
+  removeProjectField,
+  removeProjectNote,
+  removeStakeholder,
   removeTask,
+  removeTeam,
+  replaceRoadmapConfig,
+  saveProjectField,
+  saveStakeholder,
+  saveTeam,
   setMetricValues,
   setNote,
+  updateAssignment,
   updateMemo,
   updateProject,
+  updateProjectNote,
   updateTask,
 } from '../domain/plan';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
-import type { DailyMetric, Memo, PlanSnapshot, TaskItem } from '../domain/types';
+import type {
+  DailyMetric,
+  Memo,
+  PlanSnapshot,
+  ProjectField,
+  RoadmapConfig,
+  Stakeholder,
+  TaskItem,
+  Team,
+} from '../domain/types';
 
 export const PLAN_STORAGE_KEY = 'release-board:plan';
 
@@ -143,6 +167,64 @@ export class LocalPlanRepository implements PlanRepository {
 
   deleteProject(projectId: string): void {
     this.change(removeProject(this.plan, projectId));
+  }
+
+  // One browser, one person: the notes of the projects have no author.
+  createProjectNote(content: ProjectNoteContent): string {
+    const id = this.createId();
+    const createdAt = this.now().toISOString();
+    this.change(addProjectNote(this.plan, { ...content, id, createdAt }));
+    return id;
+  }
+
+  updateProjectNote(noteId: string, changes: ProjectNoteChanges): void {
+    this.change(updateProjectNote(this.plan, noteId, changes));
+  }
+
+  deleteProjectNote(noteId: string): void {
+    this.change(removeProjectNote(this.plan, noteId));
+  }
+
+  createAssignment(content: AssignmentContent): string {
+    const id = this.createId();
+    this.change(addAssignment(this.plan, { ...content, id }));
+    return id;
+  }
+
+  updateAssignment(assignmentId: string, changes: AssignmentChanges): void {
+    this.change(updateAssignment(this.plan, assignmentId, changes));
+  }
+
+  deleteAssignment(assignmentId: string): void {
+    this.change(removeAssignment(this.plan, assignmentId));
+  }
+
+  saveProjectField(field: ProjectField): void {
+    this.change(saveProjectField(this.plan, field));
+  }
+
+  deleteProjectField(fieldId: string): void {
+    this.change(removeProjectField(this.plan, fieldId));
+  }
+
+  saveTeam(team: Team): void {
+    this.change(saveTeam(this.plan, team));
+  }
+
+  deleteTeam(teamId: string): void {
+    this.change(removeTeam(this.plan, teamId));
+  }
+
+  saveStakeholder(stakeholder: Stakeholder): void {
+    this.change(saveStakeholder(this.plan, stakeholder));
+  }
+
+  deleteStakeholder(stakeholderId: string): void {
+    this.change(removeStakeholder(this.plan, stakeholderId));
+  }
+
+  replaceRoadmapConfig(config: RoadmapConfig): void {
+    this.change(replaceRoadmapConfig(this.plan, config));
   }
 
   replacePlan(plan: PlanSnapshot): void {

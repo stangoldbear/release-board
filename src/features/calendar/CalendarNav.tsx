@@ -11,6 +11,10 @@ interface CalendarNavProps {
   onViewAction: (action: CalendarAction) => void;
   /** Without the past, the timeline has nothing before the current month. */
   hidePastDays: boolean;
+  /** The name of the period controls, which tells them apart from those of another area. */
+  name?: string;
+  /** Whether the board of one week is among the views: the roadmap has only the timeline. */
+  board?: boolean;
 }
 
 /** The three zoom levels of the timeline, then the board of one week. */
@@ -26,15 +30,22 @@ const VIEW_OPTIONS: {
 ];
 
 /** The month or week in view, with the arrows and Today, then the views of the calendar. */
-export function CalendarNav({ view, onViewAction, hidePastDays }: CalendarNavProps) {
+export function CalendarNav({
+  view,
+  onViewAction,
+  hidePastDays,
+  name = 'Periodo',
+  board = true,
+}: CalendarNavProps) {
   const activeView = view.mode === 'week' ? 'week' : view.zoom;
   const onBoard = view.mode === 'week';
   const canGoBack =
     onBoard || !hidePastDays || startOfMonth(view.anchor) > startOfMonth(todayIso());
+  const options = board ? VIEW_OPTIONS : VIEW_OPTIONS.filter((option) => option.key !== 'week');
 
   return (
     <>
-      <nav aria-label="Periodo" className={`${SEGMENTED} gap-1`}>
+      <nav aria-label={name} className={`${SEGMENTED} gap-1`}>
         <Button
           variant="ghost"
           size="icon"
@@ -70,8 +81,8 @@ export function CalendarNav({ view, onViewAction, hidePastDays }: CalendarNavPro
         </Button>
       </nav>
 
-      <div role="group" aria-label="Vista" className={SEGMENTED}>
-        {VIEW_OPTIONS.map(({ key, label, title }) => (
+      <div role="group" aria-label={`Vista: ${name.toLowerCase()}`} className={SEGMENTED}>
+        {options.map(({ key, label, title }) => (
           <button
             key={key}
             type="button"

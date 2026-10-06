@@ -2,6 +2,7 @@ import type { KeyboardEvent, PointerEvent } from 'react';
 import { PROJECT_STATUS_LABELS } from '../../domain/projects';
 import type { ProjectChanges } from '../../domain/projects';
 import { moveTask, resizeTask } from '../../domain/schedule';
+import type { PlacedTask } from '../../domain/schedule';
 import type { Project } from '../../domain/types';
 import { CURRENT_RESULT, Highlight, useIsCurrentResult } from '../../shared/ui/Highlight';
 import { taskColorStyle } from '../../themes';
@@ -20,9 +21,9 @@ export function projectBarId(projectId: string): string {
 }
 
 interface ProjectBarProps {
-  project: Project;
-  left: number;
-  width: number;
+  /** The project, cut to the days the roadmap holds. */
+  placed: PlacedTask<Project>;
+  dayWidth: number;
   /** Pixels from the top of the row, or a CSS length such as one that centers the bar. */
   top: number | string;
   height: number;
@@ -40,9 +41,8 @@ interface ProjectBarProps {
  * Shift they move its end.
  */
 export function ProjectBar({
-  project,
-  left,
-  width,
+  placed,
+  dayWidth,
   top,
   height,
   dragging,
@@ -51,6 +51,8 @@ export function ProjectBar({
   onOpen,
   onChange,
 }: ProjectBarProps) {
+  const { task: project, first, last, continuesBefore, continuesAfter } = placed;
+  const width = (last - first + 1) * dayWidth - 2;
   const resizable = width >= MIN_RESIZABLE_WIDTH;
   const current = useIsCurrentResult('project', project.id);
 
@@ -95,13 +97,21 @@ export function ProjectBar({
       onPointerDown={(event) => onPointerDown(event, 'move')}
       onClick={onOpen}
       onKeyDown={handleKeyDown}
-      style={{ ...taskColorStyle(project.colorId), left, width: Math.max(width, 6), top, height }}
+      style={{
+        ...taskColorStyle(project.colorId),
+        left: first * dayWidth + 1,
+        width: Math.max(width, 6),
+        top,
+        height,
+      }}
       // Clipped rather than hidden: a hidden overflow would keep the title from sticking.
-      className={`group/bar pointer-events-auto absolute flex cursor-grab items-center overflow-clip rounded-xs border-2 px-2 text-left text-xs font-semibold active:cursor-grabbing in-data-compact:px-1 ${
+      className={`group/bar pointer-events-auto absolute flex cursor-grab items-center overflow-clip border-2 px-2 text-left text-xs font-semibold active:cursor-grabbing in-data-compact:px-1 ${
+        continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'
+      } ${continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'} ${
         dragging ? 'z-30 opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'
       } ${current ? `z-20 ${CURRENT_RESULT}` : ''}`}
     >
-      {resizable && handle('start')}
+      {resizable && !continuesBefore && handle('start')}
       {/* The title stays in view while the start of a long bar scrolls past the left edge. */}
       <span className="sticky left-[calc(var(--gantt-label-width)+6px)] flex max-w-full min-w-0 items-center gap-1">
         <ProjectStatusMark status={project.status} iconOnly />
@@ -109,7 +119,7 @@ export function ProjectBar({
           <Highlight text={project.title} />
         </span>
       </span>
-      {resizable && handle('end')}
+      {resizable && !continuesAfter && handle('end')}
     </button>
   );
 }

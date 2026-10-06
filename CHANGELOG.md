@@ -6,6 +6,58 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-06
+
+### Aggiunto
+
+- «Funzioni beta» nelle Impostazioni: una casella, ricordata da questo browser, che mostra le parti
+  ancora in sviluppo. Per ora è la Roadmap, con la sua sezione delle impostazioni, la ricerca nei
+  progetti e gli avvisi delle sue note: senza, la pagina ha le sole aree Note e Next Releases. I
+  dati del piano sono gli stessi per tutti; cambia solo cosa mostra il browser.
+- Note dei progetti, nella scheda «Note» della finestra del progetto: ogni nota ha testo, autore e
+  data; si scrive e si aggiunge con Invio. «Altre opzioni» mostra lo stato (senza stato, da fare o
+  fatta: le note da fare hanno una casella da spuntare), la scadenza con «Avvisa alla scadenza»,
+  owner e tag separati da virgola, suggeriti da quelli già usati nel progetto. Dal giorno della
+  scadenza l'avviso compare una volta per browser, con «Fatta» e «Chiudi».
+- Campi personalizzati dei progetti, da Impostazioni → Roadmap → «Modifica i campi…»: etichetta,
+  descrizione, tipo (`text`, `textarea`, `number`, `price` con la valuta, `url`, `date`, `choice`
+  con i valori predefiniti) e le opzioni «più valori», «almeno uno» e «principale». Il nome inglese
+  di tipi e opzioni ha accanto la traduzione e una scheda che li spiega. I campi si compilano nella
+  scheda «Progetto»; i principali compaiono accanto al titolo nella roadmap.
+- Team e persone, da Impostazioni → Roadmap → «Modifica team e persone…»: team con colore e tag,
+  persone con nome, informazioni e assenze (dal, al, motivo). Nella roadmap un clic sul nome di una
+  persona la modifica.
+- Livello «Team» della roadmap: sotto ogni progetto una barra per persona, nel colore del suo team,
+  dal primo all'ultimo giorno di lavoro. L'impegno si scrive in giorni o settimane (una settimana
+  sono cinque giorni) e salta weekend, festività italiane e assenze, disegnate a strisce oblique
+  rosse e rosa con una palma. La barra si trascina per cambiare il giorno di inizio; le frecce la
+  spostano di un giorno, con Maiusc di una settimana. «+ Persona» e la scheda «Team» della finestra
+  del progetto aggiungono e modificano le assegnazioni.
+- Predefiniti della roadmap in un file leggibile del repository, `src/domain/roadmapDefaults.json`:
+  otto campi (Team impattati, Jira request, Jira epics, Figma, Confluence, Stakeholder, Raw
+  estimation totale ed elapsed), sei team e sedici persone. Un piano creato prima li carica con
+  «Carica i predefiniti»; «Ripristina i predefiniti del repository» li rimette.
+- «Festivi e weekend» e «Nascondi giorni passati» anche nella roadmap, con preferenze proprie: qui i
+  giorni passati restano visibili di serie, perché la roadmap mostra anche i progetti conclusi.
+- La ricerca guarda anche nelle note e nei campi dei progetti.
+- I backup hanno lo schema 6, con note dei progetti, assegnazioni, campi, team e persone; gli
+  schemi 3, 4 e 5 si leggono ancora. La cronologia registra anche queste modifiche.
+
+### Modificato
+
+- L'area «Roadmaps» si chiama «Roadmap» e ha lo stesso widget del periodo di Next Releases: «‹ mese
+  anno ›», «Oggi», «Dettaglio», «Mese» e «Trimestre», con le stesse colonne del calendario, così le
+  due linee del tempo si allineano. L'intervallo arriva fin dove arrivano i progetti, più un mese.
+  Le scale «Mesi», «Trimestri» e «Anni» e le caselle di «Informazioni visibili» della 0.6 sono
+  sostituite dai livelli «Solo titoli», «Info principali» e «Team».
+- Nell'istanza condivisa servono le regole di Firestore nuove (raccolte `projectNotes`,
+  `assignments`, `projectFields`, `teams` e `stakeholders`, campo `fields` dei progetti): senza,
+  il piano si apre senza i dettagli dei progetti e l'indicatore di sincronizzazione lo spiega.
+- Le parti del piano che le regole pubblicate rifiutano non sono più un errore di
+  sincronizzazione: l'indicatore dice «Parti non disponibili», con il triangolo giallo, e le
+  elenca nella sua scheda; lo stato del salvataggio resta leggibile. Le parti di una funzione beta
+  spenta non contano.
+
 ## [0.6.0] - 2026-10-05
 
 ### Aggiunto
@@ -377,7 +429,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/stangoldbear/release-board/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/stangoldbear/release-board/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/stangoldbear/release-board/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/stangoldbear/release-board/compare/v0.3.0...v0.4.0

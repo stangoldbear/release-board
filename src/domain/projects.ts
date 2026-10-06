@@ -1,5 +1,5 @@
 import type { TaskColorId } from './colors';
-import type { Project, ProjectStatus } from './types';
+import type { Project, ProjectFieldValues, ProjectStatus } from './types';
 
 /** Longest title, owner and description of a project; the security rules enforce the same. */
 export const PROJECT_TITLE_MAX = 200;
@@ -31,6 +31,18 @@ export interface ProjectChanges {
   status?: ProjectStatus;
   owner?: string | null;
   description?: string | null;
+  /** All the values of the custom fields at once: they are one field of the project. */
+  fields?: ProjectFieldValues | null;
+}
+
+/** The values written the same way whatever the order of their keys, to compare them. */
+function canonicalFields(values: ProjectFieldValues | undefined): string {
+  if (!values) return '';
+  return JSON.stringify(
+    Object.keys(values)
+      .sort()
+      .map((key) => [key, values[key]]),
+  );
 }
 
 /** The rows of the roadmap: by start, then end, then title; the id breaks ties, for every copy. */
@@ -60,5 +72,7 @@ export function diffProject(before: Project, after: ProjectContent): ProjectChan
   if (owner !== before.owner) changes.owner = owner ?? null;
   const description = after.description?.trim() || undefined;
   if (description !== before.description) changes.description = description ?? null;
+  const fields = after.fields && Object.keys(after.fields).length > 0 ? after.fields : undefined;
+  if (canonicalFields(fields) !== canonicalFields(before.fields)) changes.fields = fields ?? null;
   return changes;
 }

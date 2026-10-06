@@ -9,8 +9,11 @@ import { AboutSection } from './AboutSection';
 import { AccountSection } from './AccountSection';
 import { AppearanceSection } from './AppearanceSection';
 import { BackupSection } from './BackupSection';
+import { BetaSection } from './BetaSection';
 import { InstanceSection } from './InstanceSection';
 import { MembersSection } from './MembersSection';
+import { RoadmapSettingsSection } from './RoadmapSettingsSection';
+import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 
 interface SettingsDialogProps {
   plan: PlanSnapshot;
@@ -20,6 +23,12 @@ interface SettingsDialogProps {
   textScale: TextScale;
   onTextScaleChange: (scale: TextScale) => void;
   onReplacePlan: (plan: PlanSnapshot) => void;
+  /** The parts still in development are shown in this browser. */
+  betaFeatures: boolean;
+  onToggleBetaFeatures: (enabled: boolean) => void;
+  /** The published rules do not know the configuration of the roadmap yet. */
+  roadmapUnavailable: boolean;
+  roadmapActions: RoadmapConfigActions;
   /** Opens the page with every change to the plan. */
   onOpenHistory: () => void;
   onClose: () => void;
@@ -34,6 +43,10 @@ export function SettingsDialog({
   textScale,
   onTextScaleChange,
   onReplacePlan,
+  betaFeatures,
+  onToggleBetaFeatures,
+  roadmapUnavailable,
+  roadmapActions,
   onOpenHistory,
   onClose,
 }: SettingsDialogProps) {
@@ -74,6 +87,14 @@ export function SettingsDialog({
               Apri la cronologia
             </Button>
           </section>
+        )}
+        <BetaSection enabled={betaFeatures} onChange={onToggleBetaFeatures} />
+        {betaFeatures && (
+          <RoadmapSettingsSection
+            config={plan.roadmap}
+            unavailable={roadmapUnavailable}
+            actions={roadmapActions}
+          />
         )}
         <BackupSection
           plan={plan}

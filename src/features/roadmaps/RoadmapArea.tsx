@@ -1,32 +1,39 @@
 import { useMemo, useState } from 'react';
-import { CalendarCheck, Check, Plus } from 'lucide-react';
+import { Check, History, Plus } from 'lucide-react';
+import { assignmentsOfProject } from '../../domain/assignments';
+import { notesOfProject } from '../../domain/projectNotes';
 import { PROJECT_STATUSES } from '../../domain/projects';
-import type { ProjectChanges, ProjectContent } from '../../domain/projects';
-import type { Project } from '../../domain/types';
-import { oneOf, usePreference } from '../../infra/preferences';
+import { ZOOM_COLUMN_UNIT } from '../../domain/schedule';
+import type {
+  Assignment,
+  MemoAuthor,
+  PlanSnapshot,
+  Project,
+  Stakeholder,
+} from '../../domain/types';
 import { Area } from '../../shared/ui/Area';
 import { Button } from '../../shared/ui/Button';
 import { RulesNotice } from '../../shared/ui/RulesNotice';
 import { SEGMENT, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from '../../shared/ui/segmented';
 import type { TextScale } from '../../shared/ui/textScale';
 import { ToggleChip } from '../../shared/ui/ToggleChip';
+import { startOfMonth, startOfWeek } from '../../utils/dateUtils';
+import { CalendarNav } from '../calendar/CalendarNav';
+import type { CalendarAction, CalendarView } from '../calendar/calendarView';
+import { AssignmentDialog } from './AssignmentDialog';
 import { ProjectDialog } from './ProjectDialog';
-import {
-  PROJECT_DETAILS,
-  PROJECT_STATUS_ICONS,
-  PROJECT_STATUS_PLURALS,
-  readProjectDetails,
-} from './projectUi';
-import type { ProjectDetail } from './projectUi';
-import {
-  ROADMAP_ZOOMS,
-  ROADMAP_ZOOM_LABELS,
-  newProjectPeriod,
-  roadmapColumns,
-  roadmapRange,
-} from './roadmapLayout';
-import type { RoadmapColumn } from './roadmapLayout';
+import type { ProjectTab } from './ProjectDialog';
+import { DETAIL_LEVELS, PROJECT_STATUS_ICONS, PROJECT_STATUS_PLURALS } from './projectUi';
+import type {
+  AssignmentActions,
+  NoteActions,
+  ProjectActions,
+  StakeholderActions,
+} from './roadmapActions';
+import { newProjectPeriod, roadmapRange } from './roadmapLayout';
 import { RoadmapTimeline } from './RoadmapTimeline';
+import { StakeholderDialog } from './StakeholderDialog';
+import type { RoadmapDisplay, RoadmapDisplayControls } from './useRoadmapDisplay';
 
 /** The button that adds a project, where the focus goes when one is deleted. */
 export const NEW_PROJECT_ID = 'new-project';
@@ -34,27 +41,36 @@ export const NEW_PROJECT_ID = 'new-project';
 interface RoadmapAreaProps {
   /** The element id of the area. */
   id: string;
-  /** Every project of the plan. */
-  projects: Project[];
+  plan: PlanSnapshot;
   /** The projects to show: all of them, or those the search finds. */
   shown: Project[];
   searching: boolean;
   /** The published security rules do not know projects yet: the area says so, and no more. */
   unavailable?: boolean;
+  /** The published rules do not know the notes, the assignments and the configuration yet. */
+  detailsUnavailable: boolean;
+  view: CalendarView;
+  onViewAction: (action: CalendarAction) => void;
+  display: RoadmapDisplay;
+  displayControls: RoadmapDisplayControls;
   today: string;
   textScale: TextScale;
   compact: boolean;
-  onCreate: (content: ProjectContent) => void;
-  onUpdate: (projectId: string, changes: ProjectChanges) => void;
-  /** Saves what the window edited: only the fields that changed. */
-  onSave: (project: Project, content: ProjectContent) => void;
-  onDelete: (project: Project) => void;
+  /** In a shared instance, the signed-in member, and the full name of an author. */
+  me: MemoAuthor | null;
+  nameOf: (author: MemoAuthor) => string;
+  projectActions: ProjectActions;
+  noteActions: NoteActions;
+  assignmentActions: AssignmentActions;
+  stakeholderActions: StakeholderActions;
 }
 
 /** The window open on a project, or on a new one with its period. */
-type OpenProject =
-  | { project: Project; period: { startDate: string; endDate: string } }
-  | { project: null; period: { startDate: string; endDate: string } };
+interface OpenProject {
+  project: Project | null;
+  period: { startDate: string; endDate: string };
+  tab?: ProjectTab;
+}
 
 /** How many projects there are in each state, with its shape, and what the search finds. */
 function ProjectSummary({ projects, found }: { projects: Project[]; found: number | null }) {
@@ -88,46 +104,57 @@ function ProjectSummary({ projects, found }: { projects: Project[]; found: numbe
 }
 
 /**
- * The roadmap of the projects, past, current and to come, on a timeline of its own: its scale and
- * Today on the line of the title, then one card with the projects by state, the rows and the
- * details to show beside each title.
+ * The roadmap of the projects, past, current and to come, over the same days as the calendar:
+ * its period and views on the line of the title, then one card with the projects by state, the
+ * rows and, under them, how much each row shows and the days to mark or hide.
  */
 export function RoadmapArea({
   id,
-  projects,
+  plan,
   shown,
   searching,
   unavailable = false,
+  detailsUnavailable,
+  view,
+  onViewAction,
+  display,
+  displayControls,
   today,
   textScale,
   compact,
-  onCreate,
-  onUpdate,
-  onSave,
-  onDelete,
+  me,
+  nameOf,
+  projectActions,
+  noteActions,
+  assignmentActions,
+  stakeholderActions,
 }: RoadmapAreaProps) {
-  const [zoom, setZoom] = usePreference('roadmap-zoom', oneOf(ROADMAP_ZOOMS), 'quarters');
-  const [details, setDetails] = usePreference<ProjectDetail[]>(
-    'roadmap-details',
-    readProjectDetails,
-    [],
-  );
-  const [todayRequest, setTodayRequest] = useState(0);
   const [open, setOpen] = useState<OpenProject | null>(null);
-  const range = useMemo(() => roadmapRange(projects, today, zoom), [projects, today, zoom]);
-  const columns = useMemo(() => roadmapColumns(range, zoom, today), [range, zoom, today]);
+  const [assignmentDialog, setAssignmentDialog] = useState<{
+    assignment: Assignment | null;
+    project: Project;
+  } | null>(null);
+  const [stakeholderDialog, setStakeholderDialog] = useState<Stakeholder | null>(null);
 
-  const openNew = (column?: RoadmapColumn) =>
-    setOpen({ project: null, period: newProjectPeriod(today, column) });
-  const toggleDetail = (detail: ProjectDetail) =>
-    setDetails((current) =>
-      current.includes(detail) ? current.filter((item) => item !== detail) : [...current, detail],
-    );
-  const allDetails = PROJECT_DETAILS.map((detail) => detail.id);
+  // The days held: those of the view, widened to every project; without the past, from today or
+  // from the Monday of this week in weekly columns.
+  const fullRange = useMemo(
+    () => roadmapRange(view.range, plan.projects),
+    [view.range, plan.projects],
+  );
+  const firstShownDay = ZOOM_COLUMN_UNIT[view.zoom] === 'week' ? startOfWeek(today) : today;
+  const start =
+    display.hidePastDays && firstShownDay > fullRange.start ? firstShownDay : fullRange.start;
+  const range = useMemo(() => ({ start, end: fullRange.end }), [start, fullRange.end]);
+
+  const openNew = (from: string) => setOpen({ project: null, period: newProjectPeriod(from) });
+  const openProject = (project: Project, tab?: ProjectTab) =>
+    setOpen({ project, period: project, tab });
+  const current = open?.project ? plan.projects.find((item) => item.id === open.project?.id) : null;
 
   if (unavailable) {
     return (
-      <Area id={id} title="Roadmaps">
+      <Area id={id} title="Roadmap">
         <RulesNotice what="I progetti" />
       </Area>
     );
@@ -136,35 +163,24 @@ export function RoadmapArea({
   return (
     <Area
       id={id}
-      title="Roadmaps"
+      title="Roadmap"
       actions={
         <>
-          <div role="group" aria-label="Scala della roadmap" className={SEGMENTED}>
-            {ROADMAP_ZOOMS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                title={ROADMAP_ZOOM_LABELS[option].title}
-                aria-pressed={zoom === option}
-                onClick={() => setZoom(option)}
-                className={`${SEGMENT} ${zoom === option ? SEGMENT_ON : SEGMENT_OFF}`}
-              >
-                {zoom === option && <Check className="h-3 w-3 shrink-0" aria-hidden="true" />}
-                {ROADMAP_ZOOM_LABELS[option].label}
-              </button>
-            ))}
-          </div>
-          <Button
-            size="sm"
-            onClick={() => setTodayRequest((value) => value + 1)}
-            aria-label="Oggi nella roadmap"
-            title="Porta oggi in vista nella roadmap"
-          >
-            <CalendarCheck className="h-3.5 w-3.5" aria-hidden="true" />
-            Oggi
-          </Button>
+          <CalendarNav
+            view={view}
+            onViewAction={onViewAction}
+            hidePastDays={display.hidePastDays}
+            name="Periodo della roadmap"
+            board={false}
+          />
           <div className="ml-auto">
-            <Button id={NEW_PROJECT_ID} variant="primary" onClick={() => openNew()}>
+            <Button
+              id={NEW_PROJECT_ID}
+              variant="primary"
+              onClick={() =>
+                openNew(startOfMonth(view.anchor) === startOfMonth(today) ? today : view.anchor)
+              }
+            >
               <Plus className="h-4 w-4" aria-hidden="true" />
               Nuovo progetto
             </Button>
@@ -173,55 +189,99 @@ export function RoadmapArea({
       }
     >
       <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface shadow-xs">
-        <ProjectSummary projects={projects} found={searching ? shown.length : null} />
+        <ProjectSummary projects={plan.projects} found={searching ? shown.length : null} />
         <p className="bg-surface-muted px-4 py-1.5 text-xs text-fg-muted">
           <span className="pointer-coarse:hidden">
-            Trascina un progetto per spostarlo, dai bordi per cambiarne inizio e fine. Maiusc +
-            rotellina scorre i mesi.
+            Trascina un progetto per spostarlo, dai bordi per cambiarne inizio e fine; al livello
+            Team trascina una persona per spostare l&apos;inizio del suo lavoro. Maiusc + rotellina
+            scorre i giorni, Ctrl + rotellina cambia lo zoom.
           </span>
           <span className="hidden pointer-coarse:inline">
-            Tocca un progetto per modificarlo. Scorri con un dito per vedere gli altri mesi.
+            Tocca un progetto o una persona per modificarli. Scorri con un dito per vedere gli altri
+            giorni, avvicina o allontana due dita per lo zoom.
           </span>
         </p>
         <RoadmapTimeline
           projects={shown}
           range={range}
-          columns={columns}
-          zoom={zoom}
+          zoom={view.zoom}
+          anchor={view.anchor}
+          jump={view.jump}
+          onScrolled={(first, last, settled) =>
+            onViewAction({ type: 'scrolled', first, last, settled })
+          }
           today={today}
-          todayRequest={todayRequest}
-          details={details}
+          highlightWeekends={display.highlightWeekends}
+          level={detailsUnavailable && display.level === 'team' ? 'main' : display.level}
+          config={plan.roadmap}
+          assignments={plan.assignments}
           searching={searching}
           textScale={textScale}
           compact={compact}
-          onOpen={(project) => setOpen({ project, period: project })}
+          onZoom={(step) => onViewAction({ type: 'zoomBy', step })}
+          onShowDays={(date) => onViewAction({ type: 'goTo', date, zoom: 'detail' })}
+          onOpen={(project) => openProject(project)}
           onAddAt={openNew}
-          onChange={onUpdate}
+          onChange={projectActions.onUpdate}
+          onOpenAssignment={(assignment) => {
+            const project = plan.projects.find((item) => item.id === assignment.projectId);
+            if (project) setAssignmentDialog({ assignment, project });
+          }}
+          onAddAssignment={(project) => setAssignmentDialog({ assignment: null, project })}
+          onChangeAssignment={assignmentActions.onUpdate}
+          onOpenStakeholder={setStakeholderDialog}
         />
-        <div
-          role="group"
-          aria-labelledby={`${id}-details`}
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-surface px-4 py-2.5"
-        >
-          <span id={`${id}-details`} className="text-xs font-bold tracking-wide uppercase">
-            Informazioni visibili
-          </span>
-          {PROJECT_DETAILS.map((detail) => (
-            <ToggleChip
-              key={detail.id}
-              pressed={details.includes(detail.id)}
-              onClick={() => toggleDetail(detail.id)}
-            >
-              {detail.label}
-            </ToggleChip>
-          ))}
-          <button
-            type="button"
-            onClick={() => setDetails(details.length > 0 ? [] : allDetails)}
-            className="ml-1 cursor-pointer text-xs font-medium text-link hover:underline"
+        <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 bg-surface px-4 py-2.5 select-none">
+          <div
+            role="group"
+            aria-labelledby={`${id}-level`}
+            className="flex flex-wrap items-center gap-3"
           >
-            {details.length > 0 ? 'Solo il titolo' : 'Tutte le informazioni'}
-          </button>
+            <span id={`${id}-level`} className="text-xs font-bold tracking-wide uppercase">
+              Informazioni visibili
+            </span>
+            <div className={SEGMENTED}>
+              {DETAIL_LEVELS.map((level) => {
+                const disabled = detailsUnavailable && level.id === 'team';
+                const pressed = display.level === level.id;
+                return (
+                  <button
+                    key={level.id}
+                    type="button"
+                    title={
+                      disabled
+                        ? 'Servono le regole di sicurezza aggiornate per il livello Team'
+                        : level.title
+                    }
+                    aria-pressed={pressed}
+                    aria-disabled={disabled || undefined}
+                    onClick={() => {
+                      if (!disabled) displayControls.setLevel(level.id);
+                    }}
+                    className={`${SEGMENT} ${pressed ? SEGMENT_ON : SEGMENT_OFF} ${
+                      disabled ? 'cursor-not-allowed opacity-50' : ''
+                    }`}
+                  >
+                    {pressed && <Check className="h-3 w-3 shrink-0" aria-hidden="true" />}
+                    {level.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <ToggleChip
+              pressed={display.highlightWeekends}
+              onClick={displayControls.toggleWeekends}
+            >
+              <span className="h-2 w-2 shrink-0 rounded-full bg-holiday-fg" aria-hidden="true" />
+              Festivi e weekend
+            </ToggleChip>
+            <ToggleChip pressed={display.hidePastDays} onClick={displayControls.togglePastDays}>
+              <History className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Nascondi giorni passati
+            </ToggleChip>
+          </div>
         </div>
       </div>
 
@@ -229,15 +289,68 @@ export function RoadmapArea({
         <ProjectDialog
           project={open.project}
           period={open.period}
-          gone={open.project !== null && !projects.some((item) => item.id === open.project?.id)}
+          gone={open.project !== null && !current}
+          config={plan.roadmap}
+          notes={open.project ? notesOfProject(plan.projectNotes, open.project.id) : []}
+          assignments={open.project ? assignmentsOfProject(plan.assignments, open.project.id) : []}
+          detailsUnavailable={detailsUnavailable}
+          me={me}
+          nameOf={nameOf}
+          today={today}
+          initialTab={open.tab}
           onSave={(content) => {
-            if (open.project) onSave(open.project, content);
-            else onCreate(content);
+            if (open.project) projectActions.onSave(open.project, content);
+            else projectActions.onCreate(content);
           }}
           onDelete={() => {
-            if (open.project) onDelete(open.project);
+            if (open.project) projectActions.onDelete(open.project);
           }}
           onClose={() => setOpen(null)}
+          noteActions={noteActions}
+          onOpenAssignment={(assignment) => {
+            if (current) setAssignmentDialog({ assignment, project: current });
+          }}
+          onDeleteAssignment={(assignment) => assignmentActions.onDelete(assignment.id)}
+          onOpenStakeholder={setStakeholderDialog}
+        />
+      )}
+
+      {assignmentDialog && (
+        <AssignmentDialog
+          assignment={assignmentDialog.assignment}
+          projectId={assignmentDialog.project.id}
+          projectTitle={assignmentDialog.project.title}
+          config={plan.roadmap}
+          defaultStart={
+            assignmentDialog.project.startDate > today ? assignmentDialog.project.startDate : today
+          }
+          onSave={(content) => {
+            if (assignmentDialog.assignment) {
+              assignmentActions.onUpdate(assignmentDialog.assignment.id, {
+                stakeholderId: content.stakeholderId,
+                startDate: content.startDate,
+                manDays: content.manDays,
+                note: content.note ?? null,
+              });
+            } else {
+              assignmentActions.onCreate(content);
+            }
+          }}
+          onDelete={() => {
+            if (assignmentDialog.assignment) {
+              assignmentActions.onDelete(assignmentDialog.assignment.id);
+            }
+          }}
+          onClose={() => setAssignmentDialog(null)}
+        />
+      )}
+
+      {stakeholderDialog && (
+        <StakeholderDialog
+          stakeholder={stakeholderDialog}
+          config={plan.roadmap}
+          onSave={stakeholderActions.onSave}
+          onClose={() => setStakeholderDialog(null)}
         />
       )}
     </Area>

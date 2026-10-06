@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addAssignment,
   addProject,
+  addProjectNote,
   addTask,
   copyOfTask,
   createEmptyPlan,
@@ -9,13 +11,25 @@ import {
   isPlanEmpty,
   moveNote,
   planContentSummary,
+  removeAssignment,
   removeProject,
+  removeProjectField,
+  removeProjectNote,
+  removeStakeholder,
   removeTask,
+  removeTeam,
+  replaceRoadmapConfig,
+  saveProjectField,
+  saveStakeholder,
+  saveTeam,
   setMetricValues,
   setNote,
+  updateAssignment,
   updateProject,
+  updateProjectNote,
   updateTask,
 } from './plan';
+import { defaultRoadmapConfig } from './roadmapConfig';
 import type { PlanSnapshot, TaskItem } from './types';
 
 const task: TaskItem = {
@@ -170,6 +184,8 @@ describe('planContentSummary', () => {
       '1 nota',
       '1 nota libera',
       '0 progetti',
+      '0 note dei progetti',
+      '0 assegnazioni',
     ]);
     expect(planContentSummary(createEmptyPlan())).toEqual([
       '3 corsie',
@@ -178,6 +194,8 @@ describe('planContentSummary', () => {
       '0 note',
       '0 note libere',
       '0 progetti',
+      '0 note dei progetti',
+      '0 assegnazioni',
     ]);
   });
 });
@@ -207,5 +225,110 @@ describe('the projects of the roadmap', () => {
 
   it('leave a project removed elsewhere as it is', () => {
     expect(updateProject(createEmptyPlan(), 'gone', { title: 'X' }).projects).toEqual([]);
+  });
+});
+
+describe('the notes, the assignments and the configuration of the roadmap', () => {
+  const project = {
+    id: 'p1',
+    title: 'App mobile',
+    startDate: '2026-11-01',
+    endDate: '2027-01-31',
+    colorId: 'blue' as const,
+    status: 'planned' as const,
+  };
+  const note = {
+    id: 'n1',
+    projectId: 'p1',
+    text: 'Stima: 15 giorni',
+    createdAt: '2026-10-06T09:00:00.000Z',
+  };
+  const assignment = {
+    id: 'a1',
+    projectId: 'p1',
+    stakeholderId: 'ios-1',
+    startDate: '2026-11-02',
+    manDays: 10,
+  };
+  const base = addAssignment(
+    addProjectNote(addProject(createEmptyPlan(), project), note),
+    assignment,
+  );
+
+  it('starts with the default configuration, which does not make the plan full', () => {
+    const empty = createEmptyPlan();
+    expect(empty.roadmap).toEqual(defaultRoadmapConfig());
+    expect(empty.roadmap.fields.length).toBeGreaterThan(0);
+    expect(isPlanEmpty(empty)).toBe(true);
+    expect(isPlanEmpty(addProjectNote({ ...empty, projects: [project] }, note))).toBe(false);
+  });
+
+  it('keeps the notes oldest first and the assignments by start, changes and removes them', () => {
+    const earlier = { ...note, id: 'n0', createdAt: '2026-10-01T09:00:00.000Z' };
+    let plan = addProjectNote(base, earlier);
+    expect(plan.projectNotes.map((item) => item.id)).toEqual(['n0', 'n1']);
+    plan = updateProjectNote(plan, 'n1', { status: 'done', owners: ['Giulia'] });
+    expect(plan.projectNotes[1]).toEqual({ ...note, status: 'done', owners: ['Giulia'] });
+    plan = updateProjectNote(plan, 'n1', { owners: null });
+    expect(plan.projectNotes[1]).toEqual({ ...note, status: 'done' });
+    expect(removeProjectNote(plan, 'n0').projectNotes.map((item) => item.id)).toEqual(['n1']);
+
+    const later = { ...assignment, id: 'a2', startDate: '2026-12-01' };
+    plan = addAssignment(plan, later);
+    expect(plan.assignments.map((item) => item.id)).toEqual(['a1', 'a2']);
+    plan = updateAssignment(plan, 'a1', { startDate: '2026-12-15', note: 'Seconda fase' });
+    expect(plan.assignments.map((item) => item.id)).toEqual(['a2', 'a1']);
+    expect(plan.assignments[1]?.note).toBe('Seconda fase');
+    expect(removeAssignment(plan, 'a2').assignments.map((item) => item.id)).toEqual(['a1']);
+  });
+
+  it('removes the notes and the assignments with their project, and the assignments with their person', () => {
+    const without = removeProject(base, 'p1');
+    expect(without.projects).toEqual([]);
+    expect(without.projectNotes).toEqual([]);
+    expect(without.assignments).toEqual([]);
+    const gone = removeStakeholder(base, 'ios-1');
+    expect(gone.assignments).toEqual([]);
+    expect(gone.roadmap.stakeholders.some((item) => item.id === 'ios-1')).toBe(false);
+    expect(gone.projectNotes).toHaveLength(1);
+  });
+
+  it('adds, replaces and removes fields, teams and people, in their order', () => {
+    const field = {
+      id: 'budget',
+      label: 'Budget',
+      type: 'price' as const,
+      multiple: false,
+      required: false,
+      main: true,
+      position: -1,
+    };
+    let plan = saveProjectField(base, field);
+    expect(plan.roadmap.fields[0]).toEqual(field);
+    plan = saveProjectField(plan, { ...field, label: 'Budget previsto' });
+    expect(plan.roadmap.fields.filter((item) => item.id === 'budget')).toHaveLength(1);
+    expect(plan.roadmap.fields[0]?.label).toBe('Budget previsto');
+    expect(
+      removeProjectField(plan, 'budget').roadmap.fields.some((item) => item.id === 'budget'),
+    ).toBe(false);
+
+    const team = { id: 'design', name: 'Design', tag: 'UX', colorId: 'red' as const, position: 99 };
+    plan = saveTeam(plan, team);
+    expect(plan.roadmap.teams.at(-1)).toEqual(team);
+    plan = saveStakeholder(plan, {
+      id: 'ux-1',
+      name: 'UX #1',
+      teamId: 'design',
+      absences: [],
+      position: 99,
+    });
+    expect(plan.roadmap.stakeholders.at(-1)?.id).toBe('ux-1');
+    plan = removeTeam(plan, 'design');
+    expect(plan.roadmap.teams.some((item) => item.id === 'design')).toBe(false);
+    // The person keeps the id of the team that is gone.
+    expect(plan.roadmap.stakeholders.at(-1)?.teamId).toBe('design');
+
+    const bare = { fields: [], teams: [], stakeholders: [] };
+    expect(replaceRoadmapConfig(plan, bare).roadmap).toEqual(bare);
   });
 });

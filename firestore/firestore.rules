@@ -48,6 +48,30 @@ service cloud.firestore {
       return value is string && value.size() > 0 && value.size() <= max;
     }
 
+    // Ids of the roadmap configuration: letters, digits, dashes and underscores.
+    function isRoadmapId(value) {
+      return value is string && value.matches('^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$');
+    }
+
+    // Who wrote a note: the GitHub id and username of a member.
+    function validAuthor(author) {
+      return author is map
+        && author.keys().hasOnly(['id', 'login'])
+        && isText(author.id, 40)
+        && isText(author.login, 39);
+    }
+
+    // The author is whoever writes: their id, and the username of their member document.
+    function writtenBy(planId, author) {
+      return author.id == githubId() && author.login == get(memberPath(planId)).data.login;
+    }
+
+    // The change is an import, which keeps the authors of a restored backup.
+    function isImport(planId) {
+      return getAfter(historyPath(planId, request.resource.data.lastHistoryId)).data.action
+        == 'import';
+    }
+
     // Who, when, and the history entry of the same batch that records the change. The client
     // writes the server timestamp, so updatedAt equals the time of the request.
     function audited(planId) {
@@ -231,39 +255,29 @@ service cloud.firestore {
       // records as such, keeps the authors of a restored backup.
       match /memos/{memoId} {
         allow read: if isMember(planId);
-        function byWriter() {
-          let author = request.resource.data.author;
-          return author.id == githubId() && author.login == get(memberPath(planId)).data.login;
-        }
-        function isImport() {
-          return getAfter(historyPath(planId, request.resource.data.lastHistoryId)).data.action
-            == 'import';
-        }
         function validMemo() {
           let data = request.resource.data;
           return data.keys().hasOnly(['title', 'body', 'colorId', 'remindOn', 'position',
               'author', 'updatedAt', 'updatedBy', 'lastHistoryId'])
             && validMemoContent(data)
-            && data.author is map
-            && data.author.keys().hasOnly(['id', 'login'])
-            && isText(data.author.id, 40)
-            && isText(data.author.login, 39);
+            && validAuthor(data.author);
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validMemo()
-          && (byWriter() || isImport());
+          && (writtenBy(planId, request.resource.data.author) || isImport(planId));
         allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validMemo()
           && request.resource.data.author == resource.data.author;
         allow delete: if isMember(planId);
       }
 
-      // A project of the roadmap: a row with a bar from its start to its end.
+      // A project of the roadmap: a row with a bar from its start to its end. The values of its
+      // custom fields are a map by field id, which the app validates against the definitions.
       match /projects/{projectId} {
         allow read: if isMember(planId);
         function validProject() {
           let data = request.resource.data;
           return data.keys().hasOnly(['title', 'startDate', 'endDate', 'colorId', 'status',
-              'owner', 'description', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+              'owner', 'description', 'fields', 'updatedAt', 'updatedBy', 'lastHistoryId'])
             && isText(data.title, 200)
             && isIsoDate(data.startDate)
             && isIsoDate(data.endDate)
@@ -271,11 +285,129 @@ service cloud.firestore {
             && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple']
             && data.status in ['idea', 'planned', 'in_progress', 'completed', 'on_hold']
             && (!('owner' in data) || isText(data.owner, 100))
-            && (!('description' in data) || isText(data.description, 5000));
+            && (!('description' in data) || isText(data.description, 5000))
+            && (!('fields' in data) || (data.fields is map && data.fields.size() <= 50));
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validProject();
         allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validProject();
+        allow delete: if isMember(planId);
+      }
+
+      // A note written on a project along the way, by the member who writes it; as for the free
+      // notes, only an import keeps other authors. Its project and its time never change.
+      match /projectNotes/{noteId} {
+        allow read: if isMember(planId);
+        function validProjectNote() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['projectId', 'text', 'createdAt', 'author', 'status',
+              'dueOn', 'remind', 'owners', 'tags', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isText(data.projectId, 100)
+            && isText(data.text, 2000)
+            && data.createdAt is string
+            && data.createdAt.size() <= 40
+            && data.createdAt.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*')
+            && validAuthor(data.author)
+            && (!('status' in data) || data.status in ['open', 'done'])
+            && (!('dueOn' in data) || isIsoDate(data.dueOn))
+            && (!('remind' in data) || (data.remind == true && 'dueOn' in data))
+            && (!('owners' in data) || (data.owners is list && data.owners.size() <= 20))
+            && (!('tags' in data) || (data.tags is list && data.tags.size() <= 20));
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validProjectNote()
+          && (writtenBy(planId, request.resource.data.author) || isImport(planId));
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validProjectNote()
+          && request.resource.data.author == resource.data.author
+          && request.resource.data.projectId == resource.data.projectId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isMember(planId);
+      }
+
+      // The work of a person on a project: from a day on, for some days of effort.
+      match /assignments/{assignmentId} {
+        allow read: if isMember(planId);
+        function validAssignment() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['projectId', 'stakeholderId', 'startDate', 'manDays',
+              'note', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isText(data.projectId, 100)
+            && isRoadmapId(data.stakeholderId)
+            && isIsoDate(data.startDate)
+            && data.manDays is number
+            && data.manDays > 0
+            && data.manDays <= 500
+            && (!('note' in data) || isText(data.note, 500));
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validAssignment();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validAssignment();
+        allow delete: if isMember(planId);
+      }
+
+      // A custom field of the projects, as Settings → Roadmap defines it; a choice field brings
+      // the values to choose from.
+      match /projectFields/{fieldId} {
+        allow read: if isMember(planId);
+        function validProjectField() {
+          let data = request.resource.data;
+          return isRoadmapId(fieldId)
+            && data.keys().hasOnly(['label', 'description', 'type', 'multiple', 'required',
+              'main', 'options', 'position', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isText(data.label, 60)
+            && (!('description' in data) || isText(data.description, 300))
+            && data.type in ['text', 'textarea', 'number', 'price', 'url', 'date', 'choice']
+            && data.multiple is bool
+            && data.required is bool
+            && data.main is bool
+            && data.position is number
+            && (data.type == 'choice'
+              ? (data.options is list && data.options.size() > 0 && data.options.size() <= 50)
+              : !('options' in data));
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validProjectField();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validProjectField();
+        allow delete: if isMember(planId);
+      }
+
+      // A team of the people who work on the projects, with its color and its short tag.
+      match /teams/{teamId} {
+        allow read: if isMember(planId);
+        function validTeam() {
+          let data = request.resource.data;
+          return isRoadmapId(teamId)
+            && data.keys().hasOnly(['name', 'tag', 'colorId', 'position', 'updatedAt',
+              'updatedBy', 'lastHistoryId'])
+            && isText(data.name, 60)
+            && isText(data.tag, 20)
+            && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple']
+            && data.position is number;
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validTeam();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validTeam();
+        allow delete: if isMember(planId);
+      }
+
+      // Someone who works on the projects, in a team, with the days they are away.
+      match /stakeholders/{stakeholderId} {
+        allow read: if isMember(planId);
+        function validStakeholder() {
+          let data = request.resource.data;
+          return isRoadmapId(stakeholderId)
+            && data.keys().hasOnly(['name', 'teamId', 'info', 'absences', 'position',
+              'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isText(data.name, 60)
+            && isRoadmapId(data.teamId)
+            && (!('info' in data) || isText(data.info, 500))
+            && data.absences is list
+            && data.absences.size() <= 100
+            && data.position is number;
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validStakeholder();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validStakeholder();
         allow delete: if isMember(planId);
       }
 
@@ -287,7 +419,8 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(
             ['entity', 'entityId', 'action', 'actor', 'at', 'before', 'after', 'summary'])
           && request.resource.data.entity
-            in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'memo', 'project', 'member']
+            in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'memo', 'project',
+              'projectNote', 'assignment', 'projectField', 'team', 'stakeholder', 'member']
           && request.resource.data.action in ['create', 'update', 'delete', 'import', 'setup']
           && request.resource.data.actor.uid == request.auth.uid
           && request.resource.data.actor.githubId == githubId()

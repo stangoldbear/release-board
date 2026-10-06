@@ -1,17 +1,28 @@
+import { sortAssignments } from './assignments';
+import type { AssignmentChanges } from './assignments';
 import { applyChanges } from './changes';
 import { memoMoves, sortMemos } from './memos';
 import type { MemoChanges } from './memos';
+import { sortProjectNotes } from './projectNotes';
+import type { ProjectNoteChanges } from './projectNotes';
 import { sortProjects } from './projects';
 import type { ProjectChanges } from './projects';
+import { defaultRoadmapConfig, sortByPosition } from './roadmapConfig';
 import type {
+  Assignment,
   BorderStyle,
   DailyMetric,
   Lane,
   Memo,
   PlanSnapshot,
   Project,
+  ProjectField,
+  ProjectNote,
+  RoadmapConfig,
+  Stakeholder,
   TaskItem,
   TaskStatus,
+  Team,
 } from './types';
 
 export const DEFAULT_LANES: readonly Lane[] = [
@@ -35,6 +46,7 @@ export const TASK_STATUSES = Object.keys(TASK_STATUS_LABELS) as TaskStatus[];
 
 export const BORDER_STYLES: readonly BorderStyle[] = ['dashed', 'solid'];
 
+/** A plan with nothing in it but the default lanes and the default roadmap configuration. */
 export function createEmptyPlan(): PlanSnapshot {
   return {
     lanes: DEFAULT_LANES.map((lane) => ({ ...lane })),
@@ -43,17 +55,23 @@ export function createEmptyPlan(): PlanSnapshot {
     dailyNotes: {},
     memos: [],
     projects: [],
+    projectNotes: [],
+    assignments: [],
+    roadmap: defaultRoadmapConfig(),
   };
 }
 
 /**
  * What a plan holds, in words: "3 corsie", "11 attività"… for imports, backups and the history.
- * Private notes are not counted: they stay with their author and no backup carries them.
+ * Private notes are not counted: they stay with their author and no backup carries them. The
+ * configuration of the roadmap is not content, and is not counted either.
  */
 export function planContentSummary(plan: PlanSnapshot): string[] {
   const values = plan.metrics.length;
   const notes = Object.keys(plan.dailyNotes).length;
   const memos = plan.memos.filter((memo) => !memo.private).length;
+  const projectNotes = plan.projectNotes.length;
+  const assignments = plan.assignments.length;
   return [
     `${plan.lanes.length} ${plan.lanes.length === 1 ? 'corsia' : 'corsie'}`,
     `${plan.tasks.length} attività`,
@@ -61,16 +79,21 @@ export function planContentSummary(plan: PlanSnapshot): string[] {
     `${notes} ${notes === 1 ? 'nota' : 'note'}`,
     `${memos} ${memos === 1 ? 'nota libera' : 'note libere'}`,
     `${plan.projects.length} ${plan.projects.length === 1 ? 'progetto' : 'progetti'}`,
+    `${projectNotes} ${projectNotes === 1 ? 'nota dei progetti' : 'note dei progetti'}`,
+    `${assignments} ${assignments === 1 ? 'assegnazione' : 'assegnazioni'}`,
   ];
 }
 
+/** True without content: the lanes and the roadmap configuration alone do not count. */
 export function isPlanEmpty(plan: PlanSnapshot): boolean {
   return (
     plan.tasks.length === 0 &&
     plan.metrics.length === 0 &&
     Object.keys(plan.dailyNotes).length === 0 &&
     plan.memos.length === 0 &&
-    plan.projects.length === 0
+    plan.projects.length === 0 &&
+    plan.projectNotes.length === 0 &&
+    plan.assignments.length === 0
   );
 }
 
@@ -225,6 +248,120 @@ export function updateProject(
   };
 }
 
+/** Removes a project with its notes and assignments. */
 export function removeProject(plan: PlanSnapshot, projectId: string): PlanSnapshot {
-  return { ...plan, projects: plan.projects.filter((project) => project.id !== projectId) };
+  return {
+    ...plan,
+    projects: plan.projects.filter((project) => project.id !== projectId),
+    projectNotes: plan.projectNotes.filter((note) => note.projectId !== projectId),
+    assignments: plan.assignments.filter((item) => item.projectId !== projectId),
+  };
+}
+
+export function addProjectNote(plan: PlanSnapshot, note: ProjectNote): PlanSnapshot {
+  return { ...plan, projectNotes: sortProjectNotes([...plan.projectNotes, note]) };
+}
+
+/** Applies the changes to the note; a note that no longer exists stays deleted. */
+export function updateProjectNote(
+  plan: PlanSnapshot,
+  noteId: string,
+  changes: ProjectNoteChanges,
+): PlanSnapshot {
+  return {
+    ...plan,
+    projectNotes: sortProjectNotes(
+      plan.projectNotes.map((note) =>
+        note.id === noteId ? applyChanges<ProjectNote>(note, changes) : note,
+      ),
+    ),
+  };
+}
+
+export function removeProjectNote(plan: PlanSnapshot, noteId: string): PlanSnapshot {
+  return { ...plan, projectNotes: plan.projectNotes.filter((note) => note.id !== noteId) };
+}
+
+export function addAssignment(plan: PlanSnapshot, assignment: Assignment): PlanSnapshot {
+  return { ...plan, assignments: sortAssignments([...plan.assignments, assignment]) };
+}
+
+/** Applies the changes to the assignment; one that no longer exists stays deleted. */
+export function updateAssignment(
+  plan: PlanSnapshot,
+  assignmentId: string,
+  changes: AssignmentChanges,
+): PlanSnapshot {
+  return {
+    ...plan,
+    assignments: sortAssignments(
+      plan.assignments.map((item) =>
+        item.id === assignmentId ? applyChanges<Assignment>(item, changes) : item,
+      ),
+    ),
+  };
+}
+
+export function removeAssignment(plan: PlanSnapshot, assignmentId: string): PlanSnapshot {
+  return { ...plan, assignments: plan.assignments.filter((item) => item.id !== assignmentId) };
+}
+
+/** Puts an item in a list of the configuration, in place of the one with the same id. */
+function upsert<T extends { id: string; position: number }>(items: readonly T[], item: T): T[] {
+  return sortByPosition([...items.filter((other) => other.id !== item.id), item]);
+}
+
+/** Adds a custom field of the projects, or replaces the one with the same id. */
+export function saveProjectField(plan: PlanSnapshot, field: ProjectField): PlanSnapshot {
+  return { ...plan, roadmap: { ...plan.roadmap, fields: upsert(plan.roadmap.fields, field) } };
+}
+
+/** Removes a field; the values the projects hold for it stay, hidden, in case it comes back. */
+export function removeProjectField(plan: PlanSnapshot, fieldId: string): PlanSnapshot {
+  return {
+    ...plan,
+    roadmap: {
+      ...plan.roadmap,
+      fields: plan.roadmap.fields.filter((field) => field.id !== fieldId),
+    },
+  };
+}
+
+export function saveTeam(plan: PlanSnapshot, team: Team): PlanSnapshot {
+  return { ...plan, roadmap: { ...plan.roadmap, teams: upsert(plan.roadmap.teams, team) } };
+}
+
+/** Removes a team; its stakeholders keep its id and show without a team. */
+export function removeTeam(plan: PlanSnapshot, teamId: string): PlanSnapshot {
+  return {
+    ...plan,
+    roadmap: { ...plan.roadmap, teams: plan.roadmap.teams.filter((team) => team.id !== teamId) },
+  };
+}
+
+export function saveStakeholder(plan: PlanSnapshot, stakeholder: Stakeholder): PlanSnapshot {
+  return {
+    ...plan,
+    roadmap: {
+      ...plan.roadmap,
+      stakeholders: upsert(plan.roadmap.stakeholders, stakeholder),
+    },
+  };
+}
+
+/** Removes a stakeholder with their assignments. */
+export function removeStakeholder(plan: PlanSnapshot, stakeholderId: string): PlanSnapshot {
+  return {
+    ...plan,
+    assignments: plan.assignments.filter((item) => item.stakeholderId !== stakeholderId),
+    roadmap: {
+      ...plan.roadmap,
+      stakeholders: plan.roadmap.stakeholders.filter((item) => item.id !== stakeholderId),
+    },
+  };
+}
+
+/** Replaces the whole configuration of the roadmap, as when the defaults are loaded. */
+export function replaceRoadmapConfig(plan: PlanSnapshot, roadmap: RoadmapConfig): PlanSnapshot {
+  return { ...plan, roadmap };
 }

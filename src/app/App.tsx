@@ -23,7 +23,10 @@ import {
   rememberReminders,
 } from '../domain/memos';
 import type { MemoContent } from '../domain/memos';
+import type { AssignmentChanges, AssignmentContent } from '../domain/assignments';
 import { copyOfTask, diffTask, isPlanEmpty } from '../domain/plan';
+import { notesOfProject, rememberNoteReminders } from '../domain/projectNotes';
+import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
 import { diffProject } from '../domain/projects';
 import type { ProjectContent } from '../domain/projects';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
@@ -35,7 +38,11 @@ import type {
   MemoAuthor,
   PlanSnapshot,
   Project,
+  ProjectField,
+  RoadmapConfig,
+  Stakeholder,
   TaskItem,
+  Team,
 } from '../domain/types';
 import { noteCellId } from '../features/calendar/NotesRow';
 import { NEW_TASK_ID, ReleasesArea } from '../features/calendar/ReleasesArea';
@@ -50,7 +57,10 @@ import { MemoStrip } from '../features/memos/MemoStrip';
 import { NEW_MEMO_ID } from '../features/memos/NewMemoForm';
 import { DailyMetricsDialog } from '../features/metrics/DailyMetricsDialog';
 import { ImportForecastDialog } from '../features/metrics/ImportForecastDialog';
+import { fieldSearchTexts } from '../features/roadmaps/fieldUi';
+import { ProjectNoteReminders } from '../features/roadmaps/ProjectNoteReminders';
 import { NEW_PROJECT_ID, RoadmapArea } from '../features/roadmaps/RoadmapArea';
+import { useRoadmapDisplay } from '../features/roadmaps/useRoadmapDisplay';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { TaskDialog } from '../features/tasks/TaskDialog';
 import { isBoolean, oneOf, usePreference } from '../infra/preferences';
@@ -64,7 +74,14 @@ import { TEXT_SCALES } from '../shared/ui/textScale';
 import { useToast } from '../shared/ui/Toast';
 import { VersionStamp } from '../shared/ui/VersionStamp';
 import { parseISODate, startOfMonth, startOfWeek, todayIso } from '../utils/dateUtils';
-import { ALL_AREAS_VISIBLE, AREAS, areaElementId, parseAreaVisibility } from './areas';
+import {
+  ALL_AREAS_VISIBLE,
+  BETA_FEATURES_PREFERENCE,
+  BETA_PARTS,
+  areaElementId,
+  availableAreas,
+  parseAreaVisibility,
+} from './areas';
 import { useAuthorNames } from './authorNames';
 import type { AreaId } from './areas';
 import { EmptyPlanNotice } from './EmptyPlanNotice';
@@ -132,6 +149,10 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const sync = useSyncState(repository);
   const showToast = useToast();
   const [areas, setAreas] = usePreference('areas', parseAreaVisibility, ALL_AREAS_VISIBLE);
+  // The parts still in development: off by default, on for who works on them, in their browser.
+  const [betaFeatures, setBetaFeatures] = usePreference(BETA_FEATURES_PREFERENCE, isBoolean, false);
+  const shownAreas = availableAreas(betaFeatures);
+  const hiddenParts = betaFeatures ? [] : BETA_PARTS;
   const [display, displayControls] = useCalendarDisplay();
   // Older names: the text size and compact mode began with the calendar, and browsers keep them.
   const [textScale, setTextScale] = usePreference('calendar-text-scale', oneOf(TEXT_SCALES), 1);
@@ -148,6 +169,14 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const { theme, setTheme } = useThemeSetting();
 
   const [view, dispatchView] = useCalendarView();
+  // The roadmap has a view of its own, over the same kinds of days, and its own display choices.
+  const [roadmapView, dispatchRoadmapView] = useCalendarView('roadmap-zoom', 'quarter');
+  const [roadmapDisplay, roadmapControls] = useRoadmapDisplay();
+  const [seenNoteReminders, setSeenNoteReminders] = usePreference(
+    'project-note-reminders-seen',
+    readSeenReminders,
+    {},
+  );
   const [page, goToPage] = useHashPage();
   const [filters, setFilters] = useState<TaskFilter>(NO_FILTER);
   const [searchMode, setSearchMode] = usePreference('search-mode', oneOf(SEARCH_MODES), 'all');
@@ -366,9 +395,71 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     focusAfterClosing(NEW_PROJECT_ID);
   };
 
+  // The notes of the projects, who works on them, and the people themselves.
+  const noteActions = {
+    onCreate: (content: ProjectNoteContent) => {
+      repository.createProjectNote(content);
+      showToast('Nota aggiunta al progetto');
+    },
+    onUpdate: (noteId: string, changes: ProjectNoteChanges) =>
+      repository.updateProjectNote(noteId, changes),
+    onDelete: (noteId: string) => {
+      repository.deleteProjectNote(noteId);
+      showToast('Nota eliminata');
+    },
+  };
+  const assignmentActions = {
+    onCreate: (content: AssignmentContent) => {
+      repository.createAssignment(content);
+      showToast('Persona aggiunta al progetto');
+    },
+    onUpdate: (assignmentId: string, changes: AssignmentChanges) =>
+      repository.updateAssignment(assignmentId, changes),
+    onDelete: (assignmentId: string) => {
+      repository.deleteAssignment(assignmentId);
+      showToast('Persona tolta dal progetto');
+    },
+  };
+  const stakeholderActions = {
+    onSave: (stakeholder: Stakeholder) => {
+      repository.saveStakeholder(stakeholder);
+      showToast(`«${oneLine(stakeholder.name)}» salvata`);
+    },
+  };
+  const configActions = {
+    onSaveField: (field: ProjectField) => repository.saveProjectField(field),
+    onDeleteField: (fieldId: string) => {
+      repository.deleteProjectField(fieldId);
+      showToast('Campo eliminato');
+    },
+    onSaveTeam: (team: Team) => repository.saveTeam(team),
+    onDeleteTeam: (teamId: string) => {
+      repository.deleteTeam(teamId);
+      showToast('Team eliminato');
+    },
+    onSaveStakeholder: stakeholderActions.onSave,
+    onDeleteStakeholder: (stakeholderId: string) => {
+      repository.deleteStakeholder(stakeholderId);
+      showToast('Persona eliminata, con il suo lavoro sui progetti');
+    },
+    onReplaceConfig: (config: RoadmapConfig) => {
+      repository.replaceRoadmapConfig(config);
+      showToast('Configurazione della roadmap caricata');
+    },
+  };
+
   const searching = isSearching(filters);
+  // The search looks in the notes of a project, their owners and tags, and the values of its fields.
+  const projectTexts = (project: Project) => [
+    ...notesOfProject(plan.projectNotes, project.id).flatMap((note) => [
+      note.text,
+      ...(note.owners ?? []),
+      ...(note.tags ?? []),
+    ]),
+    ...fieldSearchTexts(project, plan.roadmap.fields),
+  ];
   const shownProjects = searching
-    ? filterProjects(plan.projects, filters.search, searchMode)
+    ? filterProjects(plan.projects, filters.search, searchMode, projectTexts)
     : plan.projects;
 
   // Search
@@ -382,7 +473,8 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
         notes: Object.fromEntries(
           Object.entries(plan.dailyNotes).filter(([date]) => noteMatches?.has(date)),
         ),
-        projects: shownProjects,
+        // Without the beta features the projects are not on the page: the search leaves them out.
+        projects: betaFeatures ? shownProjects : [],
       })
     : [];
   const searchCounts: FoundCount[] = [
@@ -394,7 +486,16 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       one: 'nota del giorno',
       many: 'note dei giorni',
     },
-    { found: shownProjects.length, total: plan.projects.length, one: 'progetto', many: 'progetti' },
+    ...(betaFeatures
+      ? [
+          {
+            found: shownProjects.length,
+            total: plan.projects.length,
+            one: 'progetto',
+            many: 'progetti',
+          },
+        ]
+      : []),
   ];
   const currentIndex = results.findIndex(
     (result) => resultKey(result.kind, result.id) === currentResult,
@@ -416,7 +517,16 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     const { area, elementId } = RESULT_TARGETS[result.kind];
     if (!areas[area]) setAreas((current) => ({ ...current, [area]: true }));
     let wait = 0;
-    if (result.date) {
+    if (result.kind === 'project') {
+      // The roadmap goes to the start of the project, with the past when the project is past.
+      const project = plan.projects.find((item) => item.id === result.id);
+      if (project) {
+        if (roadmapDisplay.hidePastDays && project.endDate < today)
+          roadmapControls.togglePastDays();
+        dispatchRoadmapView({ type: 'goTo', date: project.startDate });
+        if (!prefersReducedMotion()) wait = SCROLL_DURATION_MS + 50;
+      }
+    } else if (result.date) {
       // The result is drawn only on the timeline, with its day, its lane and the notes row.
       if (display.hidePastDays && (result.endDate ?? result.date) < today) {
         displayControls.togglePastDays();
@@ -451,6 +561,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           onTextScaleChange={setTextScale}
           compact={compact}
           onToggleCompact={() => setCompact((value) => !value)}
+          availableAreas={shownAreas}
           areas={areas}
           onToggleArea={handleToggleArea}
           search={filters.search}
@@ -488,7 +599,11 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             )
           }
           searchAnnouncement={searching ? describeFound(searchCounts, results.length) : ''}
-          syncIndicator={instance.kind === 'cloud' && <SyncIndicator repository={repository} />}
+          syncIndicator={
+            instance.kind === 'cloud' && (
+              <SyncIndicator repository={repository} hiddenParts={hiddenParts} />
+            )
+          }
           onOpenSettings={() => setDialog({ kind: 'settings' })}
         />
 
@@ -580,24 +695,36 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             />
           )}
 
-          {areas.roadmaps && (
+          {betaFeatures && areas.roadmaps && (
             <RoadmapArea
               id={areaElementId('roadmaps')}
               unavailable={sync.missing.includes('projects')}
-              projects={plan.projects}
+              detailsUnavailable={sync.missing.includes('roadmap')}
+              plan={plan}
               shown={shownProjects}
               searching={searching}
+              view={roadmapView}
+              onViewAction={dispatchRoadmapView}
+              display={roadmapDisplay}
+              displayControls={roadmapControls}
               today={today}
               textScale={textScale}
               compact={compact}
-              onCreate={handleCreateProject}
-              onUpdate={(projectId, changes) => repository.updateProject(projectId, changes)}
-              onSave={handleSaveProject}
-              onDelete={handleDeleteProject}
+              me={me}
+              nameOf={nameOf}
+              projectActions={{
+                onCreate: handleCreateProject,
+                onUpdate: (projectId, changes) => repository.updateProject(projectId, changes),
+                onSave: handleSaveProject,
+                onDelete: handleDeleteProject,
+              }}
+              noteActions={noteActions}
+              assignmentActions={assignmentActions}
+              stakeholderActions={stakeholderActions}
             />
           )}
 
-          {AREAS.every(({ id }) => !areas[id]) && (
+          {shownAreas.every(({ id }) => !areas[id]) && (
             <div className="flex flex-col items-center gap-2 rounded-xl border border-line bg-surface p-10 text-center">
               <p className="text-sm font-bold">Tutte le aree sono nascoste</p>
               <p className="text-xs text-fg-muted">Scegli in alto quali mostrare.</p>
@@ -655,6 +782,18 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           onOpen={(memo) => setDialog({ kind: 'memo', memo })}
         />
 
+        {betaFeatures && !sync.missing.includes('roadmap') && (
+          <ProjectNoteReminders
+            notes={plan.projectNotes}
+            projects={plan.projects}
+            seen={seenNoteReminders}
+            onSeen={(shown) =>
+              setSeenNoteReminders((seen) => rememberNoteReminders(seen, shown, plan.projectNotes))
+            }
+            onDone={(noteId) => repository.updateProjectNote(noteId, { status: 'done' })}
+          />
+        )}
+
         {dialog?.kind === 'metrics' && (
           <DailyMetricsDialog
             year={anchorDate.getFullYear()}
@@ -677,6 +816,10 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           <SettingsDialog
             plan={plan}
             instance={instance}
+            betaFeatures={betaFeatures}
+            onToggleBetaFeatures={setBetaFeatures}
+            roadmapUnavailable={sync.missing.includes('roadmap')}
+            roadmapActions={configActions}
             theme={theme}
             onChangeTheme={setTheme}
             textScale={textScale}

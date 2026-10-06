@@ -1,16 +1,23 @@
 import type { TaskColorId } from './colors';
 import type {
+  Assignment,
   BorderStyle,
   DailyMetric,
   Memo,
   PlanSnapshot,
   Project,
+  ProjectFieldValues,
+  ProjectNote,
+  ProjectNoteStatus,
   ProjectStatus,
   TaskItem,
   TaskStatus,
 } from './types';
 import { formatDateToISO, getDaysInMonth, isWeekend } from '../utils/dateUtils';
+import { sortAssignments } from './assignments';
 import { DEFAULT_LANES } from './plan';
+import { sortProjectNotes } from './projectNotes';
+import { defaultRoadmapConfig } from './roadmapConfig';
 
 interface SampleTask {
   title: string;
@@ -206,6 +213,85 @@ const SAMPLE_PROJECTS: {
   },
 ];
 
+/** The values of the custom fields of the default configuration, for two of the projects. */
+const SAMPLE_FIELDS: Record<number, ProjectFieldValues> = {
+  2: {
+    impactedTeams: ['ios-dev', 'android-dev', 'backend-dev', 'qa'],
+    jiraEpics: [
+      'https://jira.example.com/browse/APP-310',
+      'https://jira.example.com/browse/APP-311',
+    ],
+    confluence: ['https://confluence.example.com/pages/app-mobile-3'],
+    rawEstimationTotal: ['55 giorni'],
+    rawEstimationElapsed: ['20 giorni'],
+  },
+  3: {
+    impactedTeams: ['backend-dev', 'backend-config'],
+    stakeholders: ['Direzione IT'],
+    rawEstimationTotal: ['90 giorni'],
+  },
+};
+
+/** Notes written on the running projects, over the month before and the given one. */
+const SAMPLE_PROJECT_NOTES: {
+  project: number;
+  at: [month: number, day: number];
+  text: string;
+  status?: ProjectNoteStatus;
+  /** A deadline in the next month: a sample loaded late in the month would alert at once. */
+  due?: [month: number, day: number];
+  owners?: string[];
+  tags?: string[];
+}[] = [
+  {
+    project: 2,
+    at: [-1, 12],
+    text: 'Studio di fattibilità: serve il nuovo SDK dei pagamenti, disponibile da novembre.',
+    tags: ['fattibilità'],
+  },
+  {
+    project: 2,
+    at: [-1, 20],
+    text: 'Stima: 20 giorni lato server e 35 giorni per le app.',
+    status: 'done',
+    owners: ['Marco'],
+    tags: ['stima'],
+  },
+  {
+    project: 2,
+    at: [0, 8],
+    text: 'Consegnare le schermate del carrello al team QA.',
+    status: 'open',
+    due: [1, 15],
+    owners: ['Giulia'],
+    tags: ['sviluppo'],
+  },
+  {
+    project: 3,
+    at: [0, 3],
+    text: 'Analisi: un servizio alla volta, prima gli ordini e poi i pagamenti.',
+    owners: ['Marco'],
+    tags: ['analisi'],
+  },
+];
+
+/** Who works on the running projects: people of the default configuration. */
+const SAMPLE_ASSIGNMENTS: {
+  project: number;
+  stakeholderId: string;
+  from: [month: number, day: number];
+  manDays: number;
+}[] = [
+  // Across the week away of "Server #1", so that the hatched days show.
+  { project: 2, stakeholderId: 'server-1', from: [0, 12], manDays: 20 },
+  { project: 2, stakeholderId: 'ios-1', from: [0, 5], manDays: 15 },
+  { project: 2, stakeholderId: 'qa-1', from: [1, 1], manDays: 5 },
+  { project: 3, stakeholderId: 'server-2', from: [0, 1], manDays: 40 },
+];
+
+/** "Server #1" is away for a week of the given month, so that the hatched days show. */
+const SAMPLE_ABSENCE = { stakeholderId: 'server-1', from: 22, to: 26, reason: 'Ferie' };
+
 /** The last day of a month, which may be before or after the given year. */
 function lastDay(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
@@ -279,8 +365,62 @@ export function buildSamplePlan(year: number, month: number): PlanSnapshot {
     };
     if (sample.owner) project.owner = sample.owner;
     if (sample.description) project.description = sample.description;
+    const fields = SAMPLE_FIELDS[index + 1];
+    if (fields) project.fields = fields;
     return project;
   });
 
-  return { lanes, tasks, metrics, dailyNotes, memos, projects };
+  const projectNotes: ProjectNote[] = SAMPLE_PROJECT_NOTES.map((sample, index) => {
+    const [offset, day] = sample.at;
+    const note: ProjectNote = {
+      id: `sample-note-${index + 1}`,
+      projectId: `sample-project-${sample.project}`,
+      text: sample.text,
+      createdAt: new Date(year, month + offset, day, 10, 0).toISOString(),
+    };
+    if (sample.status) note.status = sample.status;
+    if (sample.due) {
+      note.dueOn = dayIn(sample.due);
+      note.remind = true;
+    }
+    if (sample.owners) note.owners = sample.owners;
+    if (sample.tags) note.tags = sample.tags;
+    return note;
+  });
+
+  const assignments: Assignment[] = SAMPLE_ASSIGNMENTS.map((sample, index) => ({
+    id: `sample-assignment-${index + 1}`,
+    projectId: `sample-project-${sample.project}`,
+    stakeholderId: sample.stakeholderId,
+    startDate: dayIn(sample.from),
+    manDays: sample.manDays,
+  }));
+
+  const roadmap = defaultRoadmapConfig();
+  roadmap.stakeholders = roadmap.stakeholders.map((stakeholder) =>
+    stakeholder.id === SAMPLE_ABSENCE.stakeholderId
+      ? {
+          ...stakeholder,
+          absences: [
+            {
+              start: dateOf(SAMPLE_ABSENCE.from),
+              end: dateOf(SAMPLE_ABSENCE.to),
+              reason: SAMPLE_ABSENCE.reason,
+            },
+          ],
+        }
+      : stakeholder,
+  );
+
+  return {
+    lanes,
+    tasks,
+    metrics,
+    dailyNotes,
+    memos,
+    projects,
+    projectNotes: sortProjectNotes(projectNotes),
+    assignments: sortAssignments(assignments),
+    roadmap,
+  };
 }

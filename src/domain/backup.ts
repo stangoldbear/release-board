@@ -1,6 +1,8 @@
 import { APPROVAL_LIGHTS } from './approval';
+import { parseAssignment, sortAssignments } from './assignments';
 import { DEFAULT_COLOR_ID, isKnownColorId, normalizeColorId } from './colors';
 import { MEMO_BODY_MAX, MEMO_TITLE_MAX, sortMemos } from './memos';
+import { parseProjectNote, sortProjectNotes } from './projectNotes';
 import {
   PROJECT_DESCRIPTION_MAX,
   PROJECT_OWNER_MAX,
@@ -8,7 +10,16 @@ import {
   PROJECT_TITLE_MAX,
   sortProjects,
 } from './projects';
+import {
+  defaultRoadmapConfig,
+  parseFieldValues,
+  parseProjectField,
+  parseStakeholder,
+  parseTeam,
+  sortByPosition,
+} from './roadmapConfig';
 import type {
+  Assignment,
   DailyMetric,
   DailyNotes,
   Lane,
@@ -16,6 +27,8 @@ import type {
   MemoAuthor,
   PlanSnapshot,
   Project,
+  ProjectNote,
+  RoadmapConfig,
   TaskItem,
 } from './types';
 import { formatDateToIT, formatDateToISO, isIsoDate } from '../utils/dateUtils';
@@ -23,9 +36,12 @@ import { parseLocaleNumber } from './numberFormat';
 import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES } from './plan';
 
 export const BACKUP_FORMAT = 'release-board/backup';
-export const BACKUP_SCHEMA_VERSION = 5;
-/** Older schemas this version still reads: 3 had no free notes, 4 no projects. */
-const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, 4, BACKUP_SCHEMA_VERSION];
+export const BACKUP_SCHEMA_VERSION = 6;
+/**
+ * Older schemas this version still reads: 3 had no free notes, 4 no projects, 5 no notes of the
+ * projects, assignments or roadmap configuration.
+ */
+const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, 4, 5, BACKUP_SCHEMA_VERSION];
 /** Larger files are rejected before parsing: a real plan weighs a few hundred kilobytes. */
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 const MAX_REPORTED_ERRORS = 20;
@@ -49,6 +65,9 @@ export interface BackupFile {
   notes: { date: string; text: string }[];
   memos: Memo[];
   projects: Project[];
+  projectNotes: ProjectNote[];
+  assignments: Assignment[];
+  roadmap: RoadmapConfig;
 }
 
 /** Where a restored plan came from: a current backup or a file of the previous app version. */
@@ -74,6 +93,13 @@ export function createBackupFile(plan: PlanSnapshot, exportedAt: Date): BackupFi
     // Private notes are their author's alone: a backup of the plan never carries them.
     memos: sortMemos(plan.memos.filter((memo) => !memo.private)),
     projects: sortProjects(plan.projects),
+    projectNotes: sortProjectNotes(plan.projectNotes),
+    assignments: sortAssignments(plan.assignments),
+    roadmap: {
+      fields: sortByPosition(plan.roadmap.fields),
+      teams: sortByPosition(plan.roadmap.teams),
+      stakeholders: sortByPosition(plan.roadmap.stakeholders),
+    },
   };
 }
 
@@ -184,11 +210,30 @@ function readPlan(file: JsonObject, source: BackupSource): BackupParseResult {
   const dailyNotes = readNotes(file.notes, errors);
   const memos = readMemos(file.memos, errors);
   const projects = readProjects(file.projects, errors);
+  const projectIds = new Set(projects.map((project) => project.id));
+  const roadmap = readRoadmap(file.roadmap, errors);
+  const projectNotes = readProjectNotes(file.projectNotes, projectIds, errors);
+  const assignments = readAssignments(
+    file.assignments,
+    projectIds,
+    new Set(roadmap.stakeholders.map((item) => item.id)),
+    errors,
+  );
 
   if (errors.length > 0) return { ok: false, errors: limitErrors(errors) };
   return {
     ok: true,
-    plan: { lanes, tasks, metrics, dailyNotes, memos, projects },
+    plan: {
+      lanes,
+      tasks,
+      metrics,
+      dailyNotes,
+      memos,
+      projects,
+      projectNotes,
+      assignments,
+      roadmap,
+    },
     source,
     exportedAt: typeof file.exportedAt === 'string' ? file.exportedAt : null,
   };
@@ -425,10 +470,12 @@ function readProjects(value: unknown, errors: string[]): Project[] {
     }
     const owner = optionalString(item.owner);
     const description = optionalString(item.description);
+    const fields = item.fields === undefined ? undefined : parseFieldValues(item.fields);
     const problems: string[] = [];
     if (!isFilledString(item.id)) problems.push("manca l'identificativo");
     else if (projects.some((project) => project.id === item.id))
       problems.push(`identificativo "${item.id}" ripetuto`);
+    if (fields === null) problems.push('campi non validi');
     if (!isFilledString(item.title)) problems.push('manca il titolo');
     else if (item.title.length > PROJECT_TITLE_MAX) problems.push('titolo troppo lungo');
     if (!isIsoDate(item.startDate)) problems.push('data di inizio non valida');
@@ -461,9 +508,106 @@ function readProjects(value: unknown, errors: string[]): Project[] {
     };
     if (owner?.trim()) project.owner = owner;
     if (description?.trim()) project.description = description;
+    if (fields && Object.keys(fields).length > 0) project.fields = fields;
     projects.push(project);
   });
   return sortProjects(projects);
+}
+
+/** The notes of the projects; each must belong to a project of the file. */
+function readProjectNotes(
+  value: unknown,
+  projectIds: Set<string>,
+  errors: string[],
+): ProjectNote[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push('Note dei progetti: formato non valido.');
+    return [];
+  }
+  const notes: ProjectNote[] = [];
+  value.forEach((item: unknown, index) => {
+    const where = `Nota dei progetti ${index + 1}`;
+    const note = isObject(item) && isFilledString(item.id) ? parseProjectNote(item.id, item) : null;
+    if (!note) errors.push(`${where}: formato non valido.`);
+    else if (notes.some((other) => other.id === note.id))
+      errors.push(`${where}: identificativo "${note.id}" ripetuto.`);
+    else if (!projectIds.has(note.projectId)) errors.push(`${where}: progetto inesistente.`);
+    else notes.push(note);
+  });
+  return sortProjectNotes(notes);
+}
+
+/** The assignments; each must name a project of the file and a person of its configuration. */
+function readAssignments(
+  value: unknown,
+  projectIds: Set<string>,
+  stakeholderIds: Set<string>,
+  errors: string[],
+): Assignment[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push('Assegnazioni: formato non valido.');
+    return [];
+  }
+  const assignments: Assignment[] = [];
+  value.forEach((item: unknown, index) => {
+    const where = `Assegnazione ${index + 1}`;
+    const assignment =
+      isObject(item) && isFilledString(item.id) ? parseAssignment(item.id, item) : null;
+    if (!assignment) errors.push(`${where}: formato non valido.`);
+    else if (assignments.some((other) => other.id === assignment.id))
+      errors.push(`${where}: identificativo "${assignment.id}" ripetuto.`);
+    else if (!projectIds.has(assignment.projectId)) errors.push(`${where}: progetto inesistente.`);
+    else if (!stakeholderIds.has(assignment.stakeholderId))
+      errors.push(`${where}: persona inesistente.`);
+    else assignments.push(assignment);
+  });
+  return sortAssignments(assignments);
+}
+
+/**
+ * The configuration of the roadmap; a file from before it has none and takes the defaults. Each
+ * list is read with the parser the app uses for its documents, and repeated ids are refused.
+ */
+function readRoadmap(value: unknown, errors: string[]): RoadmapConfig {
+  if (value === undefined) return defaultRoadmapConfig();
+  if (!isObject(value)) {
+    errors.push('Configurazione della roadmap: formato non valido.');
+    return { fields: [], teams: [], stakeholders: [] };
+  }
+  const readList = <T extends { id: string; position: number }>(
+    list: unknown,
+    what: string,
+    parse: (id: string, item: unknown, position: number) => T | null,
+  ): T[] => {
+    if (list === undefined) return [];
+    if (!Array.isArray(list)) {
+      errors.push(`${what}: formato non valido.`);
+      return [];
+    }
+    const items: T[] = [];
+    list.forEach((raw: unknown, index) => {
+      const where = `${what} ${index + 1}`;
+      const item = isObject(raw) && isFilledString(raw.id) ? parse(raw.id, raw, index) : null;
+      if (!item) errors.push(`${where}: formato non valido.`);
+      else if (items.some((other) => other.id === item.id))
+        errors.push(`${where}: identificativo "${item.id}" ripetuto.`);
+      else items.push(item);
+    });
+    return sortByPosition(items);
+  };
+  const teams = readList(value.teams, 'Team', parseTeam);
+  const stakeholders = readList(value.stakeholders, 'Persona del team', parseStakeholder);
+  stakeholders.forEach((item, index) => {
+    if (!teams.some((team) => team.id === item.teamId))
+      errors.push(`Persona del team ${index + 1}: team inesistente.`);
+  });
+  return {
+    fields: readList(value.fields, 'Campo dei progetti', parseProjectField),
+    teams,
+    stakeholders,
+  };
 }
 
 function limitErrors(errors: string[]): string[] {

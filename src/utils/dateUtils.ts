@@ -249,3 +249,12 @@ export function timeAgo(then: Date, now: Date): string {
   const days = Math.floor(hours / 24);
   return days === 1 ? '1 giorno fa' : `${days} giorni fa`;
 }
+
+/** True for a moment written in ISO 8601 with its time, as `Date.prototype.toISOString` writes it. */
+export function isIsoDateTime(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) &&
+    !Number.isNaN(new Date(value).getTime())
+  );
+}

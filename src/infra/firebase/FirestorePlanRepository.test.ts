@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { unavailableMessage } from './FirestorePlanRepository';
+import { unavailableMessage } from '../../app/PlanRepository';
 
 describe('the parts of the plan that the published rules refuse', () => {
   it('are named in one sentence', () => {

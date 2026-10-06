@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_AREAS_VISIBLE, parseAreaVisibility } from './areas';
+import { ALL_AREAS_VISIBLE, availableAreas, parseAreaVisibility } from './areas';
 
 describe('the areas shown', () => {
   it('reads what a browser saved', () => {
@@ -23,5 +23,12 @@ describe('the areas shown', () => {
     expect(parseAreaVisibility(null)).toBeNull();
     expect(parseAreaVisibility([true])).toBeNull();
     expect(parseAreaVisibility('notes')).toBeNull();
+  });
+});
+
+describe('the areas available', () => {
+  it('keeps the roadmap for the beta features', () => {
+    expect(availableAreas(false).map(({ id }) => id)).toEqual(['notes', 'releases']);
+    expect(availableAreas(true).map(({ id }) => id)).toEqual(['notes', 'releases', 'roadmaps']);
   });
 });

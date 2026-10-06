@@ -1,13 +1,42 @@
+import type { AssignmentChanges, AssignmentContent } from '../domain/assignments';
 import type { MemoChanges, MemoContent } from '../domain/memos';
+import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
 import type { ProjectChanges, ProjectContent } from '../domain/projects';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
-import type { DailyMetric, PlanSnapshot, TaskItem } from '../domain/types';
+import type {
+  DailyMetric,
+  PlanSnapshot,
+  ProjectField,
+  RoadmapConfig,
+  Stakeholder,
+  TaskItem,
+  Team,
+} from '../domain/types';
 
 /** Whether the changes made here have reached where the plan is kept. */
 export type SyncStatus = 'synced' | 'saving' | 'offline' | 'error';
 
-/** Parts of the plan that came with rules of their own, which a published copy may lack. */
-export type PlanPart = 'memos' | 'projects';
+/**
+ * Parts of the plan that came with rules of their own, which a published copy may lack: the
+ * free notes (0.5), the projects (0.6), and their notes, assignments and configuration (0.7).
+ */
+export type PlanPart = 'memos' | 'projects' | 'roadmap';
+
+/** The parts by name, for the sentence that says what the published rules refuse. */
+export const PART_NAMES: Record<PlanPart, string> = {
+  memos: 'Note libere',
+  projects: 'Progetti',
+  roadmap: 'Dettagli dei progetti',
+};
+
+/** "Note libere e progetti non disponibili: chi gestisce l'istanza deve pubblicare le regole…". */
+export function unavailableMessage(parts: readonly PlanPart[]): string {
+  const [first = '', ...others] = parts.map((part) => PART_NAMES[part]);
+  const names = [first, ...others.map((part) => part.toLowerCase())];
+  const list =
+    names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names.at(-1) ?? ''}` : first;
+  return `${list} non disponibili: chi gestisce l'istanza deve pubblicare le regole di sicurezza aggiornate.`;
+}
 
 export interface SyncState {
   status: SyncStatus;
@@ -20,7 +49,8 @@ export interface SyncState {
   error: string | null;
   /**
    * The parts of the plan that the published security rules do not let anyone read or write yet:
-   * the plan goes on without them until the rules are published.
+   * the plan goes on without them until the rules are published. A limit of the page, not an
+   * error: the status says how the saving goes.
    */
   missing: readonly PlanPart[];
 }
@@ -81,7 +111,33 @@ export interface PlanRepository {
   createProject(content: ProjectContent): string;
   /** Changes some fields of a project, null removing an optional one. */
   updateProject(projectId: string, changes: ProjectChanges): void;
+  /** Removes a project with its notes and assignments. */
   deleteProject(projectId: string): void;
+  /**
+   * Adds a note to a project, written now, and returns its id. In a shared instance its author is
+   * the signed-in member.
+   */
+  createProjectNote(content: ProjectNoteContent): string;
+  /** Changes some fields of a note of a project, null removing an optional one. */
+  updateProjectNote(noteId: string, changes: ProjectNoteChanges): void;
+  deleteProjectNote(noteId: string): void;
+  /** Adds the work of a person on a project and returns its id. */
+  createAssignment(content: AssignmentContent): string;
+  updateAssignment(assignmentId: string, changes: AssignmentChanges): void;
+  deleteAssignment(assignmentId: string): void;
+  /** Adds a custom field of the projects, or replaces the one with the same id. */
+  saveProjectField(field: ProjectField): void;
+  /** Removes a field; the values the projects hold for it stay, hidden. */
+  deleteProjectField(fieldId: string): void;
+  /** Adds a team, or replaces the one with the same id. */
+  saveTeam(team: Team): void;
+  deleteTeam(teamId: string): void;
+  /** Adds a person of the team, or replaces the one with the same id. */
+  saveStakeholder(stakeholder: Stakeholder): void;
+  /** Removes a person with their assignments. */
+  deleteStakeholder(stakeholderId: string): void;
+  /** Replaces the whole configuration of the roadmap, as when the defaults are loaded. */
+  replaceRoadmapConfig(config: RoadmapConfig): void;
   /** Replaces everything, as when a backup is restored. */
   replacePlan(plan: PlanSnapshot): void;
 }

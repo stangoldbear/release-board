@@ -2,12 +2,14 @@ import type { RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { collection, getDocs } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { SyncStatus } from '../../app/PlanRepository';
+import { unavailableMessage } from '../../app/PlanRepository';
+import type { PlanPart, SyncState, SyncStatus } from '../../app/PlanRepository';
 import { describeHistoryEntry } from '../../domain/history';
 import type { HistoryEntry } from '../../domain/history';
 import { createEmptyPlan } from '../../domain/plan';
 import { buildSamplePlan } from '../../domain/sample';
 import type { PlanSnapshot, TaskItem } from '../../domain/types';
+import { isIsoDateTime } from '../../utils/dateUtils';
 import { FirestoreMembersRepository } from './FirestoreMembersRepository';
 import { FirestorePlanRepository } from './FirestorePlanRepository';
 import {
@@ -54,7 +56,14 @@ function matchesSample(plan: PlanSnapshot): boolean {
     plan.metrics.length === sample.metrics.length &&
     Object.keys(plan.dailyNotes).length === Object.keys(sample.dailyNotes).length &&
     plan.memos.length === sample.memos.length &&
-    plan.projects.length === sample.projects.length
+    plan.projects.length === sample.projects.length &&
+    plan.projectNotes.length === sample.projectNotes.length &&
+    plan.assignments.length === sample.assignments.length &&
+    plan.roadmap.fields.length === sample.roadmap.fields.length &&
+    plan.roadmap.teams.length === sample.roadmap.teams.length &&
+    plan.roadmap.stakeholders.length === sample.roadmap.stakeholders.length &&
+    // The default configuration has as many people: the absences tell the sample's apart.
+    plan.roadmap.stakeholders.some((item) => item.absences.length > 0)
   );
 }
 
@@ -183,6 +192,9 @@ describe('access and setup', () => {
       dailyNotes: {},
       memos: [],
       projects: [],
+      projectNotes: [],
+      assignments: [],
+      roadmap: { fields: [], teams: [], stakeholders: [] },
     });
 
     repository.replacePlan(createEmptyPlan());
@@ -195,6 +207,15 @@ describe('access and setup', () => {
     expect(imported.metrics).toEqual(sample.metrics);
     expect(imported.dailyNotes).toEqual(sample.dailyNotes);
     expect(imported.projects).toEqual(sample.projects);
+    // The notes of the projects take the importer as their author, as the free notes do.
+    expect(imported.projectNotes).toEqual(
+      sample.projectNotes.map((note) => ({
+        ...note,
+        author: { id: OWNER.githubId, login: OWNER.login },
+      })),
+    );
+    expect(imported.assignments).toEqual(sample.assignments);
+    expect(imported.roadmap).toEqual(sample.roadmap);
     expect(new Set(imported.tasks.map((task) => task.id))).toEqual(
       new Set(sample.tasks.map((task) => task.id)),
     );
@@ -635,16 +656,17 @@ describe('changes', () => {
   });
 });
 
-describe('rules older than the free notes and the projects', () => {
-  // As the rules of 0.4, which have no free notes nor projects: everything else is allowed to the
-  // signed-in.
+describe('rules older than the free notes, the projects and their details', () => {
+  // As the rules of 0.4, which have no free notes, projects nor their details: everything else is
+  // allowed to the signed-in.
   const legacyRules = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /plans/{planId} {
       allow read: if request.auth != null;
       match /{collection}/{id} {
-        allow read, write: if request.auth != null && !(collection in ['memos', 'projects']);
+        allow read, write: if request.auth != null
+          && !(collection in ['memos', 'projects', 'projectNotes', 'assignments', 'projectFields', 'teams', 'stakeholders']);
       }
       match /metrics/{metricId}/values/{date} {
         allow read, write: if request.auth != null;
@@ -682,14 +704,18 @@ service cloud.firestore {
       expect(plan.lanes.map((lane) => lane.name)).toEqual(['Corsia']);
       expect(plan.memos).toEqual([]);
       expect(plan.projects).toEqual([]);
-      const sync = await new Promise((resolve) => {
+      // The refused parts are not an error: the state names them, and the page says the rest.
+      const refused = await new Promise<readonly PlanPart[]>((resolve) => {
         const stop = repository.subscribeSync((state) => {
-          if (state.status !== 'error') return;
-          resolve(state.error);
+          if (state.missing.length < 3) return;
+          resolve(state.missing);
           setTimeout(() => stop());
         });
       });
-      expect(sync).toMatch(/Note libere e progetti non disponibili.*regole/);
+      expect(refused).toEqual(['memos', 'projects', 'roadmap']);
+      expect(unavailableMessage(refused)).toMatch(
+        /Note libere, progetti e dettagli dei progetti non disponibili.*regole/,
+      );
 
       // The sample and a backup still go in, without the parts the rules refuse.
       repository.replacePlan(sample);
@@ -698,17 +724,19 @@ service cloud.firestore {
         (current) => current.tasks.length === sample.tasks.length,
       );
       expect(restored.projects).toEqual([]);
+      expect(restored.projectNotes).toEqual([]);
+      expect(restored.roadmap).toEqual({ fields: [], teams: [], stakeholders: [] });
       await whenSynced(repository);
-      const state = await new Promise<{ error: string | null; missing: readonly string[] }>(
-        (resolve) => {
-          const stop = repository.subscribeSync((current) => {
-            resolve(current);
-            setTimeout(() => stop());
-          });
-        },
-      );
-      expect(state.missing).toEqual(['memos', 'projects']);
-      expect(state.error).toMatch(/non disponibili/);
+      const state = await new Promise<SyncState>((resolve) => {
+        const stop = repository.subscribeSync((current) => {
+          resolve(current);
+          setTimeout(() => stop());
+        });
+      });
+      expect(state.missing).toEqual(['memos', 'projects', 'roadmap']);
+      // The saving went well: the page only lacks those parts.
+      expect(state.status).toBe('synced');
+      expect(state.error).toBeNull();
     } finally {
       await legacy.cleanup();
     }
@@ -753,5 +781,190 @@ describe('members', () => {
       lookupUser: () => Promise.resolve(known[0] ?? null),
     });
     await expect(asEditor.remove('1003')).rejects.toThrow();
+  });
+});
+
+describe('the notes, the assignments and the configuration of the roadmap', () => {
+  let repository: FirestorePlanRepository;
+  const appMobile = 'sample-project-2';
+
+  beforeEach(async () => {
+    repository = await bootstrap();
+    repository.replacePlan(sample);
+    await planWhere(repository, matchesSample);
+    await whenSynced(repository);
+  });
+
+  it('adds, changes and deletes the notes of a project, with the writer as author', async () => {
+    const other = repositoryFor(editorDb, EDITOR);
+    await other.whenReady();
+    const id = other.createProjectNote({
+      projectId: appMobile,
+      text: 'Stima: 15 giorni lato server',
+      status: 'open',
+      dueOn: '2026-10-20',
+      remind: true,
+      owners: ['Giulia'],
+      tags: ['stima'],
+    });
+    const created = await planWhere(repository, (plan) =>
+      plan.projectNotes.some((note) => note.id === id),
+    );
+    const note = created.projectNotes.find((item) => item.id === id);
+    expect(note).toMatchObject({
+      projectId: appMobile,
+      text: 'Stima: 15 giorni lato server',
+      status: 'open',
+      dueOn: '2026-10-20',
+      remind: true,
+      owners: ['Giulia'],
+      tags: ['stima'],
+      author: { id: EDITOR.githubId, login: EDITOR.login },
+    });
+    expect(isIsoDateTime(note?.createdAt)).toBe(true);
+    // The newest note comes last.
+    expect(created.projectNotes.at(-1)?.id).toBe(id);
+
+    repository.updateProjectNote(id, { status: 'done', remind: null, owners: null });
+    const updated = await planWhere(other, (plan) =>
+      plan.projectNotes.some((item) => item.id === id && item.status === 'done'),
+    );
+    const done = updated.projectNotes.find((item) => item.id === id);
+    expect(done).toMatchObject({ status: 'done', dueOn: '2026-10-20', tags: ['stima'] });
+    expect(done?.remind).toBeUndefined();
+    expect(done?.owners).toBeUndefined();
+
+    repository.deleteProjectNote(id);
+    await planWhere(other, (plan) => !plan.projectNotes.some((item) => item.id === id));
+  });
+
+  it('adds and moves assignments, and removes them with their person or their project', async () => {
+    const id = repository.createAssignment({
+      projectId: appMobile,
+      stakeholderId: 'qa-2',
+      startDate: '2026-10-05',
+      manDays: 10,
+      note: 'Collaudo',
+    });
+    const created = await planWhere(repository, (plan) =>
+      plan.assignments.some((item) => item.id === id),
+    );
+    expect(created.assignments.find((item) => item.id === id)).toEqual({
+      id,
+      projectId: appMobile,
+      stakeholderId: 'qa-2',
+      startDate: '2026-10-05',
+      manDays: 10,
+      note: 'Collaudo',
+    });
+
+    repository.updateAssignment(id, { startDate: '2026-10-12', note: null });
+    const moved = await planWhere(
+      repository,
+      (plan) => plan.assignments.find((item) => item.id === id)?.startDate === '2026-10-12',
+    );
+    expect(moved.assignments.find((item) => item.id === id)?.note).toBeUndefined();
+
+    repository.deleteStakeholder('qa-2');
+    await planWhere(
+      repository,
+      (plan) =>
+        !plan.assignments.some((item) => item.id === id) &&
+        !plan.roadmap.stakeholders.some((item) => item.id === 'qa-2'),
+    );
+
+    const before = await planWhere(repository, () => true);
+    expect(before.projectNotes.some((note) => note.projectId === appMobile)).toBe(true);
+    expect(before.assignments.some((item) => item.projectId === appMobile)).toBe(true);
+    repository.deleteProject(appMobile);
+    await planWhere(
+      repository,
+      (plan) =>
+        !plan.projects.some((item) => item.id === appMobile) &&
+        !plan.projectNotes.some((note) => note.projectId === appMobile) &&
+        !plan.assignments.some((item) => item.projectId === appMobile),
+    );
+  });
+
+  it('saves fields, teams and people, and loads a configuration in place of the current one', async () => {
+    const budget = {
+      id: 'budget',
+      label: 'Budget',
+      type: 'price' as const,
+      multiple: false,
+      required: false,
+      main: true,
+      position: 10,
+    };
+    repository.saveProjectField(budget);
+    const withField = await planWhere(repository, (plan) =>
+      plan.roadmap.fields.some((field) => field.id === 'budget'),
+    );
+    expect(withField.roadmap.fields.at(-1)).toEqual(budget);
+    repository.saveProjectField({ ...budget, label: 'Budget previsto', required: true });
+    await planWhere(
+      repository,
+      (plan) =>
+        plan.roadmap.fields.find((field) => field.id === 'budget')?.label === 'Budget previsto',
+    );
+    repository.deleteProjectField('budget');
+    await planWhere(
+      repository,
+      (plan) => !plan.roadmap.fields.some((field) => field.id === 'budget'),
+    );
+
+    const design = {
+      id: 'design',
+      name: 'Design',
+      tag: 'UX',
+      colorId: 'red' as const,
+      position: 9,
+    };
+    repository.saveTeam(design);
+    repository.saveStakeholder({
+      id: 'ux-1',
+      name: 'UX #1',
+      teamId: 'design',
+      info: 'Esterno',
+      absences: [{ start: '2026-12-20', end: '2027-01-06', reason: 'Ferie' }],
+      position: 0,
+    });
+    const withTeam = await planWhere(repository, (plan) =>
+      plan.roadmap.stakeholders.some((item) => item.id === 'ux-1'),
+    );
+    expect(withTeam.roadmap.teams.at(-1)).toEqual(design);
+    expect(withTeam.roadmap.stakeholders.find((item) => item.id === 'ux-1')).toMatchObject({
+      info: 'Esterno',
+      absences: [{ start: '2026-12-20', end: '2027-01-06', reason: 'Ferie' }],
+    });
+    repository.deleteTeam('design');
+    await planWhere(repository, (plan) => !plan.roadmap.teams.some((team) => team.id === 'design'));
+
+    const bare = { fields: [], teams: [sample.roadmap.teams[0]!], stakeholders: [] };
+    repository.replaceRoadmapConfig(bare);
+    const replaced = await planWhere(
+      repository,
+      (plan) => plan.roadmap.fields.length === 0 && plan.roadmap.stakeholders.length === 0,
+    );
+    expect(replaced.roadmap.teams).toEqual(bare.teams);
+
+    await whenSynced(repository);
+    const entries = await new Promise<HistoryEntry[]>((resolve) => {
+      const stop = repository.subscribeHistory({ limit: 20 }, (items) => {
+        if (items.length >= 8 && items.every((item) => item.at !== null)) {
+          stop();
+          resolve(items);
+        }
+      });
+    });
+    expect(describeHistoryEntry(entries[0] as HistoryEntry)).toBe(
+      'owner ha importato: configurazione della roadmap: 0 campi, 1 team, 0 persone',
+    );
+    expect(entries.map((entry) => entry.entity)).toEqual(
+      expect.arrayContaining(['projectField', 'team', 'stakeholder']),
+    );
+    expect(describeHistoryEntry(entries[1] as HistoryEntry)).toBe(
+      'owner ha eliminato il team «Design»',
+    );
   });
 });

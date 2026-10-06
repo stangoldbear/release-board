@@ -7,7 +7,8 @@ giornalieri.
 
 ## Funzionalità
 
-- Tre aree, Note, Next Releases e Roadmaps, da mostrare o nascondere dall'intestazione.
+- Due aree, Note e Next Releases, da mostrare o nascondere dall'intestazione; una terza, Roadmap,
+  in beta: compare attivando «Funzioni beta» nelle Impostazioni.
 - Calendario continuo a corsie, con i mesi uno dopo l'altro, tre livelli di zoom e i giorni passati
   in grigio o nascosti, e bacheca settimanale.
 - Testo di note e calendari regolabile con le lenti, dal 75% al 175%, e vista compatta che mostra
@@ -19,10 +20,14 @@ giornalieri.
 - Note libere sotto la ricerca, una dopo l'altra: titolo, testo, colore, un promemoria che compare
   il giorno scelto e un ordine che si cambia trascinandole. In un'istanza condivisa ognuno vede le
   sue, può guardare quelle di tutti, raggruppate per autore, e può tenerne alcune private.
-- Roadmaps: i progetti passati, in corso e futuri su una linea del tempo propria, a mesi o a
-  trimestri, con stato, responsabile e descrizione; si spostano e si allungano trascinandoli.
-- Ricerca in attività, note dei giorni, note libere e progetti, con tutte le parole o almeno una:
-  le parole trovate sono evidenziate e i risultati si scorrono uno alla volta.
+- Roadmap (funzione beta): i progetti passati, in corso e futuri su una linea del tempo con le
+  scale del calendario, con stato, responsabile, descrizione e campi personalizzati (link a Jira, Figma e
+  Confluence, team impattati, stime…); note con autore, scadenza e avviso; una vista Team con una
+  barra per persona, che salta weekend, festività e assenze. Progetti e barre si spostano
+  trascinandoli, anche da tastiera.
+- Ricerca in attività, note dei giorni, note libere e, con le funzioni beta, progetti (anche note
+  e campi), con tutte le parole o almeno una: le parole trovate sono evidenziate e i risultati si
+  scorrono uno alla volta.
 - Fatturato previsto importato da un foglio Google in CSV, con il semaforo dei rilasci e le
   promozioni di ogni giorno.
 - Festività italiane e weekend evidenziati.

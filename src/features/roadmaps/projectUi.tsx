@@ -38,19 +38,22 @@ export function ProjectStatusMark({
   );
 }
 
-/** What a row of the roadmap can show beside the title of its project. */
-export type ProjectDetail = 'dates' | 'status' | 'owner' | 'description';
+/**
+ * How much a row of the roadmap shows of its project: the title alone, the main information
+ * (description, state, owner and the main custom fields), or those and the people who work on it.
+ */
+export type DetailLevel = 'titles' | 'main' | 'team';
 
-export const PROJECT_DETAILS: readonly { id: ProjectDetail; label: string }[] = [
-  { id: 'dates', label: 'Date' },
-  { id: 'status', label: 'Stato' },
-  { id: 'owner', label: 'Responsabile' },
-  { id: 'description', label: 'Descrizione' },
+export const DETAIL_LEVELS: readonly { id: DetailLevel; label: string; title: string }[] = [
+  { id: 'titles', label: 'Solo titoli', title: 'Il titolo di ogni progetto, e nulla più' },
+  {
+    id: 'main',
+    label: 'Info principali',
+    title: 'Sotto il titolo: descrizione, stato, responsabile e i campi principali',
+  },
+  {
+    id: 'team',
+    label: 'Team',
+    title: 'Le informazioni principali e una riga per ogni persona che lavora al progetto',
+  },
 ];
-
-/** The details a browser chose to show; null when the saved value is not a list of them. */
-export function readProjectDetails(value: unknown): ProjectDetail[] | null {
-  if (!Array.isArray(value)) return null;
-  const known = PROJECT_DETAILS.map((detail) => detail.id) as unknown[];
-  return value.filter((item): item is ProjectDetail => known.includes(item));
-}

@@ -1,76 +1,101 @@
-import { memo, useId, useRef, useState } from 'react';
+import { memo, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Plus, UserRound } from 'lucide-react';
+import { assignmentsOfProject, scheduleAssignment } from '../../domain/assignments';
+import type { AssignmentChanges } from '../../domain/assignments';
 import { applyChanges } from '../../domain/changes';
 import type { ProjectChanges } from '../../domain/projects';
-import type { DateRange } from '../../domain/schedule';
-import type { Project } from '../../domain/types';
+import { teamOf } from '../../domain/roadmapConfig';
+import { ZOOM_COLUMN_UNIT, placeTasks } from '../../domain/schedule';
+import type { DateRange, ZoomLevel } from '../../domain/schedule';
+import type {
+  Assignment,
+  Project,
+  ProjectField,
+  RoadmapConfig,
+  Stakeholder,
+} from '../../domain/types';
 import { prefersReducedMotion } from '../../shared/motion';
 import { Highlight } from '../../shared/ui/Highlight';
 import { scaledTextStyle } from '../../shared/ui/textScale';
 import type { TextScale } from '../../shared/ui/textScale';
 import { useStableCallback } from '../../shared/useStableCallback';
 import { diffDays, formatDateToIT } from '../../utils/dateUtils';
+import type { CalendarJump } from '../calendar/calendarView';
 import { DragHint } from '../calendar/DragHint';
-import { LABEL_CELL, clampLines } from '../calendar/timelineLayout';
+import { DayHeaderRow, MonthBand } from '../calendar/TimelineHeader';
+import { LABEL_CELL, buildColumns, clampLines, columnEdge } from '../calendar/timelineLayout';
+import type { Column } from '../calendar/timelineLayout';
+import { useTimelineScroll } from '../calendar/useTimelineScroll';
+import { useZoomGestures } from '../calendar/useZoomGestures';
+import { AssignmentBar, assignmentBarId } from './AssignmentBar';
+import { FieldValueList } from './fieldUi';
 import { ProjectBar, projectBarId } from './ProjectBar';
 import { ProjectStatusMark } from './projectUi';
-import type { ProjectDetail } from './projectUi';
-import {
-  ROADMAP_DAY_WIDTH,
-  barPlace,
-  projectPeriod,
-  roadmapMetrics,
-  yearSpans,
-} from './roadmapLayout';
-import type { RoadmapColumn, RoadmapZoom } from './roadmapLayout';
+import type { DetailLevel } from './projectUi';
+import { projectPeriod, roadmapMetrics } from './roadmapLayout';
+import { draggedAssignment, useAssignmentDrag } from './useAssignmentDrag';
 import { draggedProject, useProjectDrag } from './useProjectDrag';
-import { useRoadmapScroll } from './useRoadmapScroll';
 
 interface RoadmapTimelineProps {
   /** The projects to show, one per row, in the order of the rows. */
   projects: Project[];
+  /** The days the roadmap holds; it scrolls through them. */
   range: DateRange;
-  columns: RoadmapColumn[];
-  zoom: RoadmapZoom;
+  zoom: ZoomLevel;
+  /** The first day in view when the roadmap opens, where the user left it. */
+  anchor: string;
+  /** The last navigation: the roadmap scrolls so that its day is at the left edge. */
+  jump: CalendarJump;
+  onScrolled: (first: string, last: string, settled: boolean) => void;
   today: string;
-  /** A new value brings today into view. */
-  todayRequest: number;
-  /** What each row shows beside the title of its project. */
-  details: readonly ProjectDetail[];
+  highlightWeekends: boolean;
+  /** How much each row shows under the title of its project. */
+  level: DetailLevel;
+  /** The custom fields, the teams and the people, to show the main fields and the assignments. */
+  config: RoadmapConfig;
+  assignments: Assignment[];
   /** While searching, the rows are those found, and no row adds a project. */
   searching: boolean;
   textScale: TextScale;
   compact: boolean;
+  /** -1 zooms in, 1 zooms out. */
+  onZoom: (step: -1 | 1) => void;
+  /** Shows the days of a week, from the quarter view. */
+  onShowDays: (date: string) => void;
   onOpen: (project: Project) => void;
-  /** Adds a project over a month, or a quarter. */
-  onAddAt: (column: RoadmapColumn) => void;
+  /** Adds a project from a day. */
+  onAddAt: (date: string) => void;
   onChange: (projectId: string, changes: ProjectChanges) => void;
+  onOpenAssignment: (assignment: Assignment) => void;
+  onAddAssignment: (project: Project) => void;
+  onChangeAssignment: (assignmentId: string, changes: AssignmentChanges) => void;
+  onOpenStakeholder: (stakeholder: Stakeholder) => void;
 }
 
-/** The columns of a row, the past ones grey: memoized, since a drag redraws only the bars. */
+/** The days of a row, past ones grey and holidays red: memoized, since a drag redraws only the bars. */
 const RowCells = memo(function RowCells({
   columns,
   onAdd,
 }: {
-  columns: RoadmapColumn[];
-  /** Clicking a column adds a project there, in the row that adds them. */
-  onAdd?: (column: RoadmapColumn) => void;
+  columns: Column[];
+  /** Clicking a day adds a project there, in the row that adds them. */
+  onAdd?: (date: string) => void;
 }) {
   return columns.map((column) => (
     <div
       key={column.start}
-      onClick={onAdd && (() => onAdd(column))}
-      title={onAdd ? `Nuovo progetto: ${column.name}` : undefined}
-      style={{ width: column.width }}
-      className={`flex shrink-0 items-center justify-center border-r ${
-        column.yearEnd ? 'border-line-strong' : 'border-line'
-      } ${column.past ? 'bg-past' : ''} ${
-        // The plus is drawn by CSS: one icon element per column would weigh on long roadmaps.
+      onClick={onAdd && (() => onAdd(column.start))}
+      title={onAdd ? `Nuovo progetto dal ${formatDateToIT(column.start)}` : undefined}
+      className={`flex shrink-0 items-center justify-center ${columnEdge(column)} ${
+        column.past ? 'bg-past' : column.red ? 'bg-holiday' : ''
+      } ${
+        // The plus is drawn by CSS: one icon element per day would weigh on long roadmaps.
         onAdd
           ? "cursor-pointer text-base text-link after:opacity-0 after:content-['+'] hover:bg-accent-soft hover:after:opacity-100 pointer-coarse:after:hidden"
           : ''
       }`}
+      style={{ width: column.width }}
     />
   ));
 });
@@ -84,14 +109,18 @@ function showBar(projectId: string): void {
   });
 }
 
-/** The title of a project and the details chosen for the rows. */
+/** The title of a project and, from the "Info principali" level on, what describes it. */
 function ProjectInfo({
   project,
-  details,
+  level,
+  fields,
+  descriptionLines,
   onOpen,
 }: {
   project: Project;
-  details: readonly ProjectDetail[];
+  level: DetailLevel;
+  fields: readonly ProjectField[];
+  descriptionLines: number;
   onOpen: () => void;
 }) {
   return (
@@ -113,31 +142,44 @@ function ProjectInfo({
       >
         <Highlight text={project.title} />
       </button>
-      {details.includes('dates') && (
-        <span
-          className="text-xs text-fg-muted"
-          title={`${formatDateToIT(project.startDate)} → ${formatDateToIT(project.endDate)}`}
-        >
-          {projectPeriod(project)}
-        </span>
-      )}
-      {details.includes('status') && (
-        <span className="text-xs">
-          <ProjectStatusMark status={project.status} />
-        </span>
-      )}
-      {details.includes('owner') && project.owner && (
-        <span className="flex items-center gap-1 text-xs">
-          <UserRound className="h-3 w-3 shrink-0" aria-hidden="true" />
-          <span className="truncate">
-            <Highlight text={project.owner} />
+      {level !== 'titles' && (
+        <>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-fg-muted">
+            <ProjectStatusMark status={project.status} />
+            <span
+              title={`${formatDateToIT(project.startDate)} → ${formatDateToIT(project.endDate)}`}
+            >
+              {projectPeriod(project)}
+            </span>
+            {project.owner && (
+              <span className="flex min-w-0 items-center gap-1">
+                <UserRound className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">
+                  <Highlight text={project.owner} />
+                </span>
+              </span>
+            )}
           </span>
-        </span>
-      )}
-      {details.includes('description') && project.description && (
-        <span style={clampLines(3)} className="text-xs whitespace-pre-line text-fg-muted">
-          <Highlight text={project.description} />
-        </span>
+          {project.description && (
+            <span
+              style={clampLines(descriptionLines)}
+              className="text-xs whitespace-pre-line text-fg-muted"
+            >
+              <Highlight text={project.description} />
+            </span>
+          )}
+          {fields
+            .filter((field) => field.main)
+            .map((field) => (
+              <span key={field.id} className="text-xs wrap-break-word">
+                <FieldValueList
+                  project={project}
+                  field={field}
+                  before={<span className="font-semibold text-fg-muted">{field.label}: </span>}
+                />
+              </span>
+            ))}
+        </>
       )}
     </>
   );
@@ -145,37 +187,65 @@ function ProjectInfo({
 
 /**
  * The roadmap: a row for each project, past, current or to come, with a bar from its start to its
- * end, over months or quarters that scroll sideways. The last row adds a project with a click on
- * a month.
+ * end over the same days as the calendar, and at the "Team" level a row for each person who works
+ * on it, with their bar in the color of their team. The last row adds a project with a click on a
+ * day.
  */
 export function RoadmapTimeline({
   projects,
   range,
-  columns,
   zoom,
+  anchor,
+  jump,
+  onScrolled,
   today,
-  todayRequest,
-  details,
+  highlightWeekends,
+  level,
+  config,
+  assignments,
   searching,
   textScale,
   compact,
+  onZoom,
+  onShowDays,
   onOpen,
   onAddAt,
   onChange,
+  onOpenAssignment,
+  onAddAssignment,
+  onChangeAssignment,
+  onOpenStakeholder,
 }: RoadmapTimelineProps) {
-  const dayWidth = ROADMAP_DAY_WIDTH[zoom];
-  const { barHeight, rowPadding, labelWidth } = roadmapMetrics(textScale, compact);
+  const metrics = roadmapMetrics(zoom, textScale, compact);
+  const { dayWidth, barHeight, assignmentHeight, rowPadding, labelWidth } = metrics;
+  const columns = useMemo(
+    () => buildColumns(range, zoom, highlightWeekends, today),
+    [range, zoom, highlightWeekends, today],
+  );
+  const weekColumns = ZOOM_COLUMN_UNIT[zoom] === 'week';
   const totalWidth = columns.reduce((sum, column) => sum + column.width, 0);
-  const todayLeft =
+  const todayOffset =
     range.start <= today && today <= range.end
       ? (diffDays(range.start, today) + 0.5) * dayWidth
       : null;
   const scrollRef = useRef<HTMLDivElement>(null);
   const helpId = useId();
+  const assignmentHelpId = useId();
   const { drag, startDrag, isClickAfterDrag } = useProjectDrag(dayWidth, onChange);
-  useRoadmapScroll(scrollRef, range, dayWidth, today, todayRequest);
+  const personDrag = useAssignmentDrag(dayWidth, onChangeAssignment);
+
+  useZoomGestures(scrollRef, onZoom);
+  useTimelineScroll(scrollRef, {
+    range,
+    dayWidth,
+    labelWidth,
+    openOn: anchor,
+    jump,
+    onScrolled,
+  });
 
   const addAt = useStableCallback(onAddAt);
+  const showDays = useStableCallback(onShowDays);
   // The rows follow the start of their projects: a move from the keyboard can change the row, and
   // the focus follows the bar there.
   const [announcement, setAnnouncement] = useState('');
@@ -187,6 +257,20 @@ export function RoadmapTimeline({
     );
     window.requestAnimationFrame(() => document.getElementById(projectBarId(project.id))?.focus());
   };
+  const changeAssignmentByKey = (assignment: Assignment, changes: AssignmentChanges) => {
+    onChangeAssignment(assignment.id, changes);
+    const name = config.stakeholders.find((item) => item.id === assignment.stakeholderId)?.name;
+    if (changes.startDate) {
+      setAnnouncement(`${name ?? 'Persona'} dal ${formatDateToIT(changes.startDate)}`);
+    }
+    window.requestAnimationFrame(() =>
+      document.getElementById(assignmentBarId(assignment.id))?.focus(),
+    );
+  };
+
+  const rowStyle = { gridTemplateColumns: 'var(--gantt-label-width) auto' };
+  const projectRowHeight = barHeight + rowPadding * 2;
+  const personRowHeight = assignmentHeight + rowPadding;
 
   return (
     <div className="w-full bg-surface select-none">
@@ -196,6 +280,10 @@ export function RoadmapTimeline({
       <p id={helpId} className="sr-only">
         Frecce sinistra e destra spostano il progetto di una settimana; con Maiusc cambiano la data
         di fine. Invio lo apre.
+      </p>
+      <p id={assignmentHelpId} className="sr-only">
+        Frecce sinistra e destra spostano l&apos;inizio del lavoro di un giorno; con Maiusc di una
+        settimana. Invio apre l&apos;assegnazione.
       </p>
       {/*
         Relative, so that hidden labels placed absolutely stay inside the scroll area. On phones the
@@ -213,85 +301,56 @@ export function RoadmapTimeline({
         className="relative w-full touch-pan-x touch-pan-y overflow-x-auto [overflow-anchor:none]"
       >
         <div style={{ width: `calc(var(--gantt-label-width) + ${totalWidth}px)` }}>
-          <div className="flex border-b border-line bg-surface text-xs">
-            <div className={`${LABEL_CELL} flex items-center bg-surface font-bold uppercase`}>
-              Anno
-            </div>
-            <div className="relative flex">
-              {yearSpans(range, dayWidth).map((span) => (
-                // Clipped, not hidden: a hidden overflow would make the cell the sticky container.
-                <div
-                  key={span.year}
-                  style={{ width: span.width }}
-                  className="shrink-0 overflow-clip border-r border-line-strong py-1.5 in-data-compact:py-1"
-                >
-                  <span className="sticky left-(--gantt-label-width) px-2 font-bold">
-                    {span.year}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <MonthBand range={range} dayWidth={dayWidth} metrics={null} />
+          <DayHeaderRow
+            columns={columns}
+            weekColumns={weekColumns}
+            showMonth={zoom === 'detail'}
+            onShowDays={showDays}
+          />
 
-          <div className="flex border-b border-line-strong text-xs">
-            <div className={`${LABEL_CELL} flex items-center bg-surface font-bold uppercase`}>
-              {zoom === 'years' ? 'Trimestre' : 'Mese'}
-            </div>
-            {columns.map((column) => (
-              <div
-                key={column.start}
-                title={`${column.name}${column.current ? ' · in corso' : ''}`}
-                style={{ width: column.width }}
-                className={`shrink-0 truncate border-r py-1 text-center in-data-compact:py-0.5 ${
-                  column.yearEnd ? 'border-line-strong' : 'border-line'
-                } ${
-                  column.past
-                    ? 'bg-past text-fg-muted'
-                    : column.current
-                      ? 'bg-accent-soft font-bold text-link underline decoration-2 underline-offset-4'
-                      : ''
-                }`}
-              >
-                {column.label}
-                {column.current && <span className="sr-only">, in corso</span>}
-              </div>
-            ))}
-          </div>
-
-          <div className="relative divide-y divide-line">
-            {todayLeft !== null && (
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 z-0 w-0.5 -translate-x-1/2 bg-link"
-                style={{ left: `calc(var(--gantt-label-width) + ${todayLeft}px)` }}
-              />
-            )}
-
+          <div>
             {projects.map((project) => {
               const shown = drag?.project.id === project.id ? draggedProject(drag) : project;
-              const { left, width } = barPlace(shown, range, dayWidth);
+              const placed = placeTasks([shown], range).placed[0];
+              const people = level === 'team' ? assignmentsOfProject(assignments, project.id) : [];
+              const rows = 1 + people.length + (level === 'team' && !searching ? 1 : 0);
               return (
-                <div
-                  key={project.id}
-                  className="flex"
-                  style={{ minHeight: barHeight + rowPadding * 2 }}
-                >
+                <div key={project.id} className="grid border-b border-line" style={rowStyle}>
+                  <div
+                    className="relative flex"
+                    style={{ gridColumn: 2, gridRow: `1 / span ${rows}`, width: totalWidth }}
+                  >
+                    <RowCells columns={columns} />
+                    {todayOffset !== null && (
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-link"
+                        style={{ left: todayOffset }}
+                      />
+                    )}
+                  </div>
+
                   <div
                     className={`${LABEL_CELL} flex flex-col justify-center gap-0.5 bg-surface-muted`}
+                    style={{ gridColumn: 1, gridRow: 1, minHeight: projectRowHeight }}
                   >
                     <ProjectInfo
                       project={project}
-                      details={details}
+                      level={level}
+                      fields={config.fields}
+                      descriptionLines={metrics.descriptionLines}
                       onOpen={() => onOpen(project)}
                     />
                   </div>
-                  <div className="relative flex">
-                    <RowCells columns={columns} />
-                    <div className="pointer-events-none absolute inset-0">
+                  <div
+                    className="pointer-events-none relative"
+                    style={{ gridColumn: 2, gridRow: 1, minHeight: projectRowHeight }}
+                  >
+                    {placed && (
                       <ProjectBar
-                        project={shown}
-                        left={left + 1}
-                        width={width - 2}
+                        placed={placed}
+                        dayWidth={dayWidth}
                         top={`calc(50% - ${barHeight / 2}px)`}
                         height={barHeight}
                         dragging={drag?.project.id === project.id}
@@ -302,8 +361,95 @@ export function RoadmapTimeline({
                         }}
                         onChange={(changes) => changeByKey(project, changes)}
                       />
-                    </div>
+                    )}
                   </div>
+
+                  {people.map((assignment, index) => {
+                    const stakeholder =
+                      config.stakeholders.find((item) => item.id === assignment.stakeholderId) ??
+                      null;
+                    const team = stakeholder ? teamOf(config, stakeholder) : null;
+                    const moving =
+                      personDrag.drag?.assignment.id === assignment.id
+                        ? draggedAssignment(personDrag.drag)
+                        : assignment;
+                    const schedule = scheduleAssignment(moving, stakeholder?.absences ?? []);
+                    const gridRow = index + 2;
+                    return (
+                      <div key={assignment.id} className="contents">
+                        <div
+                          className={`${LABEL_CELL} flex items-center gap-1.5 border-t border-line/60 bg-surface-muted text-xs`}
+                          style={{ gridColumn: 1, gridRow, minHeight: personRowHeight }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-2 w-2 shrink-0 rounded-full border border-line-strong"
+                            style={
+                              team
+                                ? { backgroundColor: `var(--rb-task-${team.colorId}-border)` }
+                                : undefined
+                            }
+                          />
+                          {stakeholder ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenStakeholder(stakeholder)}
+                              title="Modifica la persona: nome, team, info e assenze"
+                              className="min-w-0 cursor-pointer truncate text-left font-semibold hover:underline"
+                            >
+                              {stakeholder.name}
+                            </button>
+                          ) : (
+                            <span className="truncate text-fg-muted">
+                              Persona non in configurazione
+                            </span>
+                          )}
+                          {team && <span className="shrink-0 text-fg-muted">{team.tag}</span>}
+                        </div>
+                        <div
+                          className="pointer-events-none relative"
+                          style={{ gridColumn: 2, gridRow, minHeight: personRowHeight }}
+                        >
+                          <AssignmentBar
+                            assignment={moving}
+                            schedule={schedule}
+                            stakeholder={stakeholder}
+                            team={team}
+                            range={range}
+                            dayWidth={dayWidth}
+                            height={assignmentHeight}
+                            dragging={personDrag.drag?.assignment.id === assignment.id}
+                            describedBy={assignmentHelpId}
+                            onPointerDown={(event) => personDrag.startDrag(event, assignment)}
+                            onOpen={() => {
+                              if (!personDrag.isClickAfterDrag()) onOpenAssignment(assignment);
+                            }}
+                            onChange={(changes) => changeAssignmentByKey(assignment, changes)}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {level === 'team' && !searching && (
+                    <>
+                      <div
+                        className={`${LABEL_CELL} flex items-center border-t border-line/60 bg-surface-muted`}
+                        style={{ gridColumn: 1, gridRow: rows, minHeight: personRowHeight }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => onAddAssignment(project)}
+                          className="flex cursor-pointer items-center gap-1 text-xs font-medium text-link hover:underline"
+                        >
+                          <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          Persona
+                          <span className="sr-only"> che lavora a «{project.title}»</span>
+                        </button>
+                      </div>
+                      <div style={{ gridColumn: 2, gridRow: rows }} />
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -315,20 +461,21 @@ export function RoadmapTimeline({
                 </p>
               )
             ) : (
-              <div className="flex" style={{ minHeight: barHeight + rowPadding * 2 }}>
+              <div className="grid" style={rowStyle}>
                 <div
                   className={`${LABEL_CELL} flex flex-col justify-center gap-0.5 bg-surface-muted text-xs text-fg-muted`}
+                  style={{ gridColumn: 1, gridRow: 1, minHeight: projectRowHeight }}
                 >
                   <span className="flex items-center gap-1 font-semibold">
                     <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     {projects.length === 0 ? 'Nessun progetto' : 'Nuovo progetto'}
                   </span>
-                  <span className="pointer-coarse:hidden">Clic su un mese per crearne uno</span>
+                  <span className="pointer-coarse:hidden">Clic su un giorno per crearne uno</span>
                   <span className="hidden pointer-coarse:inline">
-                    Tocca un mese per crearne uno
+                    Tocca un giorno per crearne uno
                   </span>
                 </div>
-                <div className="relative flex">
+                <div className="relative flex" style={{ gridColumn: 2, gridRow: 1 }}>
                   <RowCells columns={columns} onAdd={addAt} />
                 </div>
               </div>
@@ -344,6 +491,12 @@ export function RoadmapTimeline({
             {drag.days > 0 ? `+${drag.days}` : drag.days}{' '}
             {Math.abs(drag.days) === 1 ? 'giorno' : 'giorni'}
           </strong>
+        </DragHint>
+      )}
+      {personDrag.drag && (
+        <DragHint>
+          Inizio del lavoro{' '}
+          <strong>{formatDateToIT(draggedAssignment(personDrag.drag).startDate)}</strong>
         </DragHint>
       )}
     </div>

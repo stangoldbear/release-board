@@ -21,42 +21,62 @@ import type {
 import type { HistoryQuery, HistoryReader } from '../../app/HistoryReader';
 import { INITIAL_SYNC } from '../../app/PlanRepository';
 import type { PlanPart, PlanRepository, SyncState, SyncStatus } from '../../app/PlanRepository';
+import type { AssignmentChanges, AssignmentContent } from '../../domain/assignments';
 import { isHistoryAction, isHistoryEntity } from '../../domain/history';
 import type { HistoryAction, HistoryEntity, HistoryEntry } from '../../domain/history';
 import { applyChanges } from '../../domain/changes';
+import type { FieldChanges } from '../../domain/changes';
 import { endPosition, memoMoves } from '../../domain/memos';
 import type { MemoChanges, MemoContent } from '../../domain/memos';
+import type { ProjectNoteChanges, ProjectNoteContent } from '../../domain/projectNotes';
 import type { ProjectChanges, ProjectContent } from '../../domain/projects';
 import type { MetricValueChange, TaskChanges } from '../../domain/plan';
 import type {
+  Assignment,
   DailyMetric,
   Lane,
   Memo,
   MemoAuthor,
   PlanSnapshot,
   Project,
+  ProjectField,
+  ProjectNote,
+  RoadmapConfig,
+  Stakeholder,
   TaskItem,
+  Team,
 } from '../../domain/types';
 import { formatDateToIT } from '../../utils/dateUtils';
 import {
   METRIC_ID,
+  assignmentContent,
   buildPlan,
   chunk,
+  configWrites,
   contentPaths,
   contentWrites,
   importSummary,
   memoContent,
   metricContent,
   projectContent,
+  projectFieldContent,
+  projectNoteContent,
   valueContent,
+  readAssignment,
   readLane,
   readMemo,
   readNote,
   readPrivateMemo,
   readProject,
+  readProjectField,
+  readProjectNote,
+  readStakeholder,
   readTask,
+  readTeam,
   readValue,
+  stakeholderContent,
   taskContent,
+  teamContent,
 } from './planDocs';
 
 /** The signed-in member, as recorded in every change. */
@@ -81,21 +101,17 @@ const CHUNK_SIZE = 499;
 /** Optional task fields: clearing one removes it from the document. */
 const OPTIONAL_TASK_FIELDS = new Set(['assignee', 'description', 'deliverables']);
 
-/**
- * Free notes and projects came with rules of their own. Until the owner publishes them, reading
- * them is refused: the plan opens without them, and the synchronization state says why.
- */
-const PART_NAMES: Record<PlanPart, string> = { memos: 'Note libere', projects: 'Progetti' };
-
 /** Where each part lives under the plan, to leave it out of a restore that the rules refuse. */
-const PART_PATHS: Record<PlanPart, string> = { memos: 'memos/', projects: 'projects/' };
+const PART_PATHS: Record<PlanPart, readonly string[]> = {
+  memos: ['memos/'],
+  projects: ['projects/'],
+  roadmap: ['projectNotes/', 'assignments/', 'projectFields/', 'teams/', 'stakeholders/'],
+};
 
-export function unavailableMessage(parts: readonly PlanPart[]): string {
-  const [first = '', ...others] = parts.map((part) => PART_NAMES[part]);
-  const names = [first, ...others.map((part) => part.toLowerCase())];
-  const list =
-    names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names.at(-1) ?? ''}` : first;
-  return `${list} non disponibili: chi gestisce l'istanza deve pubblicare le regole di sicurezza aggiornate.`;
+/** A write of an import: a document to set, or to delete when its data is null. */
+interface Operation {
+  path: string;
+  data: DocumentData | null;
 }
 
 type Parts = {
@@ -107,6 +123,11 @@ type Parts = {
   memos?: Memo[];
   privateMemos?: Memo[];
   projects?: Project[];
+  projectNotes?: ProjectNote[];
+  assignments?: Assignment[];
+  fields?: ProjectField[];
+  teams?: Team[];
+  stakeholders?: Stakeholder[];
 };
 
 function mapDocs<T>(
@@ -196,6 +217,33 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       part: 'projects',
       fallback: () => (this.parts.projects = []),
     });
+    // The details of the projects are one part: all five came with the rules of the 0.7.
+    const roadmap = (fallback: () => void) => ({ part: 'roadmap' as const, fallback });
+    this.listen(
+      'projectNotes',
+      (snapshot) => (this.parts.projectNotes = mapDocs(snapshot, readProjectNote)),
+      roadmap(() => (this.parts.projectNotes = [])),
+    );
+    this.listen(
+      'assignments',
+      (snapshot) => (this.parts.assignments = mapDocs(snapshot, readAssignment)),
+      roadmap(() => (this.parts.assignments = [])),
+    );
+    this.listen(
+      'projectFields',
+      (snapshot) => (this.parts.fields = mapDocs(snapshot, readProjectField)),
+      roadmap(() => (this.parts.fields = [])),
+    );
+    this.listen(
+      'teams',
+      (snapshot) => (this.parts.teams = mapDocs(snapshot, readTeam)),
+      roadmap(() => (this.parts.teams = [])),
+    );
+    this.listen(
+      'stakeholders',
+      (snapshot) => (this.parts.stakeholders = mapDocs(snapshot, readStakeholder)),
+      roadmap(() => (this.parts.stakeholders = [])),
+    );
     if (typeof window !== 'undefined') {
       const refresh = () => this.updateSync();
       window.addEventListener('online', refresh);
@@ -504,28 +552,12 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
 
   updateProject(projectId: string, changes: ProjectChanges): void {
     const current = this.plan?.projects.find((project) => project.id === projectId);
-    const fields = Object.keys(changes) as (keyof ProjectChanges)[];
     // A project deleted meanwhile, by someone else, stays deleted.
-    if (!current || fields.length === 0 || this.refusedParts.has('projects')) return;
-    const next = applyChanges<Project>(current, changes);
-    const update: DocumentData = {};
-    for (const field of fields) {
-      const value = changes[field];
-      update[field] = value === null ? deleteField() : value;
-    }
-    const batch = writeBatch(this.db);
-    const historyId = this.record(batch, 'project', projectId, 'update', {
-      before: defined(Object.fromEntries(fields.map((field) => [field, current[field]]))),
-      // The title is kept so that the history can name the project.
-      after: defined({
-        title: current.title,
-        ...Object.fromEntries(fields.map((field) => [field, next[field]])),
-      }),
-    });
-    batch.update(this.ref(`projects/${projectId}`), { ...update, ...this.audit(historyId) });
-    this.commit(batch);
+    if (!current || this.refusedParts.has('projects')) return;
+    this.updateEntity('projects', 'project', current, changes, { title: current.title });
   }
 
+  /** Removes the project with its notes and assignments, in one batch. */
   deleteProject(projectId: string): void {
     const before = this.plan?.projects.find((project) => project.id === projectId);
     // Already deleted by someone else: nothing to delete, nor to record.
@@ -533,7 +565,159 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const batch = writeBatch(this.db);
     this.record(batch, 'project', projectId, 'delete', { before: projectContent(before) });
     batch.delete(this.ref(`projects/${projectId}`));
+    if (!this.refusedParts.has('roadmap')) {
+      for (const note of this.plan?.projectNotes ?? []) {
+        if (note.projectId === projectId) batch.delete(this.ref(`projectNotes/${note.id}`));
+      }
+      for (const assignment of this.plan?.assignments ?? []) {
+        if (assignment.projectId === projectId) {
+          batch.delete(this.ref(`assignments/${assignment.id}`));
+        }
+      }
+    }
     this.commit(batch);
+  }
+
+  createProjectNote(content: ProjectNoteContent): string {
+    const id = this.createId();
+    if (this.refusedParts.has('roadmap')) return id;
+    const data = projectNoteContent({
+      ...content,
+      createdAt: this.now().toISOString(),
+      author: this.author,
+    });
+    this.createDocument('projectNotes', 'projectNote', id, data);
+    return id;
+  }
+
+  updateProjectNote(noteId: string, changes: ProjectNoteChanges): void {
+    const current = this.plan?.projectNotes.find((note) => note.id === noteId);
+    if (!current || this.refusedParts.has('roadmap')) return;
+    this.updateEntity('projectNotes', 'projectNote', current, changes, { text: current.text });
+  }
+
+  deleteProjectNote(noteId: string): void {
+    const before = this.plan?.projectNotes.find((note) => note.id === noteId);
+    if (!before || this.refusedParts.has('roadmap')) return;
+    const { id, ...content } = before;
+    this.deleteDocument('projectNotes', 'projectNote', id, projectNoteContent(content));
+  }
+
+  createAssignment(content: AssignmentContent): string {
+    const id = this.createId();
+    if (this.refusedParts.has('roadmap')) return id;
+    this.createDocument(
+      'assignments',
+      'assignment',
+      id,
+      assignmentContent(content),
+      this.assignmentNaming(content),
+    );
+    return id;
+  }
+
+  updateAssignment(assignmentId: string, changes: AssignmentChanges): void {
+    const current = this.plan?.assignments.find((item) => item.id === assignmentId);
+    if (!current || this.refusedParts.has('roadmap')) return;
+    this.updateEntity(
+      'assignments',
+      'assignment',
+      current,
+      changes,
+      this.assignmentNaming(current),
+    );
+  }
+
+  deleteAssignment(assignmentId: string): void {
+    const before = this.plan?.assignments.find((item) => item.id === assignmentId);
+    if (!before || this.refusedParts.has('roadmap')) return;
+    const { id, ...content } = before;
+    this.deleteDocument('assignments', 'assignment', id, {
+      ...assignmentContent(content),
+      ...this.assignmentNaming(before),
+    });
+  }
+
+  saveProjectField(field: ProjectField): void {
+    if (this.refusedParts.has('roadmap')) return;
+    const { id, ...content } = field;
+    const existing = this.plan?.roadmap.fields.find((item) => item.id === id);
+    this.saveDocument(
+      'projectFields',
+      'projectField',
+      id,
+      projectFieldContent(content),
+      existing && projectFieldContent(existing),
+    );
+  }
+
+  deleteProjectField(fieldId: string): void {
+    const before = this.plan?.roadmap.fields.find((item) => item.id === fieldId);
+    if (!before || this.refusedParts.has('roadmap')) return;
+    this.deleteDocument('projectFields', 'projectField', fieldId, projectFieldContent(before));
+  }
+
+  saveTeam(team: Team): void {
+    if (this.refusedParts.has('roadmap')) return;
+    const { id, ...content } = team;
+    const existing = this.plan?.roadmap.teams.find((item) => item.id === id);
+    this.saveDocument('teams', 'team', id, teamContent(content), existing && teamContent(existing));
+  }
+
+  deleteTeam(teamId: string): void {
+    const before = this.plan?.roadmap.teams.find((item) => item.id === teamId);
+    if (!before || this.refusedParts.has('roadmap')) return;
+    this.deleteDocument('teams', 'team', teamId, teamContent(before));
+  }
+
+  saveStakeholder(stakeholder: Stakeholder): void {
+    if (this.refusedParts.has('roadmap')) return;
+    const { id, ...content } = stakeholder;
+    const existing = this.plan?.roadmap.stakeholders.find((item) => item.id === id);
+    this.saveDocument(
+      'stakeholders',
+      'stakeholder',
+      id,
+      stakeholderContent(content),
+      existing && stakeholderContent(existing),
+    );
+  }
+
+  /** Removes the person with their assignments, in one batch. */
+  deleteStakeholder(stakeholderId: string): void {
+    const before = this.plan?.roadmap.stakeholders.find((item) => item.id === stakeholderId);
+    if (!before || this.refusedParts.has('roadmap')) return;
+    const batch = writeBatch(this.db);
+    this.record(batch, 'stakeholder', stakeholderId, 'delete', {
+      before: stakeholderContent(before),
+    });
+    batch.delete(this.ref(`stakeholders/${stakeholderId}`));
+    for (const assignment of this.plan?.assignments ?? []) {
+      if (assignment.stakeholderId === stakeholderId) {
+        batch.delete(this.ref(`assignments/${assignment.id}`));
+      }
+    }
+    this.commit(batch);
+  }
+
+  replaceRoadmapConfig(config: RoadmapConfig): void {
+    if (this.refusedParts.has('roadmap')) return;
+    const writes = configWrites(config);
+    const keep = new Set(writes.map((write) => write.path));
+    const deletions = this.plan
+      ? configWrites(this.plan.roadmap)
+          .map((write) => write.path)
+          .filter((path) => !keep.has(path))
+      : [];
+    const count = (items: readonly unknown[], one: string, many: string) =>
+      `${items.length} ${items.length === 1 ? one : many}`;
+    this.importOperations(
+      [
+        ...deletions.map((path) => ({ path, data: null })),
+        ...writes.map((write) => ({ path: write.path, data: write.data })),
+      ],
+      `configurazione della roadmap: ${count(config.fields, 'campo', 'campi')}, ${count(config.teams, 'team', 'team')}, ${count(config.stakeholders, 'persona', 'persone')}`,
+    );
   }
 
   replacePlan(plan: PlanSnapshot): void {
@@ -545,31 +729,49 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
         memo.private || !memo.author ? [] : [[memo.id, memo.author] as const],
       ),
     );
+    const noteAuthors = new Map(
+      (this.plan?.projectNotes ?? []).flatMap((note) =>
+        note.author ? [[note.id, note.author] as const] : [],
+      ),
+    );
     const imported = {
       ...plan,
       memos: plan.memos.map((memo) => ({
         ...memo,
         author: authors.get(memo.id) ?? memo.author ?? this.author,
       })),
+      projectNotes: plan.projectNotes.map((note) => ({
+        ...note,
+        author: noteAuthors.get(note.id) ?? note.author ?? this.author,
+      })),
     };
     // A part the published rules refuse would make every batch fail: the rest goes in without it.
     const allowed = (path: string) =>
-      [...this.refusedParts].every((part) => !path.startsWith(PART_PATHS[part]));
+      [...this.refusedParts].every(
+        (part) => !PART_PATHS[part].some((prefix) => path.startsWith(prefix)),
+      );
     const writes = contentWrites(imported).filter((write) => allowed(write.path));
     const keep = new Set(writes.map((write) => write.path));
     const deletions = this.plan
       ? contentPaths(this.plan).filter((path) => allowed(path) && !keep.has(path))
       : [];
-    const operations = [
-      ...deletions.map((path) => ({ path, data: null })),
-      ...writes.map((write) => ({ path: write.path, data: write.data })),
-    ];
+    this.importOperations(
+      [
+        ...deletions.map((path) => ({ path, data: null })),
+        ...writes.map((write) => ({ path: write.path, data: write.data })),
+      ],
+      importSummary(imported),
+    );
+  }
+
+  /** Writes an import in batches of at most CHUNK_SIZE, each with its history entry. */
+  private importOperations(operations: readonly Operation[], summary: string): void {
     const groups = chunk(operations, CHUNK_SIZE);
     groups.forEach((group, index) => {
       const batch = writeBatch(this.db);
       const part = groups.length > 1 ? ` (parte ${index + 1} di ${groups.length})` : '';
       const historyId = this.record(batch, 'plan', 'main', 'import', {
-        summary: `${importSummary(imported)}${part}`,
+        summary: `${summary}${part}`,
       });
       for (const operation of group) {
         if (operation.data === null) batch.delete(this.ref(operation.path));
@@ -577,6 +779,85 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       }
       this.commit(batch);
     });
+  }
+
+  /** What names an assignment in the history: the person, when the configuration knows them. */
+  private assignmentNaming(assignment: Pick<Assignment, 'stakeholderId'>): DocumentData {
+    const name = this.plan?.roadmap.stakeholders.find(
+      (item) => item.id === assignment.stakeholderId,
+    )?.name;
+    return name ? { name } : {};
+  }
+
+  /** Writes a new document with its history entry; `naming` goes in the entry only. */
+  private createDocument(
+    path: string,
+    entity: HistoryEntity,
+    id: string,
+    data: DocumentData,
+    naming: DocumentData = {},
+  ): void {
+    const batch = writeBatch(this.db);
+    const historyId = this.record(batch, entity, id, 'create', { after: { ...data, ...naming } });
+    batch.set(this.ref(`${path}/${id}`), { ...data, ...this.audit(historyId) });
+    this.commit(batch);
+  }
+
+  /** Writes a whole document, new or in place of the one before, with its history entry. */
+  private saveDocument(
+    path: string,
+    entity: HistoryEntity,
+    id: string,
+    data: DocumentData,
+    before: DocumentData | undefined,
+  ): void {
+    const batch = writeBatch(this.db);
+    const historyId = this.record(batch, entity, id, before ? 'update' : 'create', {
+      before,
+      after: data,
+    });
+    batch.set(this.ref(`${path}/${id}`), { ...data, ...this.audit(historyId) });
+    this.commit(batch);
+  }
+
+  private deleteDocument(path: string, entity: HistoryEntity, id: string, before: DocumentData) {
+    const batch = writeBatch(this.db);
+    this.record(batch, entity, id, 'delete', { before });
+    batch.delete(this.ref(`${path}/${id}`));
+    this.commit(batch);
+  }
+
+  /**
+   * Writes the changed fields of an entity, null removing one, with a history entry that keeps
+   * what changed before and after, and `naming` in `after` so that the history can name it.
+   */
+  private updateEntity<T extends { id: string }>(
+    path: string,
+    entity: HistoryEntity,
+    current: T,
+    changes: FieldChanges<T>,
+    naming: DocumentData,
+  ): void {
+    const fields = (Object.keys(changes) as (keyof T & string)[]).filter(
+      (field) => changes[field] !== undefined,
+    );
+    if (fields.length === 0) return;
+    const next = applyChanges(current, changes);
+    const update: DocumentData = {};
+    for (const field of fields) {
+      const value = changes[field];
+      update[field] = value === null ? deleteField() : value;
+    }
+    const batch = writeBatch(this.db);
+    const historyId = this.record(batch, entity, current.id, 'update', {
+      before: defined(Object.fromEntries(fields.map((field) => [field, current[field]]))),
+      after: defined({
+        ...naming,
+        ...Object.fromEntries(fields.map((field) => [field, next[field]])),
+      }),
+    });
+    batch.update(this.ref(`${path}/${current.id}`), { ...update, ...this.audit(historyId) });
+    this.commit(batch);
   }
 
   private ref(path: string) {
@@ -638,9 +919,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
   private updateSync(): void {
     // Node has a navigator without onLine: only an explicit false means offline.
     const online = typeof navigator === 'undefined' || navigator.onLine !== false;
-    const unavailable =
-      this.refusedParts.size > 0 ? unavailableMessage([...this.refusedParts]) : this.unreadable;
-    const error = this.lastError ?? unavailable;
+    const error = this.lastError ?? this.unreadable;
     const status: SyncStatus = error
       ? 'error'
       : this.pendingCommits > 0
@@ -705,8 +984,10 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
 
   private emitIfComplete(): void {
     const { lanes, tasks, metricIds, values, notes, memos, privateMemos, projects } = this.parts;
+    const { projectNotes, assignments, fields, teams, stakeholders } = this.parts;
     if (!lanes || !tasks || !metricIds || !values || !notes || !memos || !privateMemos || !projects)
       return;
+    if (!projectNotes || !assignments || !fields || !teams || !stakeholders) return;
     // Should a shared note ever have the id of a private one, the private note wins: what the
     // author writes there never reaches the shared one.
     const privateIds = new Set(privateMemos.map((memo) => memo.id));
@@ -718,6 +999,11 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       notes,
       memos: [...shared, ...privateMemos],
       projects,
+      projectNotes,
+      assignments,
+      fields,
+      teams,
+      stakeholders,
     });
     this.markReady();
     for (const listener of this.planListeners) listener(this.plan);

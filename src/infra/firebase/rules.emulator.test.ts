@@ -570,3 +570,277 @@ describe('projects', () => {
     await assertFails(deleteDoc(doc(stranger, `${PLAN}/projects/p1`)));
   });
 });
+
+describe('notes of the projects', () => {
+  beforeEach(seedPlan);
+
+  const AUTHOR = { id: EDITOR.githubId, login: EDITOR.login };
+  const NOTE: Record<string, unknown> = {
+    projectId: 'p1',
+    text: 'Stima: 15 giorni lato server',
+    createdAt: '2026-10-06T09:00:00.000Z',
+    author: AUTHOR,
+  };
+
+  function writeNote(
+    db: Firestore,
+    identity: Identity,
+    data: Record<string, unknown>,
+    id = 'n1',
+    action = 'create',
+  ) {
+    const historyId = `h-${id}-${Math.random().toString(36).slice(2)}`;
+    const batch = writeBatch(db);
+    const ref = doc(db, `${PLAN}/projectNotes/${id}`);
+    if (action === 'update') batch.update(ref, { ...data, ...audit(identity, historyId) });
+    else batch.set(ref, { ...data, ...audit(identity, historyId) });
+    batch.set(
+      doc(db, `${PLAN}/history/${historyId}`),
+      historyEntry(identity, 'projectNote', id, action),
+    );
+    return batch.commit();
+  }
+
+  it('accepts a note by its writer, with or without the optional fields', async () => {
+    await assertSucceeds(writeNote(editor, EDITOR, NOTE));
+    await assertSucceeds(
+      writeNote(
+        editor,
+        EDITOR,
+        {
+          ...NOTE,
+          status: 'open',
+          dueOn: '2026-10-20',
+          remind: true,
+          owners: ['Giulia', 'Marco'],
+          tags: ['stima'],
+        },
+        'n2',
+      ),
+    );
+    await assertSucceeds(getDocs(collection(editor, `${PLAN}/projectNotes`)));
+    await assertSucceeds(deleteDoc(doc(owner, `${PLAN}/projectNotes/n2`)));
+  });
+
+  it('refuses a note without a history entry, and bad fields', async () => {
+    await assertFails(
+      setDoc(doc(editor, `${PLAN}/projectNotes/n1`), { ...NOTE, ...audit(EDITOR, 'h9') }),
+    );
+    await assertFails(writeNote(editor, EDITOR, { ...NOTE, text: '' }));
+    await assertFails(writeNote(editor, EDITOR, { ...NOTE, text: 'x'.repeat(2001) }));
+    await assertFails(writeNote(editor, EDITOR, { ...NOTE, createdAt: '2026-10-06' }));
+    await assertFails(writeNote(editor, EDITOR, { ...NOTE, status: 'maybe' }));
+    await assertFails(writeNote(editor, EDITOR, { ...NOTE, dueOn: '20/10/2026' }));
+    await assertFails(writeNote(editor, EDITOR, { ...NOTE, remind: true }));
+    await assertFails(writeNote(editor, EDITOR, { ...NOTE, owners: 'Giulia' }));
+    await assertFails(writeNote(editor, EDITOR, { ...NOTE, pinned: true }));
+    const { author: _author, ...anonymous } = NOTE;
+    await assertFails(writeNote(editor, EDITOR, anonymous));
+  });
+
+  it('wants the writer as author, keeps author, project and time, and lets an import keep other authors', async () => {
+    await assertFails(writeNote(owner, OWNER, NOTE));
+    await assertSucceeds(writeNote(owner, OWNER, NOTE, 'n1', 'import'));
+    await assertSucceeds(
+      writeNote(owner, OWNER, { text: 'Stima rivista', status: 'done' }, 'n1', 'update'),
+    );
+    await assertFails(
+      writeNote(
+        owner,
+        OWNER,
+        { author: { id: OWNER.githubId, login: OWNER.login } },
+        'n1',
+        'update',
+      ),
+    );
+    await assertFails(writeNote(owner, OWNER, { projectId: 'p2' }, 'n1', 'update'));
+    await assertFails(
+      writeNote(owner, OWNER, { createdAt: '2026-10-07T09:00:00.000Z' }, 'n1', 'update'),
+    );
+  });
+
+  it('keeps strangers and anonymous visitors out', async () => {
+    await assertSucceeds(writeNote(editor, EDITOR, NOTE));
+    await assertFails(writeNote(stranger, STRANGER, NOTE, 'n2'));
+    await assertFails(getDocs(collection(stranger, `${PLAN}/projectNotes`)));
+    await assertFails(getDoc(doc(nobody, `${PLAN}/projectNotes/n1`)));
+    await assertFails(deleteDoc(doc(stranger, `${PLAN}/projectNotes/n1`)));
+  });
+});
+
+describe('assignments', () => {
+  beforeEach(seedPlan);
+
+  const ASSIGNMENT: Record<string, unknown> = {
+    projectId: 'p1',
+    stakeholderId: 'server-1',
+    startDate: '2026-12-15',
+    manDays: 15,
+  };
+
+  function writeAssignment(
+    db: Firestore,
+    identity: Identity,
+    data: Record<string, unknown>,
+    id = 'a1',
+    update = false,
+  ) {
+    const historyId = `h-${id}-${Math.random().toString(36).slice(2)}`;
+    const batch = writeBatch(db);
+    const ref = doc(db, `${PLAN}/assignments/${id}`);
+    if (update) batch.update(ref, { ...data, ...audit(identity, historyId) });
+    else batch.set(ref, { ...data, ...audit(identity, historyId) });
+    batch.set(
+      doc(db, `${PLAN}/history/${historyId}`),
+      historyEntry(identity, 'assignment', id, update ? 'update' : 'create'),
+    );
+    return batch.commit();
+  }
+
+  it('accepts an assignment with its history entry, with or without a note, and its changes', async () => {
+    await assertSucceeds(writeAssignment(editor, EDITOR, ASSIGNMENT));
+    await assertSucceeds(
+      writeAssignment(owner, OWNER, { ...ASSIGNMENT, manDays: 2.5, note: 'Collaudo' }, 'a2'),
+    );
+    await assertSucceeds(writeAssignment(editor, EDITOR, { startDate: '2027-01-11' }, 'a2', true));
+    await assertSucceeds(getDocs(collection(editor, `${PLAN}/assignments`)));
+    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/assignments/a2`)));
+  });
+
+  it('refuses bad efforts, dates, people and extra fields', async () => {
+    await assertFails(
+      setDoc(doc(editor, `${PLAN}/assignments/a1`), { ...ASSIGNMENT, ...audit(EDITOR, 'h9') }),
+    );
+    await assertFails(writeAssignment(editor, EDITOR, { ...ASSIGNMENT, manDays: 0 }));
+    await assertFails(writeAssignment(editor, EDITOR, { ...ASSIGNMENT, manDays: 501 }));
+    await assertFails(writeAssignment(editor, EDITOR, { ...ASSIGNMENT, manDays: '15' }));
+    await assertFails(writeAssignment(editor, EDITOR, { ...ASSIGNMENT, startDate: '15/12/2026' }));
+    await assertFails(writeAssignment(editor, EDITOR, { ...ASSIGNMENT, stakeholderId: 'bad id!' }));
+    await assertFails(writeAssignment(editor, EDITOR, { ...ASSIGNMENT, note: '' }));
+    await assertFails(writeAssignment(editor, EDITOR, { ...ASSIGNMENT, endDate: '2027-01-31' }));
+  });
+
+  it('keeps strangers and anonymous visitors out', async () => {
+    await assertSucceeds(writeAssignment(editor, EDITOR, ASSIGNMENT));
+    await assertFails(writeAssignment(stranger, STRANGER, ASSIGNMENT, 'a2'));
+    await assertFails(getDocs(collection(stranger, `${PLAN}/assignments`)));
+    await assertFails(getDoc(doc(nobody, `${PLAN}/assignments/a1`)));
+    await assertFails(deleteDoc(doc(stranger, `${PLAN}/assignments/a1`)));
+  });
+});
+
+describe('configuration of the roadmap', () => {
+  beforeEach(seedPlan);
+
+  const FIELD: Record<string, unknown> = {
+    label: 'Jira epics',
+    type: 'url',
+    multiple: true,
+    required: false,
+    main: true,
+    position: 2,
+  };
+  const TEAM: Record<string, unknown> = { name: 'QA', tag: 'QA', colorId: 'ice', position: 3 };
+  const PERSON: Record<string, unknown> = {
+    name: 'QA #1',
+    teamId: 'qa',
+    absences: [],
+    position: 0,
+  };
+
+  function writeConfig(
+    db: Firestore,
+    identity: Identity,
+    path: 'projectFields' | 'teams' | 'stakeholders',
+    id: string,
+    data: Record<string, unknown>,
+    action = 'create',
+  ) {
+    const entity = { projectFields: 'projectField', teams: 'team', stakeholders: 'stakeholder' }[
+      path
+    ];
+    const historyId = `h-${id}-${Math.random().toString(36).slice(2)}`;
+    const batch = writeBatch(db);
+    batch.set(doc(db, `${PLAN}/${path}/${id}`), { ...data, ...audit(identity, historyId) });
+    batch.set(doc(db, `${PLAN}/history/${historyId}`), historyEntry(identity, entity, id, action));
+    return batch.commit();
+  }
+
+  it('accepts fields, teams and people with their history entries, and their replacement', async () => {
+    await assertSucceeds(writeConfig(editor, EDITOR, 'projectFields', 'jiraEpics', FIELD));
+    await assertSucceeds(
+      writeConfig(editor, EDITOR, 'projectFields', 'impactedTeams', {
+        ...FIELD,
+        label: 'Team impattati',
+        description: 'I team il cui lavoro serve.',
+        type: 'choice',
+        options: [
+          { id: 'qa', label: 'QA' },
+          { id: 'ba', label: 'BA' },
+        ],
+      }),
+    );
+    await assertSucceeds(
+      writeConfig(owner, OWNER, 'projectFields', 'jiraEpics', { ...FIELD, main: false }, 'update'),
+    );
+    await assertSucceeds(writeConfig(editor, EDITOR, 'teams', 'qa', TEAM));
+    await assertSucceeds(writeConfig(editor, EDITOR, 'stakeholders', 'qa-1', PERSON));
+    await assertSucceeds(
+      writeConfig(editor, EDITOR, 'stakeholders', 'qa-2', {
+        ...PERSON,
+        name: 'QA #2',
+        info: 'Part time',
+        absences: [{ start: '2026-12-20', end: '2027-01-20', reason: 'Ferie' }],
+      }),
+    );
+    await assertSucceeds(getDocs(collection(editor, `${PLAN}/projectFields`)));
+    await assertSucceeds(getDocs(collection(editor, `${PLAN}/teams`)));
+    await assertSucceeds(getDocs(collection(editor, `${PLAN}/stakeholders`)));
+    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/stakeholders/qa-2`)));
+    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/teams/qa`)));
+    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/projectFields/jiraEpics`)));
+  });
+
+  it('refuses bad ids, a choice without values, values on a link, unknown types and colors', async () => {
+    await assertFails(writeConfig(editor, EDITOR, 'projectFields', 'bad id!', FIELD));
+    await assertFails(
+      writeConfig(editor, EDITOR, 'projectFields', 'x', { ...FIELD, type: 'choice' }),
+    );
+    await assertFails(
+      writeConfig(editor, EDITOR, 'projectFields', 'x', {
+        ...FIELD,
+        options: [{ id: 'a', label: 'A' }],
+      }),
+    );
+    await assertFails(
+      writeConfig(editor, EDITOR, 'projectFields', 'x', { ...FIELD, type: 'attachment' }),
+    );
+    await assertFails(writeConfig(editor, EDITOR, 'projectFields', 'x', { ...FIELD, label: '' }));
+    await assertFails(
+      writeConfig(editor, EDITOR, 'projectFields', 'x', { ...FIELD, multiple: 'yes' }),
+    );
+    await assertFails(
+      writeConfig(editor, EDITOR, 'projectFields', 'x', { ...FIELD, position: '2' }),
+    );
+    await assertFails(writeConfig(editor, EDITOR, 'teams', 'qa', { ...TEAM, colorId: 'pink' }));
+    await assertFails(writeConfig(editor, EDITOR, 'teams', 'qa', { ...TEAM, tag: '' }));
+    await assertFails(writeConfig(editor, EDITOR, 'teams', 'bad id!', TEAM));
+    await assertFails(
+      writeConfig(editor, EDITOR, 'stakeholders', 'qa-1', { ...PERSON, teamId: '' }),
+    );
+    await assertFails(
+      writeConfig(editor, EDITOR, 'stakeholders', 'qa-1', { ...PERSON, absences: 'x' }),
+    );
+    await assertFails(
+      writeConfig(editor, EDITOR, 'stakeholders', 'qa-1', { ...PERSON, email: 'x' }),
+    );
+  });
+
+  it('keeps strangers and anonymous visitors out', async () => {
+    await assertSucceeds(writeConfig(editor, EDITOR, 'teams', 'qa', TEAM));
+    await assertFails(writeConfig(stranger, STRANGER, 'teams', 'ba', TEAM));
+    await assertFails(getDocs(collection(stranger, `${PLAN}/teams`)));
+    await assertFails(getDoc(doc(nobody, `${PLAN}/teams/qa`)));
+    await assertFails(deleteDoc(doc(stranger, `${PLAN}/teams/qa`)));
+  });
+});
