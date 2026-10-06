@@ -76,6 +76,8 @@ export type FieldType = 'text' | 'textarea' | 'number' | 'price' | 'url' | 'date
 export interface FieldOption {
   id: string;
   label: string;
+  /** The color of the value's tag: a task color, readable in every theme. None: a neutral tag. */
+  colorId?: TaskColorId;
 }
 
 /** A custom field of the projects, as Settings → Roadmap defines it. */
@@ -91,6 +93,11 @@ export interface ProjectField {
   required: boolean;
   /** Shown under the title of the project at the "Info principali" level of the roadmap. */
   main: boolean;
+  /**
+   * The roadmap can group the projects by the value of this field. Only a choice with one value
+   * groups: each project then belongs to one group. Kept only when true.
+   */
+  group?: true;
   /** Choice fields: the values to choose from, in order. */
   options?: FieldOption[];
   /** Order among the fields. */

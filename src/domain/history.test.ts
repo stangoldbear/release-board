@@ -186,6 +186,32 @@ describe('projects in the history', () => {
   });
 });
 
+describe('fields of the projects in the history', () => {
+  it('shows the values of a list with their colors, and the flag that groups', () => {
+    const entry = noteEntry({
+      entity: 'projectField',
+      entityId: 'projectSize',
+      before: { options: [{ id: 'big', label: 'Big project' }] },
+      after: {
+        label: 'Dimensione',
+        group: true,
+        options: [
+          { id: 'big', label: 'Big project', colorId: 'purple' },
+          { id: 'small', label: 'Small project' },
+        ],
+      },
+    });
+    expect(fieldChanges(entry, () => undefined)).toEqual([
+      { label: 'Raggruppa', after: 'Sì' },
+      {
+        label: 'Valori',
+        before: 'Big project',
+        after: 'Big project (Viola), Small project',
+      },
+    ]);
+  });
+});
+
 describe('entries read from the database', () => {
   it('know their kinds of change and of entity', () => {
     expect(isHistoryEntity('memo')).toBe(true);

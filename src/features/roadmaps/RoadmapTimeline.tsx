@@ -1,15 +1,16 @@
-import { memo, useId, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Plus, UserRound } from 'lucide-react';
 import { assignmentsOfProject, scheduleAssignment } from '../../domain/assignments';
 import type { AssignmentChanges } from '../../domain/assignments';
 import { applyChanges } from '../../domain/changes';
 import type { ProjectChanges } from '../../domain/projects';
-import { teamOf } from '../../domain/roadmapConfig';
+import { groupProjects, teamOf } from '../../domain/roadmapConfig';
 import { ZOOM_COLUMN_UNIT, placeTasks } from '../../domain/schedule';
 import type { DateRange, ZoomLevel } from '../../domain/schedule';
 import type {
   Assignment,
+  FieldOption,
   Project,
   ProjectField,
   RoadmapConfig,
@@ -35,7 +36,7 @@ import type { Column } from '../calendar/timelineLayout';
 import { useTimelineScroll } from '../calendar/useTimelineScroll';
 import { useZoomGestures } from '../calendar/useZoomGestures';
 import { AssignmentBar, assignmentBarId } from './AssignmentBar';
-import { FieldValueList } from './fieldUi';
+import { FieldTag, FieldValues } from './fieldUi';
 import { ProjectBar, projectBarId } from './ProjectBar';
 import { ProjectStatusMark } from './projectUi';
 import type { DetailLevel } from './projectUi';
@@ -65,6 +66,8 @@ interface RoadmapTimelineProps {
   searching: boolean;
   /** Titles on one line, out of their bars when longer, rather than cut. */
   oneLineTitles: boolean;
+  /** A field that groups: the projects with the same value go together, under its tag. */
+  groupBy: ProjectField | null;
   textScale: TextScale;
   compact: boolean;
   /** -1 zooms in, 1 zooms out. */
@@ -117,17 +120,73 @@ function showBar(projectId: string): void {
   });
 }
 
+/**
+ * The row above a group of projects: the value they share, as its tag, and how many they are. A
+ * heading, so that a screen reader can move from group to group.
+ */
+function GroupHeader({
+  field,
+  option,
+  count,
+  width,
+  todayOffset,
+  minHeight,
+}: {
+  field: ProjectField;
+  option: FieldOption | null;
+  count: number;
+  width: number;
+  todayOffset: number | null;
+  minHeight: number;
+}) {
+  return (
+    <div
+      className="grid border-b border-line-strong bg-surface-strong"
+      style={{ gridTemplateColumns: 'var(--gantt-label-width) auto' }}
+    >
+      <div
+        className={`${LABEL_CELL} flex items-center bg-surface-strong`}
+        style={{ gridColumn: 1, gridRow: 1, minHeight }}
+      >
+        <h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+          <span className="sr-only">{field.label}:</span>
+          {option ? (
+            <FieldTag colorId={option.colorId}>{option.label}</FieldTag>
+          ) : (
+            <span className="font-semibold">Senza valore</span>
+          )}
+          <span className="text-fg-muted">
+            {count} {count === 1 ? 'progetto' : 'progetti'}
+          </span>
+        </h3>
+      </div>
+      <div className="relative" style={{ gridColumn: 2, gridRow: 1, width }}>
+        {todayOffset !== null && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-link"
+            style={{ left: todayOffset }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** The title of a project and, from the "Info principali" level on, what describes it. */
 function ProjectInfo({
   project,
   level,
   fields,
+  hiddenFieldId,
   descriptionLines,
   onOpen,
 }: {
   project: Project;
   level: DetailLevel;
   fields: readonly ProjectField[];
+  /** The field the rows are grouped by: the header of the group already says its value. */
+  hiddenFieldId: string | undefined;
   descriptionLines: number;
   onOpen: () => void;
 }) {
@@ -177,15 +236,9 @@ function ProjectInfo({
             </span>
           )}
           {fields
-            .filter((field) => field.main)
+            .filter((field) => field.main && field.id !== hiddenFieldId)
             .map((field) => (
-              <span key={field.id} className="text-xs wrap-break-word">
-                <FieldValueList
-                  project={project}
-                  field={field}
-                  before={<span className="font-semibold text-fg-muted">{field.label}: </span>}
-                />
-              </span>
+              <FieldValues key={field.id} project={project} field={field} />
             ))}
         </>
       )}
@@ -215,6 +268,7 @@ export function RoadmapTimeline({
   textScale,
   compact,
   oneLineTitles,
+  groupBy,
   onZoom,
   onShowDays,
   onOpen,
@@ -278,6 +332,8 @@ export function RoadmapTimeline({
   };
 
   const rowStyle = { gridTemplateColumns: 'var(--gantt-label-width) auto' };
+  // Without a field to group by, one group of every project and no header.
+  const groups = groupBy ? groupProjects(projects, groupBy) : [{ option: null, projects }];
   const projectRowHeight = barHeight + rowPadding * 2;
   const personRowHeight = assignmentHeight + rowPadding;
 
@@ -319,151 +375,168 @@ export function RoadmapTimeline({
           />
 
           <div>
-            {projects.map((project) => {
-              const shown = drag?.project.id === project.id ? draggedProject(drag) : project;
-              const placed = placeTasks([shown], range).placed[0];
-              const people = level === 'team' ? assignmentsOfProject(assignments, project.id) : [];
-              const rows = 1 + people.length + (level === 'team' && !searching ? 1 : 0);
-              return (
-                <div key={project.id} className="grid border-b border-line" style={rowStyle}>
-                  <div
-                    className="relative flex"
-                    style={{ gridColumn: 2, gridRow: `1 / span ${rows}`, width: totalWidth }}
-                  >
-                    <RowCells columns={columns} />
-                    {todayOffset !== null && (
+            {groups.map((group) => (
+              <Fragment key={group.option?.id ?? 'none'}>
+                {groupBy && (
+                  <GroupHeader
+                    field={groupBy}
+                    option={group.option}
+                    count={group.projects.length}
+                    width={totalWidth}
+                    todayOffset={todayOffset}
+                    minHeight={assignmentHeight + rowPadding * 2}
+                  />
+                )}
+                {group.projects.map((project) => {
+                  const shown = drag?.project.id === project.id ? draggedProject(drag) : project;
+                  const placed = placeTasks([shown], range).placed[0];
+                  const people =
+                    level === 'team' ? assignmentsOfProject(assignments, project.id) : [];
+                  const rows = 1 + people.length + (level === 'team' && !searching ? 1 : 0);
+                  return (
+                    <div key={project.id} className="grid border-b border-line" style={rowStyle}>
                       <div
-                        aria-hidden="true"
-                        className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-link"
-                        style={{ left: todayOffset }}
-                      />
-                    )}
-                  </div>
-
-                  <div
-                    className={`${LABEL_CELL} flex flex-col justify-center gap-0.5 bg-surface-muted`}
-                    style={{ gridColumn: 1, gridRow: 1, minHeight: projectRowHeight }}
-                  >
-                    <ProjectInfo
-                      project={project}
-                      level={level}
-                      fields={config.fields}
-                      descriptionLines={metrics.descriptionLines}
-                      onOpen={() => onOpen(project)}
-                    />
-                  </div>
-                  <div
-                    className="pointer-events-none relative"
-                    style={{ gridColumn: 2, gridRow: 1, minHeight: projectRowHeight }}
-                  >
-                    {placed && (
-                      <ProjectBar
-                        placed={placed}
-                        dayWidth={dayWidth}
-                        top={`calc(50% - ${barHeight / 2}px)`}
-                        height={barHeight}
-                        overflowTitle={oneLineTitles}
-                        dragging={drag?.project.id === project.id}
-                        describedBy={helpId}
-                        onPointerDown={(event, kind) => startDrag(event, project, kind)}
-                        onOpen={() => {
-                          if (!isClickAfterDrag()) onOpen(project);
-                        }}
-                        onChange={(changes) => changeByKey(project, changes)}
-                      />
-                    )}
-                  </div>
-
-                  {people.map((assignment, index) => {
-                    const stakeholder =
-                      config.stakeholders.find((item) => item.id === assignment.stakeholderId) ??
-                      null;
-                    const team = stakeholder ? teamOf(config, stakeholder) : null;
-                    const moving =
-                      personDrag.drag?.assignment.id === assignment.id
-                        ? draggedAssignment(personDrag.drag)
-                        : assignment;
-                    const schedule = scheduleAssignment(moving, stakeholder?.absences ?? []);
-                    const gridRow = index + 2;
-                    return (
-                      <div key={assignment.id} className="contents">
-                        <div
-                          className={`${LABEL_CELL} flex items-center gap-1.5 border-t border-line/60 bg-surface-muted text-xs`}
-                          style={{ gridColumn: 1, gridRow, minHeight: personRowHeight }}
-                        >
-                          <span
+                        className="relative flex"
+                        style={{ gridColumn: 2, gridRow: `1 / span ${rows}`, width: totalWidth }}
+                      >
+                        <RowCells columns={columns} />
+                        {todayOffset !== null && (
+                          <div
                             aria-hidden="true"
-                            className="h-2 w-2 shrink-0 rounded-full border border-line-strong"
-                            style={
-                              team
-                                ? { backgroundColor: `var(--rb-task-${team.colorId}-border)` }
-                                : undefined
-                            }
+                            className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-link"
+                            style={{ left: todayOffset }}
                           />
-                          {stakeholder ? (
+                        )}
+                      </div>
+
+                      <div
+                        className={`${LABEL_CELL} flex flex-col justify-center gap-0.5 bg-surface-muted`}
+                        style={{ gridColumn: 1, gridRow: 1, minHeight: projectRowHeight }}
+                      >
+                        <ProjectInfo
+                          project={project}
+                          level={level}
+                          fields={config.fields}
+                          hiddenFieldId={groupBy?.id}
+                          descriptionLines={metrics.descriptionLines}
+                          onOpen={() => onOpen(project)}
+                        />
+                      </div>
+                      <div
+                        className="pointer-events-none relative"
+                        style={{ gridColumn: 2, gridRow: 1, minHeight: projectRowHeight }}
+                      >
+                        {placed && (
+                          <ProjectBar
+                            placed={placed}
+                            dayWidth={dayWidth}
+                            top={`calc(50% - ${barHeight / 2}px)`}
+                            height={barHeight}
+                            overflowTitle={oneLineTitles}
+                            dragging={drag?.project.id === project.id}
+                            describedBy={helpId}
+                            onPointerDown={(event, kind) => startDrag(event, project, kind)}
+                            onOpen={() => {
+                              if (!isClickAfterDrag()) onOpen(project);
+                            }}
+                            onChange={(changes) => changeByKey(project, changes)}
+                          />
+                        )}
+                      </div>
+
+                      {people.map((assignment, index) => {
+                        const stakeholder =
+                          config.stakeholders.find(
+                            (item) => item.id === assignment.stakeholderId,
+                          ) ?? null;
+                        const team = stakeholder ? teamOf(config, stakeholder) : null;
+                        const moving =
+                          personDrag.drag?.assignment.id === assignment.id
+                            ? draggedAssignment(personDrag.drag)
+                            : assignment;
+                        const schedule = scheduleAssignment(moving, stakeholder?.absences ?? []);
+                        const gridRow = index + 2;
+                        return (
+                          <div key={assignment.id} className="contents">
+                            <div
+                              className={`${LABEL_CELL} flex items-center gap-1.5 border-t border-line/60 bg-surface-muted text-xs`}
+                              style={{ gridColumn: 1, gridRow, minHeight: personRowHeight }}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className="h-2 w-2 shrink-0 rounded-full border border-line-strong"
+                                style={
+                                  team
+                                    ? { backgroundColor: `var(--rb-task-${team.colorId}-border)` }
+                                    : undefined
+                                }
+                              />
+                              {stakeholder ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenStakeholder(stakeholder)}
+                                  title="Modifica la persona: nome, team, info e assenze"
+                                  className="min-w-0 cursor-pointer truncate text-left font-semibold hover:underline"
+                                >
+                                  {stakeholder.name}
+                                </button>
+                              ) : (
+                                <span className="truncate text-fg-muted">
+                                  Persona non in configurazione
+                                </span>
+                              )}
+                              {team && <span className="shrink-0 text-fg-muted">{team.tag}</span>}
+                            </div>
+                            <div
+                              className="pointer-events-none relative"
+                              style={{ gridColumn: 2, gridRow, minHeight: personRowHeight }}
+                            >
+                              <AssignmentBar
+                                assignment={moving}
+                                schedule={schedule}
+                                stakeholder={stakeholder}
+                                team={team}
+                                range={range}
+                                dayWidth={dayWidth}
+                                height={assignmentHeight}
+                                overflowTitle={oneLineTitles}
+                                dragging={personDrag.drag?.assignment.id === assignment.id}
+                                describedBy={assignmentHelpId}
+                                onPointerDown={(event) => personDrag.startDrag(event, assignment)}
+                                onOpen={() => {
+                                  if (!personDrag.isClickAfterDrag()) onOpenAssignment(assignment);
+                                }}
+                                onChange={(changes) => changeAssignmentByKey(assignment, changes)}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {level === 'team' && !searching && (
+                        <>
+                          <div
+                            className={`${LABEL_CELL} flex items-center border-t border-line/60 bg-surface-muted`}
+                            style={{ gridColumn: 1, gridRow: rows, minHeight: personRowHeight }}
+                          >
                             <button
                               type="button"
-                              onClick={() => onOpenStakeholder(stakeholder)}
-                              title="Modifica la persona: nome, team, info e assenze"
-                              className="min-w-0 cursor-pointer truncate text-left font-semibold hover:underline"
+                              onClick={() => onAddAssignment(project)}
+                              className="flex cursor-pointer items-center gap-1 text-xs font-medium text-link hover:underline"
                             >
-                              {stakeholder.name}
+                              <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                              Persona
+                              <span className="sr-only"> che lavora a «{project.title}»</span>
                             </button>
-                          ) : (
-                            <span className="truncate text-fg-muted">
-                              Persona non in configurazione
-                            </span>
-                          )}
-                          {team && <span className="shrink-0 text-fg-muted">{team.tag}</span>}
-                        </div>
-                        <div
-                          className="pointer-events-none relative"
-                          style={{ gridColumn: 2, gridRow, minHeight: personRowHeight }}
-                        >
-                          <AssignmentBar
-                            assignment={moving}
-                            schedule={schedule}
-                            stakeholder={stakeholder}
-                            team={team}
-                            range={range}
-                            dayWidth={dayWidth}
-                            height={assignmentHeight}
-                            overflowTitle={oneLineTitles}
-                            dragging={personDrag.drag?.assignment.id === assignment.id}
-                            describedBy={assignmentHelpId}
-                            onPointerDown={(event) => personDrag.startDrag(event, assignment)}
-                            onOpen={() => {
-                              if (!personDrag.isClickAfterDrag()) onOpenAssignment(assignment);
-                            }}
-                            onChange={(changes) => changeAssignmentByKey(assignment, changes)}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {level === 'team' && !searching && (
-                    <>
-                      <div
-                        className={`${LABEL_CELL} flex items-center border-t border-line/60 bg-surface-muted`}
-                        style={{ gridColumn: 1, gridRow: rows, minHeight: personRowHeight }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => onAddAssignment(project)}
-                          className="flex cursor-pointer items-center gap-1 text-xs font-medium text-link hover:underline"
-                        >
-                          <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                          Persona
-                          <span className="sr-only"> che lavora a «{project.title}»</span>
-                        </button>
-                      </div>
-                      <div style={{ gridColumn: 2, gridRow: rows }} />
-                    </>
-                  )}
-                </div>
-              );
-            })}
+                          </div>
+                          <div style={{ gridColumn: 2, gridRow: rows }} />
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </Fragment>
+            ))}
 
             {searching ? (
               projects.length === 0 && (

@@ -3,6 +3,7 @@ import { CURRENCIES } from '../../domain/roadmapConfig';
 import type { ProjectField } from '../../domain/types';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { emptyDraft } from './fieldDrafts';
+import { FieldTag } from './fieldUi';
 import type { FieldDraft, FieldDrafts } from './fieldDrafts';
 
 interface ProjectFieldsEditorProps {
@@ -33,19 +34,33 @@ function FieldControl({
   const invalid = problem !== undefined;
   if (draft.kind === 'choice') {
     const options = field.options ?? [];
-    if (field.multiple) {
-      return (
-        <div
-          role="group"
-          aria-labelledby={`${controlId}-label`}
-          aria-describedby={describedBy}
-          className="flex flex-wrap gap-x-4 gap-y-1.5"
-        >
-          {options.map((option) => (
-            <label
-              key={option.id}
-              className="inline-flex cursor-pointer items-center gap-1.5 text-sm"
-            >
+    // The values as the roadmap shows them, tags in their colors: checkboxes when they add up,
+    // radio buttons with "Nessuno" when one excludes the others.
+    return (
+      <div
+        role={field.multiple ? 'group' : 'radiogroup'}
+        aria-labelledby={`${controlId}-label`}
+        aria-describedby={describedBy}
+        aria-invalid={invalid || undefined}
+        className="flex flex-wrap gap-x-4 gap-y-1.5"
+      >
+        {!field.multiple && (
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm">
+            <input
+              type="radio"
+              name={controlId}
+              checked={draft.ids.length === 0}
+              onChange={() => onChange({ kind: 'choice', ids: [] })}
+            />
+            Nessuno
+          </label>
+        )}
+        {options.map((option) => (
+          <label
+            key={option.id}
+            className="inline-flex cursor-pointer items-center gap-1.5 text-sm"
+          >
+            {field.multiple ? (
               <input
                 type="checkbox"
                 checked={draft.ids.includes(option.id)}
@@ -58,30 +73,18 @@ function FieldControl({
                   })
                 }
               />
-              {option.label}
-            </label>
-          ))}
-        </div>
-      );
-    }
-    return (
-      <select
-        id={controlId}
-        value={draft.ids[0] ?? ''}
-        aria-invalid={invalid || undefined}
-        aria-describedby={describedBy}
-        onChange={(event) =>
-          onChange({ kind: 'choice', ids: event.target.value ? [event.target.value] : [] })
-        }
-        className={FIELD_CLASS}
-      >
-        <option value="">Nessuno</option>
-        {options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
+            ) : (
+              <input
+                type="radio"
+                name={controlId}
+                checked={draft.ids[0] === option.id}
+                onChange={() => onChange({ kind: 'choice', ids: [option.id] })}
+              />
+            )}
+            <FieldTag colorId={option.colorId}>{option.label}</FieldTag>
+          </label>
         ))}
-      </select>
+      </div>
     );
   }
   if (draft.kind === 'price') {
@@ -191,7 +194,7 @@ export function ProjectFieldsEditor({
         const problemId = problem ? `${controlId}-problem` : undefined;
         const describedBy = [descriptionId, problemId].filter(Boolean).join(' ') || undefined;
         const draft = drafts[field.id] ?? emptyDraft(field);
-        const labelsGroup = draft.kind === 'choice' && field.multiple;
+        const labelsGroup = draft.kind === 'choice';
         return (
           <div key={field.id}>
             {labelsGroup ? (

@@ -90,6 +90,11 @@ export const FIELD_FLAG_INFO = {
     description:
       'Il valore compare sotto il titolo nella roadmap, al livello «Info principali», e non solo nella finestra del progetto.',
   },
+  group: {
+    label: 'Raggruppa',
+    description:
+      'La roadmap può raggruppare i progetti per i valori di questo campo: si sceglie in «Raggruppa per», sotto la roadmap. Solo per una lista di valori esclusivi, così ogni progetto sta in un gruppo solo.',
+  },
 } as const;
 
 /** Currencies offered first; any three-letter code is accepted. */
@@ -171,7 +176,12 @@ function parseOptions(value: unknown): FieldOption[] | null {
     if (!isData(item) || !isRoadmapId(item.id)) return null;
     const label = text(item.label, FIELD_OPTION_LABEL_MAX);
     if (!label || options.some((option) => option.id === item.id)) return null;
-    options.push({ id: item.id, label });
+    const option: FieldOption = { id: item.id, label };
+    // A color the app does not know is left out: the value shows as a neutral tag.
+    if (typeof item.colorId === 'string' && isKnownColorId(item.colorId)) {
+      option.colorId = item.colorId;
+    }
+    options.push(option);
   }
   return options;
 }
@@ -201,7 +211,40 @@ export function parseProjectField(
     if (!options || options.length === 0) return null;
     field.options = options;
   }
+  if (value.group === true && isGroupable({ ...field, group: true })) field.group = true;
   return field;
+}
+
+/** Whether the roadmap can group the projects by a field: a choice of one value, marked so. */
+export function isGroupable(field: Pick<ProjectField, 'type' | 'multiple' | 'group'>): boolean {
+  return field.group === true && field.type === 'choice' && !field.multiple;
+}
+
+/** The projects with the same value of a field; the option is null for those without one. */
+export interface ProjectGroup<T> {
+  option: FieldOption | null;
+  projects: T[];
+}
+
+/**
+ * The projects grouped by the value of a field that groups: in the order of its options, then the
+ * projects without a value, or with one no longer among the options. Each group keeps the order of
+ * the projects; empty groups are left out.
+ */
+export function groupProjects<T extends Pick<Project, 'fields'>>(
+  projects: readonly T[],
+  field: ProjectField,
+): ProjectGroup<T>[] {
+  const valueOf = (project: T) => {
+    const [value] = fieldValuesOf(project, field);
+    return typeof value === 'string' ? value : null;
+  };
+  const groups: ProjectGroup<T>[] = (field.options ?? []).map((option) => ({
+    option,
+    projects: projects.filter((project) => valueOf(project) === option.id),
+  }));
+  groups.push({ option: null, projects: projects.filter((project) => valueOf(project) === null) });
+  return groups.filter((group) => group.projects.length > 0);
 }
 
 export function isFieldType(value: unknown): value is FieldType {

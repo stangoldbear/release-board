@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { RotateCcw, SlidersHorizontal, Users } from 'lucide-react';
-import { defaultRoadmapConfig, isRoadmapConfigEmpty } from '../../domain/roadmapConfig';
+import {
+  defaultRoadmapConfig,
+  isGroupable,
+  isRoadmapConfigEmpty,
+} from '../../domain/roadmapConfig';
 import type { RoadmapConfig } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
@@ -29,6 +33,7 @@ export function RoadmapSettingsSection({
   const [confirmDefaults, setConfirmDefaults] = useState(false);
   const empty = isRoadmapConfigEmpty(config);
   const mainFields = config.fields.filter((field) => field.main).length;
+  const groupFields = config.fields.filter(isGroupable).length;
 
   return (
     <section aria-labelledby="settings-roadmap" className="space-y-3">
@@ -52,6 +57,7 @@ export function RoadmapSettingsSection({
               <p className="text-xs text-fg-muted">
                 {config.fields.length} {config.fields.length === 1 ? 'campo' : 'campi'},{' '}
                 {mainFields} {mainFields === 1 ? 'principale' : 'principali'}
+                {groupFields > 0 && `, ${groupFields} per raggruppare`}
               </p>
               <Button size="sm" className="self-start" onClick={() => setOpen('fields')}>
                 Modifica i campi…
@@ -75,7 +81,8 @@ export function RoadmapSettingsSection({
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning bg-warning-soft p-3 text-xs">
               <span>
                 Nessuna configurazione: questa istanza è nata prima dei campi e dei team. I
-                predefiniti portano i campi Jira, Figma e Confluence, sei team e sedici persone.
+                predefiniti portano la dimensione dei progetti, i campi Jira, Figma e Confluence,
+                sei team e sedici persone.
               </span>
               <Button
                 size="sm"

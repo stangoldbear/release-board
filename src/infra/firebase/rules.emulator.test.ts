@@ -783,6 +783,20 @@ describe('configuration of the roadmap', () => {
     await assertSucceeds(
       writeConfig(owner, OWNER, 'projectFields', 'jiraEpics', { ...FIELD, main: false }, 'update'),
     );
+    // A list of exclusive values that groups the projects, with colored values.
+    await assertSucceeds(
+      writeConfig(editor, EDITOR, 'projectFields', 'projectSize', {
+        ...FIELD,
+        label: 'Dimensione',
+        type: 'choice',
+        multiple: false,
+        group: true,
+        options: [
+          { id: 'big', label: 'Big project', colorId: 'purple' },
+          { id: 'small', label: 'Small project' },
+        ],
+      }),
+    );
     await assertSucceeds(writeConfig(editor, EDITOR, 'teams', 'qa', TEAM));
     await assertSucceeds(writeConfig(editor, EDITOR, 'stakeholders', 'qa-1', PERSON));
     await assertSucceeds(
@@ -821,6 +835,23 @@ describe('configuration of the roadmap', () => {
     );
     await assertFails(
       writeConfig(editor, EDITOR, 'projectFields', 'x', { ...FIELD, position: '2' }),
+    );
+    // Only a list of exclusive values groups, and the flag is written only when true.
+    const choice = {
+      ...FIELD,
+      type: 'choice',
+      multiple: false,
+      options: [{ id: 'a', label: 'A' }],
+    };
+    await assertFails(
+      writeConfig(editor, EDITOR, 'projectFields', 'x', { ...choice, multiple: true, group: true }),
+    );
+    await assertFails(writeConfig(editor, EDITOR, 'projectFields', 'x', { ...FIELD, group: true }));
+    await assertFails(
+      writeConfig(editor, EDITOR, 'projectFields', 'x', { ...choice, group: false }),
+    );
+    await assertFails(
+      writeConfig(editor, EDITOR, 'projectFields', 'x', { ...choice, group: 'yes' }),
     );
     await assertFails(writeConfig(editor, EDITOR, 'teams', 'qa', { ...TEAM, colorId: 'pink' }));
     await assertFails(writeConfig(editor, EDITOR, 'teams', 'qa', { ...TEAM, tag: '' }));

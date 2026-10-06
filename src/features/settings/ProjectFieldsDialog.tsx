@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   Info,
+  Layers,
   Pencil,
   Plus,
   SlidersHorizontal,
@@ -11,6 +12,7 @@ import {
   Trash,
   X,
 } from 'lucide-react';
+import { TASK_COLORS, isKnownColorId } from '../../domain/colors';
 import {
   FIELD_DESCRIPTION_MAX,
   FIELD_FLAG_INFO,
@@ -19,6 +21,7 @@ import {
   FIELD_OPTION_LABEL_MAX,
   FIELD_TYPES,
   FIELD_TYPE_INFO,
+  isGroupable,
   nextPosition,
   sortByPosition,
   uniqueId,
@@ -29,6 +32,7 @@ import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { Dialog } from '../../shared/ui/Dialog';
 import { FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
+import { FieldTag } from '../roadmaps/fieldUi';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 
 /** A word of the model in English, as the editor names types and flags, with its translation. */
@@ -47,7 +51,14 @@ interface Explained {
 }
 
 /** The flags a field can have, with their English name. */
-const FLAGS = ['multiple', 'required', 'main'] as const;
+const FLAGS = ['multiple', 'required', 'main', 'group'] as const;
+
+/** An option with another color, or none when the value is not a color. */
+function withColor(option: FieldOption, colorId: string): FieldOption {
+  const next: FieldOption = { id: option.id, label: option.label };
+  if (isKnownColorId(colorId)) next.colorId = colorId;
+  return next;
+}
 
 interface FieldDialogProps {
   /** The field to edit; null for a new one. */
@@ -69,6 +80,7 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
   const [multiple, setMultiple] = useState(field?.multiple ?? false);
   const [required, setRequired] = useState(field?.required ?? false);
   const [main, setMain] = useState(field?.main ?? false);
+  const [group, setGroup] = useState(field?.group === true);
   const [options, setOptions] = useState<FieldOption[]>(field?.options ?? []);
   const [optionDraft, setOptionDraft] = useState('');
   const formId = useId();
@@ -78,6 +90,8 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
   const { card, triggerProps, cardProps } = useHoverCard<Explained>();
   const id = field?.id ?? uniqueId(label, config.fields);
   const valid = label.trim() !== '' && (type !== 'choice' || options.length > 0);
+  // Only a list of exclusive values groups: each project then belongs to one group.
+  const canGroup = type === 'choice' && !multiple;
 
   const addOption = () => {
     const text = optionDraft.trim().slice(0, FIELD_OPTION_LABEL_MAX);
@@ -100,6 +114,7 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
     };
     if (description.trim()) saved.description = description.trim();
     if (type === 'choice') saved.options = options;
+    if (group && canGroup) saved.group = true;
     onSave(saved);
     onClose();
   };
@@ -205,9 +220,22 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
           <div className="grid gap-1.5">
             {FLAGS.map((flag) => {
               const checked =
-                flag === 'multiple' ? multiple : flag === 'required' ? required : main;
+                flag === 'multiple'
+                  ? multiple
+                  : flag === 'required'
+                    ? required
+                    : flag === 'main'
+                      ? main
+                      : group && canGroup;
               const set =
-                flag === 'multiple' ? setMultiple : flag === 'required' ? setRequired : setMain;
+                flag === 'multiple'
+                  ? setMultiple
+                  : flag === 'required'
+                    ? setRequired
+                    : flag === 'main'
+                      ? setMain
+                      : setGroup;
+              const disabled = flag === 'group' && !canGroup;
               const wording = FIELD_FLAG_INFO[flag];
               // For a list of values the request speaks of "exclusive" choices: the opposite flag.
               const label =
@@ -215,12 +243,15 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
               return (
                 <div
                   key={flag}
-                  className="flex items-center gap-2 rounded-lg border border-line p-2 hover:bg-surface-strong has-checked:border-accent has-checked:bg-accent-soft"
+                  className="flex items-center gap-2 rounded-lg border border-line p-2 hover:bg-surface-strong has-checked:border-accent has-checked:bg-accent-soft has-disabled:opacity-60 has-disabled:hover:bg-transparent"
                 >
-                  <label className="flex flex-1 cursor-pointer items-center gap-2">
+                  <label
+                    className={`flex flex-1 items-center gap-2 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
                     <input
                       type="checkbox"
                       checked={checked}
+                      disabled={disabled}
                       onChange={(event) => set(event.target.checked)}
                     />
                     <Term name={flag} label={label} />
@@ -235,20 +266,51 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
               Senza «multiple» i valori sono esclusivi: se ne sceglie uno solo.
             </p>
           )}
+          {type === 'choice' && multiple && (
+            <p className="mt-1.5 text-xs text-fg-muted">
+              «group» vale solo per valori esclusivi: con più valori un progetto starebbe in più
+              gruppi.
+            </p>
+          )}
         </fieldset>
 
         {type === 'choice' && (
           <fieldset className="space-y-2">
             <legend className={LABEL_CLASS}>Valori della lista *</legend>
+            <p className="-mt-1 text-xs text-fg-muted">
+              Ogni valore può avere un colore: nella roadmap e nella finestra del progetto compare
+              come un&apos;etichetta colorata, con il suo nome.
+            </p>
             {options.length > 0 && (
               <ul className="space-y-1.5">
                 {options.map((option) => (
                   <li
                     key={option.id}
-                    className="flex items-center gap-2 rounded-md border border-line bg-surface-muted px-2.5 py-1.5 text-sm"
+                    className="flex flex-wrap items-center gap-2 rounded-md border border-line bg-surface-muted px-2.5 py-1.5 text-sm"
                   >
-                    <span className="flex-1">{option.label}</span>
+                    <span className="flex min-w-0 flex-1">
+                      <FieldTag colorId={option.colorId}>{option.label}</FieldTag>
+                    </span>
                     <code className="text-xs text-fg-muted">{option.id}</code>
+                    <select
+                      aria-label={`Colore di «${option.label}»`}
+                      value={option.colorId ?? ''}
+                      onChange={(event) =>
+                        setOptions(
+                          options.map((item) =>
+                            item.id === option.id ? withColor(item, event.target.value) : item,
+                          ),
+                        )
+                      }
+                      className="rounded-lg border border-line-strong bg-surface px-2 py-1 text-xs"
+                    >
+                      <option value="">Nessun colore</option>
+                      {TASK_COLORS.map((color) => (
+                        <option key={color.id} value={color.id}>
+                          {color.name}
+                        </option>
+                      ))}
+                    </select>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -399,6 +461,12 @@ export function ProjectFieldsDialog({ config, actions, onClose }: ProjectFieldsD
                         principale
                       </span>
                     )}
+                    {isGroupable(field) && (
+                      <span className="inline-flex items-center gap-0.5 text-xs text-fg-muted">
+                        <Layers className="h-3 w-3" aria-hidden="true" />
+                        raggruppa
+                      </span>
+                    )}
                   </p>
                   <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
                     <code className="rounded-sm bg-surface-strong px-1 font-semibold">
@@ -407,12 +475,16 @@ export function ProjectFieldsDialog({ config, actions, onClose }: ProjectFieldsD
                     <span>{FIELD_TYPE_INFO[field.type].label}</span>
                     {field.multiple && <span>· più valori</span>}
                     {field.required && <span>· almeno uno</span>}
-                    {field.options && (
-                      <span className="truncate">
-                        · {field.options.map((option) => option.label).join(', ')}
-                      </span>
-                    )}
                   </p>
+                  {field.options && (
+                    <p className="mt-1 flex flex-wrap gap-1">
+                      {field.options.map((option) => (
+                        <FieldTag key={option.id} colorId={option.colorId}>
+                          {option.label}
+                        </FieldTag>
+                      ))}
+                    </p>
+                  )}
                   {field.description && (
                     <p className="mt-0.5 text-xs text-fg-muted">{field.description}</p>
                   )}

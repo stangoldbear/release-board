@@ -3,6 +3,7 @@ import { ArrowRightFromLine, Check, History, Plus } from 'lucide-react';
 import { assignmentsOfProject } from '../../domain/assignments';
 import { notesOfProject } from '../../domain/projectNotes';
 import { PROJECT_STATUSES } from '../../domain/projects';
+import { isGroupable } from '../../domain/roadmapConfig';
 import { ZOOM_COLUMN_UNIT } from '../../domain/schedule';
 import type {
   Assignment,
@@ -151,6 +152,8 @@ export function RoadmapArea({
   const openProject = (project: Project, tab?: ProjectTab) =>
     setOpen({ project, period: project, tab });
   const current = open?.project ? plan.projects.find((item) => item.id === open.project?.id) : null;
+  const groupable = plan.roadmap.fields.filter(isGroupable);
+  const groupBy = groupable.find((field) => field.id === display.groupBy) ?? null;
 
   if (unavailable) {
     return (
@@ -219,6 +222,7 @@ export function RoadmapArea({
           textScale={textScale}
           compact={compact}
           oneLineTitles={display.oneLineTitles}
+          groupBy={groupBy}
           onZoom={(step) => onViewAction({ type: 'zoomBy', step })}
           onShowDays={(date) => onViewAction({ type: 'goTo', date, zoom: 'detail' })}
           onOpen={(project) => openProject(project)}
@@ -270,6 +274,23 @@ export function RoadmapArea({
               })}
             </div>
           </div>
+          {groupable.length > 0 && (
+            <label className="flex items-center gap-2">
+              <span className="text-xs font-bold tracking-wide uppercase">Raggruppa per</span>
+              <select
+                value={groupBy?.id ?? ''}
+                onChange={(event) => displayControls.setGroupBy(event.target.value || null)}
+                className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-xs"
+              >
+                <option value="">Nessun gruppo</option>
+                {groupable.map((field) => (
+                  <option key={field.id} value={field.id}>
+                    {field.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <ToggleChip
               pressed={display.highlightWeekends}

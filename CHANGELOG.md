@@ -6,6 +6,36 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-06
+
+### Aggiunto
+
+- Roadmap (funzione beta): «Raggruppa per», sotto la roadmap, mette insieme i progetti con lo
+  stesso valore di un campo, sotto un'intestazione con il valore come etichetta e il numero dei
+  progetti. I gruppi seguono l'ordine dei valori del campo e in fondo vengono i progetti senza
+  valore; il campo del gruppo non si ripete sotto i progetti. La scelta resta nel browser.
+- La proprietà `group` («Raggruppa») dei campi dei progetti, in Impostazioni → Roadmap → «Modifica
+  i campi…»: vale per le liste di valori esclusivi, così ogni progetto sta in un gruppo solo. Il
+  nuovo campo predefinito «Dimensione», con «Big project», «Medium project» e «Small project», la
+  ha di serie.
+- Un colore per ogni valore di una lista, scelto tra quelli delle attività, leggibili in ogni tema,
+  con l'anteprima dell'etichetta nell'editor del campo. I valori predefiniti di «Team impattati»
+  hanno i colori dei team.
+
+### Modificato
+
+- Sotto il titolo dei progetti, ai livelli «Info principali» e «Team», i valori delle liste e i
+  testi multipli sono etichette, rettangoli arrotondati nei colori dei valori o neutri; i link
+  stanno uno accanto all'altro e il resto resta testo. Il nome dice sempre il valore: il colore
+  aiuta solo a riconoscerlo.
+- Nella finestra del progetto i valori delle liste sono le stesse etichette, e una lista di valori
+  esclusivi si sceglie con i pulsanti di opzione invece che da un menu.
+- La cronologia mostra i valori di una lista con i loro colori.
+- Nell'istanza condivisa servono le regole di Firestore nuove (la chiave `group` dei campi):
+  senza, un campo che raggruppa non si salva. Un piano già creato non riceve da solo il campo
+  «Dimensione»: si aggiunge in Impostazioni → Roadmap → «Modifica i campi…», oppure si riportano i
+  predefiniti.
+
 ## [0.8.0] - 2026-10-06
 
 ### Aggiunto
@@ -450,7 +480,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/stangoldbear/release-board/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/stangoldbear/release-board/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/stangoldbear/release-board/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/stangoldbear/release-board/compare/v0.5.0...v0.6.0

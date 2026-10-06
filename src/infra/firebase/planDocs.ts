@@ -6,6 +6,7 @@ import { sortMemos } from '../../domain/memos';
 import { parseProjectNote, sortProjectNotes } from '../../domain/projectNotes';
 import { PROJECT_STATUSES, sortProjects } from '../../domain/projects';
 import {
+  isGroupable,
   parseFieldValues,
   parseProjectField,
   parseStakeholder,
@@ -258,8 +259,14 @@ export function projectFieldContent(field: Omit<ProjectField, 'id'>): DocumentDa
     position: field.position,
   };
   if (field.description) data.description = field.description;
+  // Only when it groups: the rules published before 0.9 do not know the key.
+  if (isGroupable(field)) data.group = true;
   if (field.type === 'choice' && field.options) {
-    data.options = field.options.map((option) => ({ id: option.id, label: option.label }));
+    data.options = field.options.map((option) => {
+      const item: DocumentData = { id: option.id, label: option.label };
+      if (option.colorId) item.colorId = option.colorId;
+      return item;
+    });
   }
   return data;
 }

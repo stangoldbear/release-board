@@ -258,6 +258,7 @@ const ROADMAP_FIELDS: Partial<Record<HistoryEntity, Record<string, string>>> = {
     multiple: 'Più valori',
     required: 'Almeno uno',
     main: 'Principale',
+    group: 'Raggruppa',
     options: 'Valori',
     position: 'Posizione',
   },
@@ -279,6 +280,24 @@ const MEMO_FIELDS: Record<string, string> = {
   private: 'Visibilità',
 };
 
+/** Options shown by name in a change: beyond these, the rest is counted. */
+const OPTIONS_SHOWN = 8;
+
+/** "iOS Dev (Azzurro), QA": the values of a list with their colors, so that a new color shows. */
+function formatOptions(options: unknown[]): string {
+  const names = options.map((option) => {
+    if (typeof option !== 'object' || option === null) return '?';
+    const { label, colorId } = option as { label?: unknown; colorId?: unknown };
+    const color = TASK_COLORS.find((item) => item.id === colorId)?.name;
+    const name = typeof label === 'string' ? label : '?';
+    return color ? `${name} (${color})` : name;
+  });
+  const rest = names.length - OPTIONS_SHOWN;
+  return rest > 0
+    ? `${names.slice(0, OPTIONS_SHOWN).join(', ')} e altre ${rest}`
+    : names.join(', ');
+}
+
 function formatField(
   entity: HistoryEntity,
   field: string,
@@ -286,6 +305,7 @@ function formatField(
   laneName: (id: string) => string | undefined,
 ): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
+  if (Array.isArray(value) && field === 'options') return formatOptions(value);
   if (Array.isArray(value)) return `${value.length} ${value.length === 1 ? 'voce' : 'voci'}`;
   if (typeof value === 'number') return formatLocaleNumber(value, Number.isInteger(value) ? 0 : 2);
   if (typeof value === 'boolean' && field === 'private') return value ? 'Privata' : 'Condivisa';

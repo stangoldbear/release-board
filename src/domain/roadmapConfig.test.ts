@@ -4,7 +4,9 @@ import {
   fieldValuesOf,
   fitsField,
   formatFieldValue,
+  groupProjects,
   idFromLabel,
+  isGroupable,
   isRoadmapId,
   missingRequiredFields,
   nextPosition,
@@ -16,7 +18,7 @@ import {
   stakeholdersByTeam,
   uniqueId,
 } from './roadmapConfig';
-import type { ProjectField } from './types';
+import type { ProjectField, ProjectFieldValues } from './types';
 
 const defaults = defaultRoadmapConfig();
 
@@ -33,6 +35,7 @@ describe('the default configuration', () => {
     expect(defaults.stakeholders).toHaveLength(16);
     expect(defaults.stakeholders.map((item) => item.name)).toContain('iOS Dev #3');
     expect(defaults.fields.map((field) => field.id)).toEqual([
+      'projectSize',
       'impactedTeams',
       'jiraRequest',
       'jiraEpics',
@@ -75,6 +78,74 @@ describe('the default configuration', () => {
     expect(byId.stakeholders).toMatchObject({ type: 'text', multiple: true });
     expect(byId.rawEstimationElapsed).toMatchObject({ type: 'text', main: true });
     expect(defaults.fields.every((field) => field.description)).toBe(true);
+  });
+
+  it('groups by the size of the projects, and colors the values of the lists', () => {
+    const groupable = defaults.fields.filter(isGroupable);
+    expect(groupable.map((field) => field.label)).toEqual(['Dimensione']);
+    expect(groupable[0]?.options?.map((option) => option.label)).toEqual([
+      'Big project',
+      'Medium project',
+      'Small project',
+    ]);
+    for (const field of defaults.fields.filter((item) => item.type === 'choice')) {
+      const colors = field.options?.map((option) => option.colorId) ?? [];
+      expect(colors.every(Boolean), field.id).toBe(true);
+      expect(new Set(colors).size, field.id).toBe(colors.length);
+    }
+  });
+});
+
+describe('the fields that group the projects', () => {
+  const size: ProjectField = {
+    id: 'size',
+    label: 'Dimensione',
+    type: 'choice',
+    multiple: false,
+    required: false,
+    main: true,
+    group: true,
+    position: 0,
+    options: [
+      { id: 'big', label: 'Big project', colorId: 'purple' },
+      { id: 'small', label: 'Small project' },
+    ],
+  };
+
+  it('are lists of exclusive values marked so', () => {
+    expect(isGroupable(size)).toBe(true);
+    expect(isGroupable({ ...size, group: undefined })).toBe(false);
+    expect(isGroupable({ ...size, multiple: true })).toBe(false);
+    expect(isGroupable({ ...size, type: 'text' })).toBe(false);
+  });
+
+  it('keep the flag only where it can group, and the colors the app knows', () => {
+    const { id, ...data } = size;
+    expect(parseProjectField(id, data, 0)).toEqual(size);
+    expect(parseProjectField(id, { ...data, multiple: true }, 0)?.group).toBeUndefined();
+    expect(parseProjectField(id, { ...data, group: 'yes' }, 0)?.group).toBeUndefined();
+    const options = [{ id: 'big', label: 'Big project', colorId: 'pink' }];
+    expect(parseProjectField(id, { ...data, options }, 0)?.options).toEqual([
+      { id: 'big', label: 'Big project' },
+    ]);
+  });
+
+  it('put the projects in the order of the values, then those without one', () => {
+    const projects: { id: string; fields: ProjectFieldValues }[] = [
+      { id: 'a', fields: { size: ['small'] } },
+      { id: 'b', fields: {} },
+      { id: 'c', fields: { size: ['big'] } },
+      { id: 'd', fields: { size: ['gone'] } },
+      { id: 'e', fields: { size: ['small'] } },
+    ];
+    const groups = groupProjects(projects, size);
+    expect(groups.map((group) => group.option?.id ?? null)).toEqual(['big', 'small', null]);
+    expect(groups.map((group) => group.projects.map((project) => project.id))).toEqual([
+      ['c'],
+      ['a', 'e'],
+      ['b', 'd'],
+    ]);
+    expect(groupProjects([], size)).toEqual([]);
   });
 });
 

@@ -22,10 +22,11 @@ giornalieri.
   il giorno scelto e un ordine che si cambia trascinandole. In un'istanza condivisa ognuno vede le
   sue, può guardare quelle di tutti, raggruppate per autore, e può tenerne alcune private.
 - Roadmap (funzione beta): i progetti passati, in corso e futuri su una linea del tempo con le
-  scale del calendario, con stato, responsabile, descrizione e campi personalizzati (link a Jira, Figma e
-  Confluence, team impattati, stime…); note con autore, scadenza e avviso; una vista Team con una
-  barra per persona, che salta weekend, festività e assenze. Progetti e barre si spostano
-  trascinandoli, anche da tastiera.
+  scale del calendario, con stato, responsabile, descrizione e campi personalizzati (link a Jira,
+  Figma e Confluence, team impattati, stime…), i cui valori compaiono come etichette colorate; i
+  progetti si raggruppano a scelta per un campo, come la dimensione. Note con autore, scadenza e
+  avviso; una vista Team con una barra per persona, che salta weekend, festività e assenze.
+  Progetti e barre si spostano trascinandoli, anche da tastiera.
 - Ricerca in attività, note dei giorni, note libere e, con le funzioni beta, progetti (anche note
   e campi), con tutte le parole o almeno una: le parole trovate sono evidenziate e i risultati si
   scorrono uno alla volta.

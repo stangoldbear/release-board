@@ -1,5 +1,5 @@
 {
-  "$comment": "How the projects of the roadmap are described when a plan starts: the custom fields, the teams and the people who work on the projects. Order matters: it is the order of the lists. Colors are the task colors (yellow, gray, blue, ice, green, indigo, red, purple), checked for contrast in every theme. Settings → Roadmap edits a copy of this in the plan; 'Carica i predefiniti' brings it back.",
+  "$comment": "How the projects of the roadmap are described when a plan starts: the custom fields, the teams and the people who work on the projects. Order matters: it is the order of the lists. Colors are the task colors (yellow, gray, blue, ice, green, indigo, red, purple), checked for contrast in every theme: a team has one, and each value of a list can have one, for its tag. A list of exclusive values marked 'group' lets the roadmap group the projects by it. Settings → Roadmap edits a copy of this in the plan; 'Carica i predefiniti' brings it back.",
   "teams": [
     { "id": "server", "name": "Server side", "tag": "ServerSide", "colorId": "yellow" },
     { "id": "ios", "name": "iOS", "tag": "iOSDev", "colorId": "blue" },
@@ -28,6 +28,21 @@
   ],
   "fields": [
     {
+      "id": "projectSize",
+      "label": "Dimensione",
+      "description": "Quanto è grande il progetto. La roadmap può raggruppare i progetti per dimensione.",
+      "type": "choice",
+      "multiple": false,
+      "required": false,
+      "main": true,
+      "group": true,
+      "options": [
+        { "id": "big", "label": "Big project", "colorId": "purple" },
+        { "id": "medium", "label": "Medium project", "colorId": "blue" },
+        { "id": "small", "label": "Small project", "colorId": "green" }
+      ]
+    },
+    {
       "id": "impactedTeams",
       "label": "Team impattati",
       "description": "I team il cui lavoro serve per il progetto.",
@@ -36,13 +51,13 @@
       "required": false,
       "main": true,
       "options": [
-        { "id": "ios-dev", "label": "iOS Dev" },
-        { "id": "android-dev", "label": "Android Dev" },
-        { "id": "backend-dev", "label": "Backend Dev" },
-        { "id": "backend-config", "label": "Backend Config" },
-        { "id": "content", "label": "Content" },
-        { "id": "qa", "label": "QA" },
-        { "id": "ba", "label": "BA" }
+        { "id": "ios-dev", "label": "iOS Dev", "colorId": "blue" },
+        { "id": "android-dev", "label": "Android Dev", "colorId": "green" },
+        { "id": "backend-dev", "label": "Backend Dev", "colorId": "yellow" },
+        { "id": "backend-config", "label": "Backend Config", "colorId": "gray" },
+        { "id": "content", "label": "Content", "colorId": "indigo" },
+        { "id": "qa", "label": "QA", "colorId": "ice" },
+        { "id": "ba", "label": "BA", "colorId": "purple" }
       ]
     },
     {

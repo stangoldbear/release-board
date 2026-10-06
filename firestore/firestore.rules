@@ -353,13 +353,16 @@ service cloud.firestore {
           let data = request.resource.data;
           return isRoadmapId(fieldId)
             && data.keys().hasOnly(['label', 'description', 'type', 'multiple', 'required',
-              'main', 'options', 'position', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+              'main', 'group', 'options', 'position', 'updatedAt', 'updatedBy', 'lastHistoryId'])
             && isText(data.label, 60)
             && (!('description' in data) || isText(data.description, 300))
             && data.type in ['text', 'textarea', 'number', 'price', 'url', 'date', 'choice']
             && data.multiple is bool
             && data.required is bool
             && data.main is bool
+            // Grouping the projects: only true, and only for a list of exclusive values.
+            && (!('group' in data)
+              || (data.group == true && data.type == 'choice' && data.multiple == false))
             && data.position is number
             && (data.type == 'choice'
               ? (data.options is list && data.options.size() > 0 && data.options.size() <= 50)

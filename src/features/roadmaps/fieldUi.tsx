@@ -1,8 +1,27 @@
 import type { ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
+import type { TaskColorId } from '../../domain/colors';
 import { fieldValuesOf, formatFieldValue } from '../../domain/roadmapConfig';
 import type { FieldValue, Project, ProjectField } from '../../domain/types';
 import { Highlight } from '../../shared/ui/Highlight';
+import { taskColorStyle } from '../../themes';
+
+/**
+ * A value as a tag: a rounded rectangle in the color of the value, readable in every theme, or a
+ * neutral one without a color. The words always say the value: the color only helps to spot it.
+ */
+export function FieldTag({ colorId, children }: { colorId?: TaskColorId; children: ReactNode }) {
+  return (
+    <span
+      style={colorId ? taskColorStyle(colorId) : undefined}
+      className={`inline-flex max-w-full min-w-0 items-center rounded-md border px-1.5 py-px text-xs leading-snug font-medium ${
+        colorId ? '' : 'border-line-strong bg-surface text-fg'
+      }`}
+    >
+      <span className="truncate">{children}</span>
+    </span>
+  );
+}
 
 /** What names a link in a few characters: the last piece of its path, or its host. */
 export function linkLabel(url: string): string {
@@ -36,29 +55,38 @@ export function FieldValueText({ field, value }: { field: ProjectField; value: F
 }
 
 /**
- * The values of a field of a project, in a line, separated by commas, after `before` (such as
- * the label of the field); nothing when the project has none.
+ * A field of a project after its label, as the column of the roadmap shows it: the values of a
+ * list as tags in their colors, several texts as neutral tags, links side by side, the rest as
+ * text. Nothing when the project has no value.
  */
-export function FieldValueList({
-  project,
-  field,
-  before,
-}: {
-  project: Project;
-  field: ProjectField;
-  before?: ReactNode;
-}) {
+export function FieldValues({ project, field }: { project: Project; field: ProjectField }) {
   const values = fieldValuesOf(project, field);
   if (values.length === 0) return null;
+  const tags = field.type === 'choice' || (field.type === 'text' && field.multiple);
   return (
-    <span className="inline">
-      {before}
-      {values.map((value, index) => (
-        <span key={index}>
-          {index > 0 && ', '}
-          <FieldValueText field={field} value={value} />
+    <span className="flex min-w-0 flex-wrap items-center gap-1 text-xs">
+      <span className="font-semibold text-fg-muted">{field.label}:</span>
+      {tags ? (
+        values.map((value, index) => {
+          const words = formatFieldValue(field, value);
+          const option = field.options?.find((item) => item.id === value);
+          return (
+            <span key={index} title={words} className="flex min-w-0">
+              {/* Read as a list, not as one long name. */}
+              {index > 0 && <span className="sr-only">,</span>}
+              <FieldTag colorId={option?.colorId}>
+                <Highlight text={words} />
+              </FieldTag>
+            </span>
+          );
+        })
+      ) : field.type === 'url' ? (
+        values.map((value, index) => <FieldValueText key={index} field={field} value={value} />)
+      ) : (
+        <span className="min-w-0 wrap-break-word">
+          <Highlight text={values.map((value) => formatFieldValue(field, value)).join(', ')} />
         </span>
-      ))}
+      )}
     </span>
   );
 }

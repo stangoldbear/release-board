@@ -154,6 +154,26 @@ describe('documents of the notes, assignments and configuration of the roadmap',
     });
     expect(readProjectField('impactedTeams', field)).toEqual({ id: 'impactedTeams', ...field });
     expect(readProjectField('bad id!', field)).toBeNull();
+
+    // The colors of the values, and the flag that groups only where it can.
+    const size = {
+      label: 'Dimensione',
+      type: 'choice' as const,
+      multiple: false,
+      required: false,
+      main: true,
+      group: true as const,
+      options: [
+        { id: 'big', label: 'Big project', colorId: 'purple' as const },
+        { id: 'small', label: 'Small project' },
+      ],
+      position: 0,
+    };
+    const sizeData = projectFieldContent(size);
+    expect(sizeData).toMatchObject({ group: true, options: size.options });
+    expect(readProjectField('projectSize', sizeData)).toEqual({ id: 'projectSize', ...size });
+    expect(projectFieldContent({ ...size, multiple: true })).not.toHaveProperty('group');
+    expect(projectFieldContent({ ...size, group: undefined })).not.toHaveProperty('group');
     expect(
       projectFieldContent({
         label: 'Link',

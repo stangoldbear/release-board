@@ -215,7 +215,9 @@ const SAMPLE_PROJECTS: {
 
 /** The values of the custom fields of the default configuration, for two of the projects. */
 const SAMPLE_FIELDS: Record<number, ProjectFieldValues> = {
+  1: { projectSize: ['small'], impactedTeams: ['content'] },
   2: {
+    projectSize: ['big'],
     impactedTeams: ['ios-dev', 'android-dev', 'backend-dev', 'qa'],
     jiraEpics: [
       'https://jira.example.com/browse/APP-310',
@@ -226,10 +228,12 @@ const SAMPLE_FIELDS: Record<number, ProjectFieldValues> = {
     rawEstimationElapsed: ['20 giorni'],
   },
   3: {
+    projectSize: ['big'],
     impactedTeams: ['backend-dev', 'backend-config'],
     stakeholders: ['Direzione IT'],
     rawEstimationTotal: ['90 giorni'],
   },
+  4: { projectSize: ['medium'], impactedTeams: ['ios-dev', 'android-dev', 'ba'] },
 };
 
 /** Notes written on the running projects, over the month before and the given one. */
