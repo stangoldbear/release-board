@@ -1,5 +1,14 @@
 import type { TaskColorId } from './colors';
-import type { BorderStyle, DailyMetric, Memo, PlanSnapshot, TaskItem, TaskStatus } from './types';
+import type {
+  BorderStyle,
+  DailyMetric,
+  Memo,
+  PlanSnapshot,
+  Project,
+  ProjectStatus,
+  TaskItem,
+  TaskStatus,
+} from './types';
 import { formatDateToISO, getDaysInMonth, isWeekend } from '../utils/dateUtils';
 import { DEFAULT_LANES } from './plan';
 
@@ -145,6 +154,63 @@ const SAMPLE_MEMOS: { title: string; body?: string; colorId?: TaskColorId; remin
     { title: 'Preparare le note di rilascio della 2.8' },
   ];
 
+/** Projects of the roadmap: one concluded, two running, two to come; months from the given one. */
+const SAMPLE_PROJECTS: {
+  title: string;
+  from: [month: number, day: number];
+  to: [month: number, day: number];
+  colorId: TaskColorId;
+  status: ProjectStatus;
+  owner?: string;
+  description?: string;
+}[] = [
+  {
+    title: 'Nuovo sito vetrina',
+    from: [-5, 1],
+    to: [-2, 15],
+    colorId: 'blue',
+    status: 'completed',
+    owner: 'Sara',
+  },
+  {
+    title: 'App mobile 3.0',
+    from: [-1, 10],
+    to: [2, 28],
+    colorId: 'purple',
+    status: 'in_progress',
+    owner: 'Giulia',
+    description: 'Nuovo carrello, pagamenti in un tocco e notifiche degli ordini.',
+  },
+  {
+    title: 'Migrazione al cloud',
+    from: [0, 1],
+    to: [5, 30],
+    colorId: 'green',
+    status: 'in_progress',
+    owner: 'Marco',
+    description: 'Database e servizi degli ordini, un servizio alla volta.',
+  },
+  {
+    title: 'Programma fedeltà',
+    from: [3, 1],
+    to: [7, 31],
+    colorId: 'yellow',
+    status: 'planned',
+  },
+  {
+    title: 'Nuovo magazzino',
+    from: [6, 1],
+    to: [11, 30],
+    colorId: 'gray',
+    status: 'idea',
+  },
+];
+
+/** The last day of a month, which may be before or after the given year. */
+function lastDay(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
+}
+
 /**
  * An invented plan for the given month, used to try the app. The result depends only on
  * year and month, so it is stable across runs and in tests.
@@ -199,5 +265,22 @@ export function buildSamplePlan(year: number, month: number): PlanSnapshot {
     return memo;
   });
 
-  return { lanes, tasks, metrics, dailyNotes, memos };
+  // Days past the end of a month go to the last one: 31 of a month of 30 is the 30th.
+  const dayIn = ([offset, day]: [number, number]) =>
+    formatDateToISO(new Date(year, month + offset, Math.min(day, lastDay(year, month + offset))));
+  const projects: Project[] = SAMPLE_PROJECTS.map((sample, index) => {
+    const project: Project = {
+      id: `sample-project-${index + 1}`,
+      title: sample.title,
+      startDate: dayIn(sample.from),
+      endDate: dayIn(sample.to),
+      colorId: sample.colorId,
+      status: sample.status,
+    };
+    if (sample.owner) project.owner = sample.owner;
+    if (sample.description) project.description = sample.description;
+    return project;
+  });
+
+  return { lanes, tasks, metrics, dailyNotes, memos, projects };
 }

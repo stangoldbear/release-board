@@ -1,30 +1,25 @@
 import { memo, useId, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
-import { EyeOff, MoveHorizontal } from 'lucide-react';
+import type { CSSProperties, KeyboardEvent } from 'react';
+import { EyeOff } from 'lucide-react';
 import type { TaskChanges } from '../../domain/plan';
 import { ZOOM_COLUMN_UNIT, placeTasks } from '../../domain/schedule';
 import type { DateRange, ZoomLevel } from '../../domain/schedule';
 import type { DailyMetric, DailyNotes, Lane, RowVisibility, TaskItem } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
+import { scaledTextStyle } from '../../shared/ui/textScale';
+import type { TextScale } from '../../shared/ui/textScale';
 import { useStableCallback } from '../../shared/useStableCallback';
 import { addDaysIso, diffDays, todayIso } from '../../utils/dateUtils';
 import { DailyNoteDialog } from '../notes/DailyNoteDialog';
 import type { CalendarJump } from './calendarView';
+import { DragHint } from './DragHint';
 import { MetricsRow } from './MetricsRow';
-import { NotesRow } from './NotesRow';
-import { TaskBar } from './TaskBar';
+import { NotesRow, noteCellId } from './NotesRow';
+import { TaskBar, taskBarId } from './TaskBar';
 import { TaskContextMenu } from './TaskContextMenu';
 import { DayHeaderRow, MonthBand } from './TimelineHeader';
-import {
-  LABEL_CELL,
-  buildColumns,
-  calendarTextStyle,
-  columnEdge,
-  dayName,
-  timelineMetrics,
-} from './timelineLayout';
-import type { TextScale } from './timelineLayout';
+import { LABEL_CELL, buildColumns, columnEdge, dayName, timelineMetrics } from './timelineLayout';
 import type { Column } from './timelineLayout';
 import { useNoteDrag } from './useNoteDrag';
 import { draggedTask, useTaskDrag } from './useTaskDrag';
@@ -66,17 +61,6 @@ interface TimelineProps {
   onSaveNote: (date: string, text: string) => void;
   /** Moves the note of a day to another day, with a new text when one is given. */
   onMoveNote: (from: string, to: string, text?: string) => void;
-}
-
-/** What a drag is about to do, at the bottom of the screen. */
-function DragHint({ children }: { children: ReactNode }) {
-  return (
-    <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm text-fg shadow-2xl">
-      <MoveHorizontal className="h-4 w-4 text-link" aria-hidden="true" />
-      <span>{children}</span>
-      <span className="text-xs text-fg-muted">Esc annulla</span>
-    </div>
-  );
 }
 
 interface LaneCellsProps {
@@ -182,7 +166,7 @@ export function Timeline({
     const to = addDaysIso(date, event.key === 'ArrowRight' ? 1 : -1);
     if (to < range.start || to > range.end || !isDayFree(to)) return;
     onMoveNote(date, to);
-    window.requestAnimationFrame(() => document.getElementById(`note-cell-${to}`)?.focus());
+    window.requestAnimationFrame(() => document.getElementById(noteCellId(to))?.focus());
   });
 
   // While dragging, the task is drawn where it would land.
@@ -192,10 +176,10 @@ export function Timeline({
   const visibleLanes = lanes.filter((lane) => !visibility.hiddenLaneIds.includes(lane.id));
   const allRowsHidden = visibleLanes.length === 0 && !visibility.showNotes;
 
-  const focusBar = (taskId: string) => document.getElementById(`task-rect-${taskId}`)?.focus();
+  const focusBar = (taskId: string) => document.getElementById(taskBarId(taskId))?.focus();
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-line bg-surface shadow-xs select-none">
+    <div className="w-full bg-surface select-none">
       <p className="border-b border-line bg-surface-muted px-4 py-1.5 text-xs text-fg-muted">
         <span className="pointer-coarse:hidden">
           Trascina un&apos;attività o una nota per spostarla; un&apos;attività anche dai bordi, per
@@ -225,7 +209,7 @@ export function Timeline({
         data-compact={compact || undefined}
         style={
           {
-            ...calendarTextStyle(textScale, compact),
+            ...scaledTextStyle(textScale, compact),
             '--gantt-label-width': `${labelWidth}px`,
           } as CSSProperties
         }
@@ -277,7 +261,7 @@ export function Timeline({
                     {todayOffset !== null && (
                       <div
                         aria-hidden="true"
-                        className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-link/40"
+                        className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-link"
                         style={{ left: todayOffset }}
                       />
                     )}

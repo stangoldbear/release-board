@@ -1,58 +1,95 @@
 import { useLayoutEffect, useMemo, useState } from 'react';
 import {
   NO_FILTER,
+  SEARCH_MODES,
   filterMemos,
+  filterProjects,
   filterTasks,
-  isFiltering,
   isSearching,
   matchingNoteDays,
+  searchResults,
+  searchWords,
+  stepResult,
 } from '../domain/filters';
-import type { TaskFilter } from '../domain/filters';
+import type { SearchResult, SearchResultKind, TaskFilter } from '../domain/filters';
 import {
   MEMO_SCOPES,
   diffMemo,
+  followerInGroup,
+  groupMemos,
   memosInScope,
+  readGroupOrder,
   readSeenReminders,
   rememberReminders,
 } from '../domain/memos';
 import type { MemoContent } from '../domain/memos';
 import { copyOfTask, diffTask, isPlanEmpty } from '../domain/plan';
+import { diffProject } from '../domain/projects';
+import type { ProjectContent } from '../domain/projects';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
 import { buildSamplePlan } from '../domain/sample';
 import { ZOOM_COLUMN_UNIT, isInRange, weekRange } from '../domain/schedule';
-import type { DailyMetric, Memo, MemoAuthor, PlanSnapshot, TaskItem } from '../domain/types';
-import { RowVisibilityBar } from '../features/calendar/RowVisibilityBar';
-import { TEXT_SCALES } from '../features/calendar/timelineLayout';
-import { Timeline } from '../features/calendar/Timeline';
-import { WeekBoard } from '../features/calendar/WeekBoard';
+import type {
+  DailyMetric,
+  Memo,
+  MemoAuthor,
+  PlanSnapshot,
+  Project,
+  TaskItem,
+} from '../domain/types';
+import { noteCellId } from '../features/calendar/NotesRow';
+import { NEW_TASK_ID, ReleasesArea } from '../features/calendar/ReleasesArea';
+import { taskBarId } from '../features/calendar/TaskBar';
+import { useCalendarDisplay } from '../features/calendar/useCalendarDisplay';
 import { useCalendarView } from '../features/calendar/useCalendarView';
-import {
-  ALL_ROWS_VISIBLE,
-  parseRowVisibility,
-  toggleLane,
-} from '../features/calendar/rowVisibility';
 import { HistoryPage } from '../features/history/HistoryPage';
 import { MemoDialog } from '../features/memos/MemoDialog';
 import { MemoReminders } from '../features/memos/MemoReminders';
-import { MemoStrip, NEW_MEMO_ID, memoElementId } from '../features/memos/MemoStrip';
+import { memoElementId } from '../features/memos/MemoCard';
+import { MemoStrip } from '../features/memos/MemoStrip';
+import { NEW_MEMO_ID } from '../features/memos/NewMemoForm';
 import { DailyMetricsDialog } from '../features/metrics/DailyMetricsDialog';
 import { ImportForecastDialog } from '../features/metrics/ImportForecastDialog';
+import { NEW_PROJECT_ID, RoadmapArea } from '../features/roadmaps/RoadmapArea';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { TaskDialog } from '../features/tasks/TaskDialog';
-import { TaskSummary } from '../features/tasks/TaskSummary';
 import { isBoolean, oneOf, usePreference } from '../infra/preferences';
+import { SCROLL_DURATION_MS } from '../features/calendar/scrollMotion';
+import { projectBarId } from '../features/roadmaps/ProjectBar';
+import { prefersReducedMotion } from '../shared/motion';
+import { SearchHighlightContext, resultKey } from '../shared/ui/Highlight';
+import { areaTitleId } from '../shared/ui/Area';
+import { Button } from '../shared/ui/Button';
+import { TEXT_SCALES } from '../shared/ui/textScale';
 import { useToast } from '../shared/ui/Toast';
 import { VersionStamp } from '../shared/ui/VersionStamp';
 import { parseISODate, startOfMonth, startOfWeek, todayIso } from '../utils/dateUtils';
+import { ALL_AREAS_VISIBLE, AREAS, areaElementId, parseAreaVisibility } from './areas';
+import { useAuthorNames } from './authorNames';
+import type { AreaId } from './areas';
 import { EmptyPlanNotice } from './EmptyPlanNotice';
-import { Header, NEW_TASK_ID } from './Header';
+import { Header, SEARCH_FIELD_ID } from './Header';
 import type { Instance } from './Instance';
 import type { PlanRepository } from './PlanRepository';
+import { SearchResultsBar, describeFound } from './SearchResultsBar';
+import type { FoundCount } from './SearchResultsBar';
 import { SyncIndicator } from './SyncIndicator';
 import { useThemeSetting } from './ThemeProvider';
 import { useHashPage } from './useHashPage';
+import { useSyncState } from './useSyncState';
 
-/** The dialog on screen, if any: only one at a time. */
+/** Where each kind of search result is: its area, and its element in the area. */
+const RESULT_TARGETS: Record<
+  SearchResultKind,
+  { area: AreaId; elementId: (id: string) => string }
+> = {
+  memo: { area: 'notes', elementId: memoElementId },
+  task: { area: 'releases', elementId: taskBarId },
+  note: { area: 'releases', elementId: noteCellId },
+  project: { area: 'roadmaps', elementId: projectBarId },
+};
+
+/** The dialog on screen, if any: only one at a time; projects have theirs in their own area. */
 type OpenDialog =
   | { kind: 'task'; task: TaskItem }
   /** A new task, with suggested date and lane. */
@@ -92,23 +129,17 @@ interface AppProps {
 
 export default function App({ repository, instance, loadWarning }: AppProps) {
   const plan = usePlan(repository);
+  const sync = useSyncState(repository);
   const showToast = useToast();
-  const [visibility, setVisibility] = usePreference(
-    'row-visibility',
-    parseRowVisibility,
-    ALL_ROWS_VISIBLE,
-  );
-  const [highlightWeekends, setHighlightWeekends] = usePreference(
-    'highlight-weekends',
-    isBoolean,
-    true,
-  );
-  const [showMetrics, setShowMetrics] = usePreference('show-metrics', isBoolean, true);
-  const [hidePastDays, setHidePastDays] = usePreference('hide-past-days', isBoolean, false);
+  const [areas, setAreas] = usePreference('areas', parseAreaVisibility, ALL_AREAS_VISIBLE);
+  const [display, displayControls] = useCalendarDisplay();
+  // Older names: the text size and compact mode began with the calendar, and browsers keep them.
   const [textScale, setTextScale] = usePreference('calendar-text-scale', oneOf(TEXT_SCALES), 1);
   const [compact, setCompact] = usePreference('calendar-compact', isBoolean, false);
   const [memosExpanded, setMemosExpanded] = usePreference('memos-expanded', isBoolean, false);
   const [memoScope, setMemoScope] = usePreference('memos-scope', oneOf(MEMO_SCOPES), 'mine');
+  const [memosGrouped, setMemosGrouped] = usePreference('memos-grouped', isBoolean, false);
+  const [groupOrder, setGroupOrder] = usePreference('memo-group-order', readGroupOrder, []);
   const [seenReminders, setSeenReminders] = usePreference(
     'memo-reminders-seen',
     readSeenReminders,
@@ -119,27 +150,57 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const [view, dispatchView] = useCalendarView();
   const [page, goToPage] = useHashPage();
   const [filters, setFilters] = useState<TaskFilter>(NO_FILTER);
+  const [searchMode, setSearchMode] = usePreference('search-mode', oneOf(SEARCH_MODES), 'all');
+  // The result brought into view, by its key; the search forgets it when it finds other things.
+  const [currentResult, setCurrentResult] = useState<string | null>(null);
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
 
   const allTasks = plan?.tasks;
-  const filteredTasks = useMemo(() => filterTasks(allTasks ?? [], filters), [allTasks, filters]);
-  // The search finds text in the notes of the days and in the free notes too.
+  const filteredTasks = useMemo(
+    () => filterTasks(allTasks ?? [], { ...filters, mode: searchMode }),
+    [allTasks, filters, searchMode],
+  );
+  // The search finds words in the notes of the days, the free notes and the projects too.
   const allNotes = plan?.dailyNotes;
   const noteMatches = useMemo(
-    () => matchingNoteDays(allNotes ?? {}, filters.search),
-    [allNotes, filters.search],
+    () => matchingNoteDays(allNotes ?? {}, filters.search, searchMode),
+    [allNotes, filters.search, searchMode],
   );
+  const words = useMemo(() => searchWords(filters.search), [filters.search]);
+  const highlight = useMemo(() => ({ words, current: currentResult }), [words, currentResult]);
   // In a shared instance the strip shows the user's own notes, or all; the search looks in all.
   const me: MemoAuthor | null =
     instance.kind === 'cloud' ? { id: instance.user.githubId, login: instance.user.login } : null;
   const allMemos = plan?.memos ?? [];
+  // Authors go by their full name: the user's own from the sign-in, the others' from GitHub.
+  const names = useAuthorNames(
+    me
+      ? allMemos.flatMap((memo) =>
+          memo.author && memo.author.id !== me.id ? [memo.author.id] : [],
+        )
+      : [],
+    instance.kind === 'cloud' ? instance.lookupName : null,
+  );
+  const myName = instance.kind === 'cloud' ? instance.user.name : null;
+  const nameOf = (author: MemoAuthor): string =>
+    (author.id === me?.id ? myName : names.get(author.id)) || author.login;
   const scopedMemos = me ? memosInScope(allMemos, memoScope, me.id) : allMemos;
-  const shownMemos = isSearching(filters) ? filterMemos(allMemos, filters.search) : scopedMemos;
+  // The user's own group comes first, until they move it.
+  const memoGroupOrder = me && !groupOrder.includes(me.id) ? [me.id, ...groupOrder] : groupOrder;
+  const grouped = me !== null && memosGrouped;
+  const shownMemos = isSearching(filters)
+    ? filterMemos(
+        allMemos,
+        filters.search,
+        searchMode,
+        (memo) => memo.author && nameOf(memo.author),
+      )
+    : scopedMemos;
 
   // Without the past, the timeline starts today, or on the Monday of this week in weekly columns.
   const today = todayIso();
   const firstShownDay = ZOOM_COLUMN_UNIT[view.zoom] === 'week' ? startOfWeek(today) : today;
-  const timelineStart = hidePastDays ? firstShownDay : view.range.start;
+  const timelineStart = display.hidePastDays ? firstShownDay : view.range.start;
   const timelineRange = useMemo(
     () => ({ start: timelineStart, end: view.range.end }),
     [timelineStart, view.range.end],
@@ -221,7 +282,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   // Whole plan
   const handleReplacePlan = (next: PlanSnapshot) => {
     repository.replacePlan(next);
-    setVisibility(ALL_ROWS_VISIBLE);
+    displayControls.showAllRows();
     showToast('Dati ripristinati dal backup');
   };
 
@@ -230,7 +291,18 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     showToast('Dati di esempio caricati');
   };
 
-  const handleShowAllRows = () => setVisibility(ALL_ROWS_VISIBLE);
+  // An area that appears comes into view: it may be far down the page.
+  const handleToggleArea = (area: AreaId) => {
+    const showing = !areas[area];
+    setAreas((current) => ({ ...current, [area]: !current[area] }));
+    if (!showing) return;
+    window.requestAnimationFrame(() =>
+      document.getElementById(areaElementId(area))?.scrollIntoView({
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+        block: 'start',
+      }),
+    );
+  };
 
   // Free notes
   const rememberShown = (shown: Memo[]) =>
@@ -259,235 +331,365 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     focusAfterClosing(neighbour ? memoElementId(neighbour.id) : NEW_MEMO_ID);
   };
 
+  /**
+   * The places a note can take from its window: in its group when the notes are grouped, otherwise
+   * in the strip as shown, or in the whole strip for a note the search found outside it.
+   */
+  const memoPlaces = (memo: Memo) => {
+    const strip = scopedMemos.some((item) => item.id === memo.id) ? scopedMemos : plan.memos;
+    const group = grouped
+      ? groupMemos(strip, memoGroupOrder).find((item) => item.key === (memo.author?.id ?? ''))
+      : undefined;
+    if (!group) return { strip, inGroup: false };
+    return {
+      strip: group.memos,
+      inGroup: true,
+      follower: (index: number) => followerInGroup(strip, group.memos, memo.id, index),
+    };
+  };
+
+  // Projects
+  const handleCreateProject = (content: ProjectContent) => {
+    repository.createProject(content);
+    showToast(`Progetto «${oneLine(content.title)}» aggiunto`);
+  };
+
+  const handleSaveProject = (project: Project, content: ProjectContent) => {
+    const changes = diffProject(project, content);
+    if (Object.keys(changes).length > 0) repository.updateProject(project.id, changes);
+    showToast(`Progetto «${oneLine(content.title)}» salvato`);
+  };
+
+  const handleDeleteProject = (project: Project) => {
+    repository.deleteProject(project.id);
+    showToast('Progetto eliminato');
+    focusAfterClosing(NEW_PROJECT_ID);
+  };
+
   const searching = isSearching(filters);
+  const shownProjects = searching
+    ? filterProjects(plan.projects, filters.search, searchMode)
+    : plan.projects;
+
+  // Search
+  const results: SearchResult[] = searching
+    ? searchResults({
+        // In the order of the page: by group when the notes are grouped.
+        memos: grouped
+          ? groupMemos(shownMemos, memoGroupOrder).flatMap((group) => group.memos)
+          : shownMemos,
+        tasks: filteredTasks,
+        notes: Object.fromEntries(
+          Object.entries(plan.dailyNotes).filter(([date]) => noteMatches?.has(date)),
+        ),
+        projects: shownProjects,
+      })
+    : [];
+  const searchCounts: FoundCount[] = [
+    { found: shownMemos.length, total: plan.memos.length, one: 'nota libera', many: 'note libere' },
+    { found: filteredTasks.length, total: plan.tasks.length, one: 'attività', many: 'attività' },
+    {
+      found: noteMatches?.size ?? 0,
+      total: Object.keys(plan.dailyNotes).length,
+      one: 'nota del giorno',
+      many: 'note dei giorni',
+    },
+    { found: shownProjects.length, total: plan.projects.length, one: 'progetto', many: 'progetti' },
+  ];
+  const currentIndex = results.findIndex(
+    (result) => resultKey(result.kind, result.id) === currentResult,
+  );
+
+  const handleSearchChange = (search: string) => {
+    setFilters({ ...filters, search });
+    setCurrentResult(null);
+  };
+
+  /**
+   * Brings a result into view: its area appears, the calendar goes to its day, with the past when
+   * the day is past, and the page scrolls to it. The result has a ring until another one is shown.
+   */
+  const showResult = (index: number) => {
+    const result = results[index];
+    if (!result) return;
+    setCurrentResult(resultKey(result.kind, result.id));
+    const { area, elementId } = RESULT_TARGETS[result.kind];
+    if (!areas[area]) setAreas((current) => ({ ...current, [area]: true }));
+    let wait = 0;
+    if (result.date) {
+      // The result is drawn only on the timeline, with its day, its lane and the notes row.
+      if (display.hidePastDays && (result.endDate ?? result.date) < today) {
+        displayControls.togglePastDays();
+      }
+      const laneId = plan.tasks.find((task) => task.id === result.id)?.laneId;
+      if (result.kind === 'task' && laneId && display.visibility.hiddenLaneIds.includes(laneId)) {
+        displayControls.toggleLane(laneId);
+      }
+      if (result.kind === 'note' && !display.visibility.showNotes) displayControls.toggleNotes();
+      dispatchView({ type: 'goTo', date: result.date, zoom: view.zoom });
+      // The timeline scrolls to the day first, unless the system asks for less motion.
+      if (!prefersReducedMotion()) wait = SCROLL_DURATION_MS + 50;
+    }
+    window.setTimeout(() => {
+      const element =
+        document.getElementById(elementId(result.id)) ??
+        document.getElementById(areaElementId(area));
+      element?.scrollIntoView({
+        block: 'center',
+        // In the middle of the calendars, clear of the column of the names.
+        inline: result.kind === 'memo' ? 'nearest' : 'center',
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      });
+    }, wait);
+  };
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas font-sans text-fg selection:bg-accent selection:text-on-accent">
-      <Header
-        view={view}
-        onViewAction={dispatchView}
-        filters={filters}
-        onFilterChange={setFilters}
-        highlightWeekends={highlightWeekends}
-        showMetrics={showMetrics}
-        hidePastDays={hidePastDays}
-        textScale={textScale}
-        onTextScaleChange={setTextScale}
-        compact={compact}
-        onToggleCompact={() => setCompact((value) => !value)}
-        onToggleWeekends={() => setHighlightWeekends((value) => !value)}
-        onToggleMetrics={() => setShowMetrics((value) => !value)}
-        onToggleHidePastDays={() => setHidePastDays((value) => !value)}
-        onNewTask={handleNewTask}
-        onOpenSettings={() => setDialog({ kind: 'settings' })}
-        onOpenMetrics={() => setDialog({ kind: 'metrics' })}
-        onImportMetrics={() => setDialog({ kind: 'import' })}
-        syncIndicator={instance.kind === 'cloud' && <SyncIndicator repository={repository} />}
-      />
-
-      {/* Under the header and not fixed with it: the notes scroll away with the page. */}
-      <div className="border-b border-line bg-surface px-4 py-3 sm:px-6">
-        <MemoStrip
-          memos={shownMemos}
-          total={plan.memos.length}
-          sharing={
-            me && {
-              me,
-              scope: memoScope,
-              counts: {
-                mine: memosInScope(plan.memos, 'mine', me.id).length,
-                all: plan.memos.length,
-              },
-              onScopeChange: setMemoScope,
-            }
-          }
-          searching={searching}
-          expanded={memosExpanded}
-          onToggleExpanded={() => setMemosExpanded((value) => !value)}
-          onAdd={(title, isPrivate) =>
-            repository.createMemo(isPrivate ? { title, private: true } : { title })
-          }
-          onOpen={(memo) => setDialog({ kind: 'memo', memo })}
-          onMove={(memoId, beforeId) => repository.moveMemo(memoId, beforeId)}
-          today={today}
-        />
-      </div>
-
-      {instance.kind === 'local' && instance.onSignIn && (
-        <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-warning bg-warning-soft px-4 py-1.5 text-center text-xs">
-          Stai provando l'app senza account: i dati restano in questo browser.
-          <button
-            type="button"
-            onClick={instance.onSignIn}
-            className="cursor-pointer font-semibold text-link underline"
-          >
-            Accedi all'istanza condivisa
-          </button>
-        </p>
-      )}
-
-      <main className="w-full flex-1 space-y-4 px-4 py-5 sm:px-6">
-        <TaskSummary
-          tasks={plan.tasks}
-          found={
-            isFiltering(filters)
-              ? {
-                  tasks: filteredTasks.length,
-                  search: searching
-                    ? {
-                        notes: noteMatches?.size ?? 0,
-                        allNotes: Object.keys(plan.dailyNotes).length,
-                        memos: shownMemos.length,
-                        allMemos: plan.memos.length,
-                      }
-                    : null,
-                }
-              : null
-          }
-          onClearFilter={() => setFilters(NO_FILTER)}
-        />
-
-        {isPlanEmpty(plan) && (
-          <EmptyPlanNotice
-            warning={loadWarning}
-            onLoadSample={handleLoadSample}
-            onRestoreBackup={() => setDialog({ kind: 'settings' })}
-          />
-        )}
-
-        {view.mode === 'timeline' ? (
-          <Timeline
-            range={timelineRange}
-            zoom={view.zoom}
-            anchor={view.anchor}
-            jump={view.jump}
-            onScrolled={(first, last, settled) =>
-              dispatchView({ type: 'scrolled', first, last, settled })
-            }
-            tasks={filteredTasks}
-            lanes={plan.lanes}
-            metrics={plan.metrics}
-            dailyNotes={plan.dailyNotes}
-            noteMatches={noteMatches}
-            showMetrics={showMetrics}
-            highlightWeekends={highlightWeekends}
-            textScale={textScale}
-            compact={compact}
-            visibility={visibility}
-            onShowAllRows={handleShowAllRows}
-            onZoom={(step) => dispatchView({ type: 'zoomBy', step })}
-            onShowDays={(date) => dispatchView({ type: 'goTo', date, zoom: 'detail' })}
-            onChangeTask={handleChangeTask}
-            onOpenTask={openTask}
-            onDuplicateTask={handleDuplicateTask}
-            onDeleteTask={handleDeleteTask}
-            onAddTaskAt={handleAddTaskAt}
-            onSaveNote={(date, text) => repository.setNote(date, text)}
-            onMoveNote={(from, to, text) => repository.moveNote(from, to, text)}
-          />
-        ) : (
-          <WeekBoard
-            week={week}
-            tasks={filteredTasks}
-            lanes={plan.lanes}
-            metrics={plan.metrics}
-            dailyNotes={plan.dailyNotes}
-            noteMatches={noteMatches}
-            highlightWeekends={highlightWeekends}
-            textScale={textScale}
-            compact={compact}
-            visibility={visibility}
-            onChangeTask={handleChangeTask}
-            onOpenTask={openTask}
-            onDuplicateTask={handleDuplicateTask}
-            onAddTaskAt={handleAddTaskAt}
-            onMoveNote={(from, to) => repository.moveNote(from, to)}
-          />
-        )}
-
-        <RowVisibilityBar
-          lanes={plan.lanes}
-          visibility={visibility}
-          onToggleLane={(laneId) => setVisibility((current) => toggleLane(current, laneId))}
-          onToggleNotes={() =>
-            setVisibility((current) => ({ ...current, showNotes: !current.showNotes }))
-          }
-          onShowAll={handleShowAllRows}
-        />
-      </main>
-
-      <footer className="w-full px-4 pb-5 sm:px-6">
-        <VersionStamp />
-      </footer>
-
-      {dialog?.kind === 'task' && (
-        <TaskDialog
-          initialTask={dialog.task}
-          defaultDate={dialog.task ? undefined : dialog.date}
-          defaultLaneId={dialog.task ? undefined : dialog.laneId}
-          lanes={plan.lanes}
-          onClose={() => setDialog(null)}
-          onSave={handleSaveTask}
-          onDelete={handleDeleteTask}
-          onDuplicate={handleDuplicateTask}
-        />
-      )}
-
-      {dialog?.kind === 'memo' && (
-        <MemoDialog
-          memo={dialog.memo}
-          // A note found by the search may be outside the strip as shown: then it is the whole strip.
-          strip={scopedMemos.some((memo) => memo.id === dialog.memo.id) ? scopedMemos : plan.memos}
-          me={me}
-          // Deleted by someone else, or made private by its author, while the window was open.
-          gone={!plan.memos.some((memo) => memo.id === dialog.memo.id)}
-          onSave={(content, beforeId) => handleSaveMemo(dialog.memo, content, beforeId)}
-          onDelete={() => handleDeleteMemo(dialog.memo)}
-          onClose={() => setDialog(null)}
-        />
-      )}
-
-      <MemoReminders
-        memos={scopedMemos}
-        seen={seenReminders}
-        onSeen={rememberShown}
-        onOpen={(memo) => setDialog({ kind: 'memo', memo })}
-      />
-
-      {dialog?.kind === 'metrics' && (
-        <DailyMetricsDialog
-          year={anchorDate.getFullYear()}
-          month={anchorDate.getMonth()}
-          metrics={plan.metrics}
-          onClose={() => setDialog(null)}
-          onSave={handleSaveMetrics}
-        />
-      )}
-
-      {dialog?.kind === 'import' && (
-        <ImportForecastDialog
-          metrics={plan.metrics}
-          onImport={handleImportForecast}
-          onClose={() => setDialog(null)}
-        />
-      )}
-
-      {dialog?.kind === 'settings' && (
-        <SettingsDialog
-          plan={plan}
-          instance={instance}
-          theme={theme}
-          onChangeTheme={setTheme}
+    <SearchHighlightContext value={highlight}>
+      <div className="flex min-h-screen flex-col bg-canvas font-sans text-fg selection:bg-accent selection:text-on-accent">
+        <Header
           textScale={textScale}
           onTextScaleChange={setTextScale}
-          onClose={() => setDialog(null)}
-          onReplacePlan={handleReplacePlan}
-          onOpenHistory={() => {
-            setDialog(null);
-            goToPage('history');
+          compact={compact}
+          onToggleCompact={() => setCompact((value) => !value)}
+          areas={areas}
+          onToggleArea={handleToggleArea}
+          search={filters.search}
+          onSearchChange={handleSearchChange}
+          onSearchKey={(backwards) => {
+            if (results.length === 0) return;
+            showResult(
+              stepResult(
+                currentIndex < 0 ? null : currentIndex,
+                results.length,
+                backwards ? -1 : 1,
+              ),
+            );
           }}
+          searchBar={
+            searching && (
+              <SearchResultsBar
+                mode={searchMode}
+                onModeChange={(mode) => {
+                  setSearchMode(mode);
+                  setCurrentResult(null);
+                }}
+                counts={searchCounts}
+                results={results}
+                current={currentIndex < 0 ? null : currentIndex}
+                onShow={showResult}
+                onClear={() => {
+                  handleSearchChange('');
+                  // The bar goes away with its button: the focus goes back to the field.
+                  window.requestAnimationFrame(() =>
+                    document.getElementById(SEARCH_FIELD_ID)?.focus(),
+                  );
+                }}
+              />
+            )
+          }
+          searchAnnouncement={searching ? describeFound(searchCounts, results.length) : ''}
+          syncIndicator={instance.kind === 'cloud' && <SyncIndicator repository={repository} />}
+          onOpenSettings={() => setDialog({ kind: 'settings' })}
         />
-      )}
-    </div>
+
+        {instance.kind === 'local' && instance.onSignIn && (
+          <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-warning bg-warning-soft px-4 py-1.5 text-center text-xs">
+            Stai provando l'app senza account: i dati restano in questo browser.
+            <button
+              type="button"
+              onClick={instance.onSignIn}
+              className="cursor-pointer font-semibold text-link underline"
+            >
+              Accedi all'istanza condivisa
+            </button>
+          </p>
+        )}
+
+        <main className="w-full flex-1 space-y-6 px-4 py-5 sm:px-6">
+          {isPlanEmpty(plan) && (
+            <EmptyPlanNotice
+              warning={loadWarning}
+              onLoadSample={handleLoadSample}
+              onRestoreBackup={() => setDialog({ kind: 'settings' })}
+            />
+          )}
+
+          {areas.notes && (
+            <MemoStrip
+              id={areaElementId('notes')}
+              unavailable={sync.missing.includes('memos')}
+              memos={shownMemos}
+              total={plan.memos.length}
+              sharing={
+                me && {
+                  me,
+                  nameOf,
+                  scope: memoScope,
+                  grouped: memosGrouped,
+                  onToggleGrouped: () => setMemosGrouped((value) => !value),
+                  // The user's own group comes first, until they move it.
+                  groupOrder: memoGroupOrder,
+                  onGroupOrderChange: setGroupOrder,
+                  counts: {
+                    mine: memosInScope(plan.memos, 'mine', me.id).length,
+                    all: plan.memos.length,
+                  },
+                  onScopeChange: setMemoScope,
+                }
+              }
+              searching={searching}
+              expanded={memosExpanded}
+              textScale={textScale}
+              compact={compact}
+              onToggleExpanded={() => setMemosExpanded((value) => !value)}
+              onAdd={(title, isPrivate) =>
+                repository.createMemo(isPrivate ? { title, private: true } : { title })
+              }
+              onOpen={(memo) => setDialog({ kind: 'memo', memo })}
+              onMove={(memoId, beforeId) => repository.moveMemo(memoId, beforeId)}
+              today={today}
+            />
+          )}
+
+          {areas.releases && (
+            <ReleasesArea
+              id={areaElementId('releases')}
+              plan={plan}
+              tasks={filteredTasks}
+              noteMatches={noteMatches}
+              status={filters.status}
+              onStatusChange={(status) => setFilters({ ...filters, status })}
+              view={view}
+              onViewAction={dispatchView}
+              timelineRange={timelineRange}
+              week={week}
+              display={display}
+              displayControls={displayControls}
+              textScale={textScale}
+              compact={compact}
+              onNewTask={handleNewTask}
+              onOpenTask={openTask}
+              onChangeTask={handleChangeTask}
+              onDuplicateTask={handleDuplicateTask}
+              onDeleteTask={handleDeleteTask}
+              onAddTaskAt={handleAddTaskAt}
+              onSaveNote={(date, text) => repository.setNote(date, text)}
+              onMoveNote={(from, to, text) => repository.moveNote(from, to, text)}
+              onEditMetrics={() => setDialog({ kind: 'metrics' })}
+              onImportMetrics={() => setDialog({ kind: 'import' })}
+            />
+          )}
+
+          {areas.roadmaps && (
+            <RoadmapArea
+              id={areaElementId('roadmaps')}
+              unavailable={sync.missing.includes('projects')}
+              projects={plan.projects}
+              shown={shownProjects}
+              searching={searching}
+              today={today}
+              textScale={textScale}
+              compact={compact}
+              onCreate={handleCreateProject}
+              onUpdate={(projectId, changes) => repository.updateProject(projectId, changes)}
+              onSave={handleSaveProject}
+              onDelete={handleDeleteProject}
+            />
+          )}
+
+          {AREAS.every(({ id }) => !areas[id]) && (
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-line bg-surface p-10 text-center">
+              <p className="text-sm font-bold">Tutte le aree sono nascoste</p>
+              <p className="text-xs text-fg-muted">Scegli in alto quali mostrare.</p>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setAreas(ALL_AREAS_VISIBLE);
+                  // The button goes away: the focus goes to the first area.
+                  window.requestAnimationFrame(() =>
+                    document.getElementById(areaTitleId(areaElementId('notes')))?.focus(),
+                  );
+                }}
+              >
+                Mostra tutte le aree
+              </Button>
+            </div>
+          )}
+        </main>
+
+        <footer className="w-full px-4 pb-5 sm:px-6">
+          <VersionStamp />
+        </footer>
+
+        {dialog?.kind === 'task' && (
+          <TaskDialog
+            initialTask={dialog.task}
+            defaultDate={dialog.task ? undefined : dialog.date}
+            defaultLaneId={dialog.task ? undefined : dialog.laneId}
+            lanes={plan.lanes}
+            onClose={() => setDialog(null)}
+            onSave={handleSaveTask}
+            onDelete={handleDeleteTask}
+            onDuplicate={handleDuplicateTask}
+          />
+        )}
+
+        {dialog?.kind === 'memo' && (
+          <MemoDialog
+            memo={dialog.memo}
+            {...memoPlaces(dialog.memo)}
+            me={me}
+            authorName={dialog.memo.author ? nameOf(dialog.memo.author) : null}
+            // Deleted by someone else, or made private by its author, while the window was open.
+            gone={!plan.memos.some((memo) => memo.id === dialog.memo.id)}
+            onSave={(content, beforeId) => handleSaveMemo(dialog.memo, content, beforeId)}
+            onDelete={() => handleDeleteMemo(dialog.memo)}
+            onClose={() => setDialog(null)}
+          />
+        )}
+
+        <MemoReminders
+          memos={scopedMemos}
+          seen={seenReminders}
+          onSeen={rememberShown}
+          onOpen={(memo) => setDialog({ kind: 'memo', memo })}
+        />
+
+        {dialog?.kind === 'metrics' && (
+          <DailyMetricsDialog
+            year={anchorDate.getFullYear()}
+            month={anchorDate.getMonth()}
+            metrics={plan.metrics}
+            onClose={() => setDialog(null)}
+            onSave={handleSaveMetrics}
+          />
+        )}
+
+        {dialog?.kind === 'import' && (
+          <ImportForecastDialog
+            metrics={plan.metrics}
+            onImport={handleImportForecast}
+            onClose={() => setDialog(null)}
+          />
+        )}
+
+        {dialog?.kind === 'settings' && (
+          <SettingsDialog
+            plan={plan}
+            instance={instance}
+            theme={theme}
+            onChangeTheme={setTheme}
+            textScale={textScale}
+            onTextScaleChange={setTextScale}
+            onClose={() => setDialog(null)}
+            onReplacePlan={handleReplacePlan}
+            onOpenHistory={() => {
+              setDialog(null);
+              goToPage('history');
+            }}
+          />
+        )}
+      </div>
+    </SearchHighlightContext>
   );
 }

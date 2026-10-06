@@ -7,18 +7,22 @@ giornalieri.
 
 ## Funzionalità
 
+- Tre aree, Note, Next Releases e Roadmaps, da mostrare o nascondere dall'intestazione.
 - Calendario continuo a corsie, con i mesi uno dopo l'altro, tre livelli di zoom e i giorni passati
   in grigio o nascosti, e bacheca settimanale.
-- Testo del calendario ingrandibile con le lenti, fino al 175%, e vista compatta che mostra più
-  testo in ogni casella.
+- Testo di note e calendari regolabile con le lenti, dal 75% al 175%, e vista compatta che mostra
+  più testo in ogni casella.
 - Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e
   checklist.
 - Note e valori giornalieri, per esempio il fatturato, allineati ai giorni del calendario. Le note
   si spostano trascinandole su un altro giorno, anche da tastiera.
 - Note libere sotto la ricerca, una dopo l'altra: titolo, testo, colore, un promemoria che compare
   il giorno scelto e un ordine che si cambia trascinandole. In un'istanza condivisa ognuno vede le
-  sue, può guardare quelle di tutti e può tenerne alcune private.
-- Ricerca in attività, note dei giorni e note libere.
+  sue, può guardare quelle di tutti, raggruppate per autore, e può tenerne alcune private.
+- Roadmaps: i progetti passati, in corso e futuri su una linea del tempo propria, a mesi o a
+  trimestri, con stato, responsabile e descrizione; si spostano e si allungano trascinandoli.
+- Ricerca in attività, note dei giorni, note libere e progetti, con tutte le parole o almeno una:
+  le parole trovate sono evidenziate e i risultati si scorrono uno alla volta.
 - Fatturato previsto importato da un foglio Google in CSV, con il semaforo dei rilasci e le
   promozioni di ogni giorno.
 - Festività italiane e weekend evidenziati.

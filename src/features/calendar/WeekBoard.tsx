@@ -8,7 +8,10 @@ import { moveTask, moveTaskTo, rangeDays, tasksOnDay } from '../../domain/schedu
 import type { DateRange } from '../../domain/schedule';
 import type { DailyMetric, DailyNotes, Lane, RowVisibility, TaskItem } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
+import { Highlight } from '../../shared/ui/Highlight';
 import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
+import { scaledTextStyle } from '../../shared/ui/textScale';
+import type { TextScale } from '../../shared/ui/textScale';
 import { taskColorStyle } from '../../themes';
 import {
   ITALIAN_DAYS_SHORT,
@@ -18,8 +21,6 @@ import {
   todayIso,
 } from '../../utils/dateUtils';
 import { APPROVAL_TONE, ApprovalIcon, DayDetails, describeDay } from '../metrics/MetricDetails';
-import { calendarTextStyle } from './timelineLayout';
-import type { TextScale } from './timelineLayout';
 
 interface WeekBoardProps {
   week: DateRange;
@@ -29,6 +30,8 @@ interface WeekBoardProps {
   dailyNotes: DailyNotes;
   /** The days whose note the search finds; null while nothing is searched. */
   noteMatches: Set<string> | null;
+  /** The revenue of each day, in its header. */
+  showMetrics: boolean;
   highlightWeekends: boolean;
   /** Size of the calendar's text, 1 being the normal one, and whether it is compact. */
   textScale: TextScale;
@@ -53,6 +56,7 @@ export function WeekBoard({
   metrics,
   dailyNotes,
   noteMatches,
+  showMetrics,
   highlightWeekends,
   textScale,
   compact,
@@ -99,12 +103,12 @@ export function WeekBoard({
       </p>
       <div
         data-compact={compact || undefined}
-        style={calendarTextStyle(textScale, compact)}
+        style={scaledTextStyle(textScale, compact)}
         className="grid grid-cols-1 gap-3 md:grid-cols-7 in-data-compact:gap-2"
       >
         {rangeDays(week).map((date) => {
           const red = isRedDay(parseISODate(date), highlightWeekends);
-          const metric = metrics.find((item) => item.date === date);
+          const metric = showMetrics ? metrics.find((item) => item.date === date) : undefined;
           const note =
             visibility.showNotes && isNoteShown(noteMatches, date) ? dailyNotes[date] : undefined;
           const dayTasks = tasksOnDay(visibleTasks, date);
@@ -166,7 +170,9 @@ export function WeekBoard({
                       className="mt-0.5 h-3 w-3 shrink-0 text-warning"
                       aria-hidden="true"
                     />
-                    <span className="break-words hyphens-auto">{note}</span>
+                    <span className="break-words hyphens-auto">
+                      <Highlight text={note} />
+                    </span>
                   </p>
                 )}
               </header>
@@ -190,7 +196,7 @@ export function WeekBoard({
                       onClick={() => onOpenTask(task)}
                       className="block w-full cursor-pointer text-left text-xs leading-snug font-bold tracking-tight wrap-break-word whitespace-pre-line uppercase hyphens-auto hover:underline in-data-compact:leading-tight"
                     >
-                      {task.title}
+                      <Highlight text={task.title} />
                     </button>
                     {task.startDate !== task.endDate && (
                       <p className="mt-1 font-mono text-xs in-data-compact:mt-0.5">
@@ -201,7 +207,7 @@ export function WeekBoard({
                     <div className="mt-2 flex items-center justify-between border-t border-current/15 pt-1.5 text-xs in-data-compact:mt-1 in-data-compact:pt-1">
                       <span className="flex items-center gap-1">
                         <User className="h-3 w-3" aria-hidden="true" />
-                        {task.assignee || 'Non assegnato'}
+                        {task.assignee ? <Highlight text={task.assignee} /> : 'Non assegnato'}
                       </span>
                       {task.deliverables && task.deliverables.length > 0 && (
                         <span className="font-mono">✓ {task.deliverables.length}</span>

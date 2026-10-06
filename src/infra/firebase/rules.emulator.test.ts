@@ -501,3 +501,72 @@ describe('free notes', () => {
     await assertSucceeds(share.commit());
   });
 });
+
+describe('projects', () => {
+  beforeEach(seedPlan);
+
+  const PROJECT: Record<string, unknown> = {
+    title: 'App mobile 3.0',
+    startDate: '2026-09-10',
+    endDate: '2026-12-20',
+    colorId: 'purple',
+    status: 'in_progress',
+  };
+
+  function writeProject(
+    db: Firestore,
+    identity: Identity,
+    data: Record<string, unknown>,
+    id = 'p1',
+    update = false,
+  ) {
+    const historyId = `h-${id}-${Math.random().toString(36).slice(2)}`;
+    const batch = writeBatch(db);
+    const ref = doc(db, `${PLAN}/projects/${id}`);
+    if (update) batch.update(ref, { ...data, ...audit(identity, historyId) });
+    else batch.set(ref, { ...data, ...audit(identity, historyId) });
+    batch.set(
+      doc(db, `${PLAN}/history/${historyId}`),
+      historyEntry(identity, 'project', id, update ? 'update' : 'create'),
+    );
+    return batch.commit();
+  }
+
+  it('accepts a project with its history entry, with or without owner and description', async () => {
+    await assertSucceeds(writeProject(editor, EDITOR, PROJECT));
+    await assertSucceeds(
+      writeProject(
+        owner,
+        OWNER,
+        { ...PROJECT, owner: 'Giulia', description: 'Nuovo carrello', status: 'idea' },
+        'p2',
+      ),
+    );
+    await assertSucceeds(writeProject(editor, EDITOR, { endDate: '2027-01-31' }, 'p2', true));
+    await assertSucceeds(getDocs(collection(editor, `${PLAN}/projects`)));
+    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/projects/p2`)));
+  });
+
+  it('refuses a project without a history entry, and bad fields', async () => {
+    await assertFails(
+      setDoc(doc(editor, `${PLAN}/projects/p1`), { ...PROJECT, ...audit(EDITOR, 'h9') }),
+    );
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, title: '' }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, title: 'x'.repeat(201) }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, endDate: '2026-09-01' }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, startDate: '10/09/2026' }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, colorId: 'pink' }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, status: 'blocked' }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, owner: '' }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, description: 'x'.repeat(5001) }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, progress: 50 }));
+  });
+
+  it('keeps strangers and anonymous visitors out', async () => {
+    await assertSucceeds(writeProject(editor, EDITOR, PROJECT));
+    await assertFails(writeProject(stranger, STRANGER, PROJECT, 'p2'));
+    await assertFails(getDocs(collection(stranger, `${PLAN}/projects`)));
+    await assertFails(getDoc(doc(nobody, `${PLAN}/projects/p1`)));
+    await assertFails(deleteDoc(doc(stranger, `${PLAN}/projects/p1`)));
+  });
+});

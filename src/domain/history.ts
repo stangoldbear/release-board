@@ -2,10 +2,11 @@ import { formatDateToIT } from '../utils/dateUtils';
 import { TASK_COLORS } from './colors';
 import { formatLocaleNumber } from './numberFormat';
 import { TASK_STATUS_LABELS } from './plan';
-import type { TaskStatus } from './types';
+import { PROJECT_STATUS_LABELS } from './projects';
+import type { ProjectStatus, TaskStatus } from './types';
 
 export type HistoryEntity =
-  'plan' | 'lane' | 'task' | 'metric' | 'value' | 'note' | 'memo' | 'member';
+  'plan' | 'lane' | 'task' | 'metric' | 'value' | 'note' | 'memo' | 'project' | 'member';
 export type HistoryAction = 'create' | 'update' | 'delete' | 'import' | 'setup';
 
 /** One change to the plan: who did what, and when. */
@@ -32,6 +33,7 @@ const ENTITY_LABELS: Record<HistoryEntity, string> = {
   value: 'il valore',
   note: 'la nota',
   memo: 'la nota libera',
+  project: 'il progetto',
   member: 'il membro',
 };
 
@@ -97,10 +99,12 @@ function memoVerb(entry: HistoryEntry): string {
 /** "ha fatto cosa", without who: the history page shows the author apart. */
 export function describeChange(entry: HistoryEntry): string {
   if (entry.summary) return `${ACTION_LABELS[entry.action]}: ${entry.summary}`;
-  if (entry.entity === 'memo') {
+  // Free notes and projects are named with what they are: "il progetto «App mobile»".
+  if (entry.entity === 'memo' || entry.entity === 'project') {
     const title = titleOf(entry);
-    const what = title ? `${ENTITY_LABELS.memo} ${title}` : ENTITY_LABELS.memo;
-    return `${memoVerb(entry)} ${what}`;
+    const label = ENTITY_LABELS[entry.entity];
+    const what = title ? `${label} ${title}` : label;
+    return `${entry.entity === 'memo' ? memoVerb(entry) : ACTION_LABELS[entry.action]} ${what}`;
   }
   const move = noteMove(entry);
   if (move) {
@@ -120,12 +124,14 @@ export function describeHistoryEntry(entry: HistoryEntry): string {
 }
 
 /** What a change is about, as the history page groups and filters it. */
-export type HistoryKind = 'task' | 'note' | 'memo' | 'revenue' | 'lane' | 'member' | 'plan';
+export type HistoryKind =
+  'task' | 'note' | 'memo' | 'project' | 'revenue' | 'lane' | 'member' | 'plan';
 
 export const HISTORY_KIND_LABELS: Record<HistoryKind, string> = {
   task: 'Attività',
   note: 'Note',
   memo: 'Note libere',
+  project: 'Progetti',
   revenue: 'Fatturato',
   lane: 'Corsie',
   member: 'Membri',
@@ -161,6 +167,19 @@ const TASK_FIELDS: Record<string, string> = {
 /** Fields worth showing for a task that was added or deleted. */
 const TASK_SUMMARY_FIELDS = ['laneId', 'startDate', 'endDate', 'status'];
 
+const PROJECT_FIELDS: Record<string, string> = {
+  title: 'Titolo',
+  startDate: 'Inizio',
+  endDate: 'Fine',
+  status: 'Stato',
+  colorId: 'Colore',
+  owner: 'Responsabile',
+  description: 'Descrizione',
+};
+
+/** Fields worth showing for a project that was added or deleted. */
+const PROJECT_SUMMARY_FIELDS = ['startDate', 'endDate', 'status', 'owner'];
+
 const MEMO_FIELDS: Record<string, string> = {
   title: 'Titolo',
   body: 'Testo',
@@ -170,6 +189,7 @@ const MEMO_FIELDS: Record<string, string> = {
 };
 
 function formatField(
+  entity: HistoryEntity,
   field: string,
   value: unknown,
   laneName: (id: string) => string | undefined,
@@ -186,7 +206,11 @@ function formatField(
     case 'remindOn':
       return formatDateToIT(value);
     case 'status':
-      return TASK_STATUS_LABELS[value as TaskStatus] ?? value;
+      return (
+        (entity === 'project'
+          ? PROJECT_STATUS_LABELS[value as ProjectStatus]
+          : TASK_STATUS_LABELS[value as TaskStatus]) ?? value
+      );
     case 'colorId':
       return TASK_COLORS.find((color) => color.id === value)?.name ?? value;
     case 'borderStyle':
@@ -210,8 +234,8 @@ export function fieldChanges(
   const after = entry.after ?? {};
   const pair = (field: string, label: string): FieldChange => ({
     label,
-    before: formatField(field, before[field], laneName),
-    after: formatField(field, after[field], laneName),
+    before: formatField(entry.entity, field, before[field], laneName),
+    after: formatField(entry.entity, field, after[field], laneName),
   });
 
   if (entry.entity === 'task') {
@@ -224,6 +248,18 @@ export function fieldChanges(
         : TASK_SUMMARY_FIELDS;
     return fields
       .map((field) => pair(field, TASK_FIELDS[field] ?? field))
+      .filter((change) => change.before !== undefined || change.after !== undefined);
+  }
+  if (entry.entity === 'project') {
+    // An update keeps the title in `after` only to name the project, as for tasks.
+    const fields =
+      entry.action === 'update'
+        ? Object.keys(PROJECT_FIELDS).filter(
+            (field) => field in before || (field !== 'title' && field in after),
+          )
+        : PROJECT_SUMMARY_FIELDS;
+    return fields
+      .map((field) => pair(field, PROJECT_FIELDS[field] ?? field))
       .filter((change) => change.before !== undefined || change.after !== undefined);
   }
   if (entry.entity === 'memo') {
@@ -251,7 +287,7 @@ export function fieldChanges(
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, value]) => ({
         label: formatDateToIT(date),
-        after: value === null ? 'Rimosso' : formatField('value', value, laneName),
+        after: value === null ? 'Rimosso' : formatField(entry.entity, 'value', value, laneName),
       }));
   }
   return [];

@@ -1,19 +1,22 @@
 import {
   CalendarRange,
   ListTodo,
+  Milestone,
   NotebookPen,
   Rows3,
   StickyNote,
   TrendingUp,
   Users,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { HistoryKind } from '../../domain/history';
 import { addDaysIso, parseISODate } from '../../utils/dateUtils';
 
-const KIND_ICONS = {
+const KIND_ICONS: Record<HistoryKind, LucideIcon> = {
   task: ListTodo,
   note: StickyNote,
   memo: NotebookPen,
+  project: Milestone,
   revenue: TrendingUp,
   lane: Rows3,
   member: Users,

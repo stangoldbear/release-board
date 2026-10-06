@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { ZOOM_COLUMN_UNIT, rangeColumns } from '../../domain/schedule';
+import { LINE_HEIGHT } from '../../shared/ui/textScale';
 import type { DateRange, ZoomLevel } from '../../domain/schedule';
 import {
   ITALIAN_DAYS_SHORT,
@@ -30,18 +31,11 @@ const SCALES: Record<ZoomLevel, { dayWidth: number; barHeight: number }> = {
 /** Width of the column with the row names, with text of the normal size. */
 const LABEL_WIDTH = 96;
 
-/**
- * Sizes of the calendar's text, as multiples of the normal one: the magnifiers in the header step
- * through them. Never below 1, which keeps the smallest text at 12 pixels.
- */
-export const TEXT_SCALES = [1, 1.15, 1.3, 1.5, 1.75] as const;
-export type TextScale = (typeof TEXT_SCALES)[number];
-
 /** Most of the calendar's text, in pixels at the normal size (text-xs). */
 const TEXT_SIZE = 12;
 
-/** Line height of the calendar's text, as a multiple of its size; compact mode tightens it. */
-const LINE_HEIGHT = { normal: 4 / 3, compact: 1.15 };
+/** The border of a bar takes 2 pixels at the top and 2 at the bottom, at every text size. */
+const BAR_BORDER = 4;
 
 /** The sizes of the timeline for a zoom level, a text size and a density. */
 export interface TimelineMetrics {
@@ -65,8 +59,8 @@ export interface TimelineMetrics {
 
 /**
  * Bigger text makes the bars, the names column and the notes taller or wider with it, not the
- * days, which the zoom level sets. Compact mode tightens lines and spacing, so that every box
- * shows more of its text.
+ * days, which the zoom level sets; smaller text also brings the bars closer. Compact mode tightens
+ * lines and spacing, so that every box shows more of its text.
  */
 export function timelineMetrics(
   zoom: ZoomLevel,
@@ -74,41 +68,22 @@ export function timelineMetrics(
   compact: boolean,
 ): TimelineMetrics {
   const { dayWidth, barHeight: normalBarHeight } = SCALES[zoom];
-  const barHeight = Math.round(normalBarHeight * textScale);
+  // The room inside the border grows and shrinks with the text, so the same lines always fit.
+  const barHeight = Math.round((normalBarHeight - BAR_BORDER) * textScale) + BAR_BORDER;
   const line = TEXT_SIZE * textScale * (compact ? LINE_HEIGHT.compact : LINE_HEIGHT.normal);
+  const spacing = Math.min(1, textScale);
   return {
     dayWidth,
     barHeight,
-    trackGap: compact ? 3 : 6,
-    lanePadding: compact ? 3 : 8,
+    trackGap: Math.round((compact ? 3 : 6) * spacing),
+    lanePadding: Math.round((compact ? 3 : 8) * spacing),
     labelWidth: Math.round(LABEL_WIDTH * textScale),
-    // The border of a bar takes 2 pixels at the top and 2 at the bottom.
-    barLines: Math.max(1, Math.floor((barHeight - 4) / line)),
+    barLines: Math.max(1, Math.floor((barHeight - BAR_BORDER) / line)),
     noteHeight: Math.round(64 * textScale),
     noteLines: compact ? 4 : 3,
     weekNoteHeight: Math.round(56 * textScale),
     digitWidth: 7 * textScale,
   };
-}
-
-/**
- * The text of the calendar at a size and a density, for the element around its rows. Tailwind's
- * text-xs, text-sm and text-base read these variables, so they scale only inside it, while the
- * header, the buttons and the dialogs keep their size. Letters spread a little as they grow.
- */
-export function calendarTextStyle(textScale: number, compact: boolean): CSSProperties {
-  const style: Record<string, string> = {
-    '--text-xs': `${0.75 * textScale}rem`,
-    '--text-sm': `${0.875 * textScale}rem`,
-    '--text-base': `${textScale}rem`,
-    letterSpacing: `${Math.round((textScale - 1) * 40) / 1000}em`,
-  };
-  if (compact) {
-    for (const size of ['xs', 'sm', 'base']) {
-      style[`--text-${size}--line-height`] = String(LINE_HEIGHT.compact);
-    }
-  }
-  return style;
 }
 
 /** The lines of text that a style clamps to, with an ellipsis on the last one. */

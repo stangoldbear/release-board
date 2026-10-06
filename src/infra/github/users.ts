@@ -4,6 +4,8 @@ export interface GitHubUser {
   id: string;
   login: string;
   avatarUrl: string;
+  /** The name on the public profile, when its owner wrote one. */
+  name: string | null;
 }
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -46,7 +48,8 @@ async function fetchUser(path: string, fetchImpl: FetchLike): Promise<GitHubUser
   }
   const avatarUrl =
     'avatar_url' in data && typeof data.avatar_url === 'string' ? data.avatar_url : '';
-  return { id: String(data.id), login: data.login, avatarUrl };
+  const name = 'name' in data && typeof data.name === 'string' ? data.name.trim() || null : null;
+  return { id: String(data.id), login: data.login, avatarUrl, name };
 }
 
 /** The account with this username, or null when there is none. Public API, no token needed. */
@@ -65,4 +68,15 @@ export function lookupGitHubUserById(
 ): Promise<GitHubUser | null> {
   if (!/^\d{1,20}$/.test(id)) return Promise.resolve(null);
   return fetchUser(`/user/${id}`, fetchImpl);
+}
+
+/**
+ * The name on the public profile of the account with this numeric id, or null when it has none or
+ * there is no such account. It fails as `lookupGitHubUser` does, when GitHub cannot answer.
+ */
+export async function lookupGitHubNameById(
+  id: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<string | null> {
+  return (await lookupGitHubUserById(id, fetchImpl))?.name ?? null;
 }

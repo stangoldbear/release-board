@@ -19,11 +19,14 @@ import type {
   WriteBatch,
 } from 'firebase/firestore';
 import type { HistoryQuery, HistoryReader } from '../../app/HistoryReader';
-import type { PlanRepository, SyncState, SyncStatus } from '../../app/PlanRepository';
+import { INITIAL_SYNC } from '../../app/PlanRepository';
+import type { PlanPart, PlanRepository, SyncState, SyncStatus } from '../../app/PlanRepository';
 import { isHistoryAction, isHistoryEntity } from '../../domain/history';
 import type { HistoryAction, HistoryEntity, HistoryEntry } from '../../domain/history';
-import { applyMemoChanges, endPosition, memoMoves } from '../../domain/memos';
+import { applyChanges } from '../../domain/changes';
+import { endPosition, memoMoves } from '../../domain/memos';
 import type { MemoChanges, MemoContent } from '../../domain/memos';
+import type { ProjectChanges, ProjectContent } from '../../domain/projects';
 import type { MetricValueChange, TaskChanges } from '../../domain/plan';
 import type {
   DailyMetric,
@@ -31,6 +34,7 @@ import type {
   Memo,
   MemoAuthor,
   PlanSnapshot,
+  Project,
   TaskItem,
 } from '../../domain/types';
 import { formatDateToIT } from '../../utils/dateUtils';
@@ -43,11 +47,13 @@ import {
   importSummary,
   memoContent,
   metricContent,
+  projectContent,
   valueContent,
   readLane,
   readMemo,
   readNote,
   readPrivateMemo,
+  readProject,
   readTask,
   readValue,
   taskContent,
@@ -76,11 +82,21 @@ const CHUNK_SIZE = 499;
 const OPTIONAL_TASK_FIELDS = new Set(['assignee', 'description', 'deliverables']);
 
 /**
- * Free notes came with rules of their own. Until the owner publishes them, reading the notes is
- * refused: the plan opens without them, and the synchronization state says why.
+ * Free notes and projects came with rules of their own. Until the owner publishes them, reading
+ * them is refused: the plan opens without them, and the synchronization state says why.
  */
-const MEMOS_UNAVAILABLE =
-  "Note libere non disponibili: chi gestisce l'istanza deve pubblicare le regole di sicurezza aggiornate.";
+const PART_NAMES: Record<PlanPart, string> = { memos: 'Note libere', projects: 'Progetti' };
+
+/** Where each part lives under the plan, to leave it out of a restore that the rules refuse. */
+const PART_PATHS: Record<PlanPart, string> = { memos: 'memos/', projects: 'projects/' };
+
+export function unavailableMessage(parts: readonly PlanPart[]): string {
+  const [first = '', ...others] = parts.map((part) => PART_NAMES[part]);
+  const names = [first, ...others.map((part) => part.toLowerCase())];
+  const list =
+    names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names.at(-1) ?? ''}` : first;
+  return `${list} non disponibili: chi gestisce l'istanza deve pubblicare le regole di sicurezza aggiornate.`;
+}
 
 type Parts = {
   lanes?: { lane: Lane; position: number }[];
@@ -90,6 +106,7 @@ type Parts = {
   notes?: [string, string][];
   memos?: Memo[];
   privateMemos?: Memo[];
+  projects?: Project[];
 };
 
 function mapDocs<T>(
@@ -126,11 +143,15 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
   private readonly planListeners = new Set<(plan: PlanSnapshot) => void>();
 
   private readonly syncListeners = new Set<(state: SyncState) => void>();
-  private sync: SyncState = { status: 'synced', lastSyncedAt: null, error: null };
+  private sync: SyncState = INITIAL_SYNC;
   private pendingCommits = 0;
   private lastError: string | null = null;
-  /** A part of the plan that cannot be read, and stays so until the page is reloaded. */
-  private unavailable: string | null = null;
+  /**
+   * Parts of the plan that the published rules do not let anyone read yet, by their name for
+   * people, and another failure to read a part; both stay until the page is reloaded.
+   */
+  private readonly refusedParts = new Set<PlanPart>();
+  private unreadable: string | null = null;
   private lastSyncedAt: Date | null = null;
 
   private readonly stops: (() => void)[] = [];
@@ -160,6 +181,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     );
     this.listen('notes', (snapshot) => (this.parts.notes = mapDocs(snapshot, readNote)));
     this.listen('memos', (snapshot) => (this.parts.memos = mapDocs(snapshot, readMemo)), {
+      part: 'memos',
       fallback: () => (this.parts.memos = []),
     });
     this.listen(
@@ -168,8 +190,12 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
         (this.parts.privateMemos = mapDocs(snapshot, (id, data) =>
           readPrivateMemo(id, data, this.author),
         )),
-      { fallback: () => (this.parts.privateMemos = []) },
+      { part: 'memos', fallback: () => (this.parts.privateMemos = []) },
     );
+    this.listen('projects', (snapshot) => (this.parts.projects = mapDocs(snapshot, readProject)), {
+      part: 'projects',
+      fallback: () => (this.parts.projects = []),
+    });
     if (typeof window !== 'undefined') {
       const refresh = () => this.updateSync();
       window.addEventListener('online', refresh);
@@ -347,6 +373,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
 
   createMemo(content: MemoContent): string {
     const id = this.createId();
+    if (this.refusedParts.has('memos')) return id;
     const memo = { ...content, position: endPosition(this.plan?.memos ?? []), author: this.author };
     const batch = writeBatch(this.db);
     if (memo.private) {
@@ -363,11 +390,14 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
   updateMemo(memoId: string, changes: MemoChanges, beforeId?: string | null): string {
     const memos = this.plan?.memos ?? [];
     const current = memos.find((memo) => memo.id === memoId);
-    if (!current) return memoId;
+    if (!current || this.refusedParts.has('memos')) return memoId;
     const moves =
       beforeId === undefined ? new Map<string, number>() : memoMoves(memos, memoId, beforeId);
     const position = moves.get(memoId);
-    const next = { ...applyMemoChanges(current, changes), position: position ?? current.position };
+    const next = {
+      ...applyChanges<Memo>(current, changes),
+      position: position ?? current.position,
+    };
     const visibility = Boolean(next.private) !== Boolean(current.private);
     // Only the author makes a note private, or shared again.
     if (visibility && current.author?.id !== this.author.id) return memoId;
@@ -460,6 +490,52 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     this.updateMemo(memoId, {}, beforeId);
   }
 
+  createProject(content: ProjectContent): string {
+    const id = this.createId();
+    // The published rules do not know projects yet: the write would fail, and the plan says why.
+    if (this.refusedParts.has('projects')) return id;
+    const data = projectContent(content);
+    const batch = writeBatch(this.db);
+    const historyId = this.record(batch, 'project', id, 'create', { after: data });
+    batch.set(this.ref(`projects/${id}`), { ...data, ...this.audit(historyId) });
+    this.commit(batch);
+    return id;
+  }
+
+  updateProject(projectId: string, changes: ProjectChanges): void {
+    const current = this.plan?.projects.find((project) => project.id === projectId);
+    const fields = Object.keys(changes) as (keyof ProjectChanges)[];
+    // A project deleted meanwhile, by someone else, stays deleted.
+    if (!current || fields.length === 0 || this.refusedParts.has('projects')) return;
+    const next = applyChanges<Project>(current, changes);
+    const update: DocumentData = {};
+    for (const field of fields) {
+      const value = changes[field];
+      update[field] = value === null ? deleteField() : value;
+    }
+    const batch = writeBatch(this.db);
+    const historyId = this.record(batch, 'project', projectId, 'update', {
+      before: defined(Object.fromEntries(fields.map((field) => [field, current[field]]))),
+      // The title is kept so that the history can name the project.
+      after: defined({
+        title: current.title,
+        ...Object.fromEntries(fields.map((field) => [field, next[field]])),
+      }),
+    });
+    batch.update(this.ref(`projects/${projectId}`), { ...update, ...this.audit(historyId) });
+    this.commit(batch);
+  }
+
+  deleteProject(projectId: string): void {
+    const before = this.plan?.projects.find((project) => project.id === projectId);
+    // Already deleted by someone else: nothing to delete, nor to record.
+    if (!before) return;
+    const batch = writeBatch(this.db);
+    this.record(batch, 'project', projectId, 'delete', { before: projectContent(before) });
+    batch.delete(this.ref(`projects/${projectId}`));
+    this.commit(batch);
+  }
+
   replacePlan(plan: PlanSnapshot): void {
     // Authors never change: a note already in the plan keeps its own, and one without an author,
     // as in the local mode and the sample, becomes the importer's. Private notes are not part of
@@ -476,9 +552,14 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
         author: authors.get(memo.id) ?? memo.author ?? this.author,
       })),
     };
-    const writes = contentWrites(imported);
+    // A part the published rules refuse would make every batch fail: the rest goes in without it.
+    const allowed = (path: string) =>
+      [...this.refusedParts].every((part) => !path.startsWith(PART_PATHS[part]));
+    const writes = contentWrites(imported).filter((write) => allowed(write.path));
     const keep = new Set(writes.map((write) => write.path));
-    const deletions = this.plan ? contentPaths(this.plan).filter((path) => !keep.has(path)) : [];
+    const deletions = this.plan
+      ? contentPaths(this.plan).filter((path) => allowed(path) && !keep.has(path))
+      : [];
     const operations = [
       ...deletions.map((path) => ({ path, data: null })),
       ...writes.map((write) => ({ path: write.path, data: write.data })),
@@ -557,7 +638,9 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
   private updateSync(): void {
     // Node has a navigator without onLine: only an explicit false means offline.
     const online = typeof navigator === 'undefined' || navigator.onLine !== false;
-    const error = this.lastError ?? this.unavailable;
+    const unavailable =
+      this.refusedParts.size > 0 ? unavailableMessage([...this.refusedParts]) : this.unreadable;
+    const error = this.lastError ?? unavailable;
     const status: SyncStatus = error
       ? 'error'
       : this.pendingCommits > 0
@@ -565,25 +648,27 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
           ? 'saving'
           : 'offline'
         : 'synced';
+    const missing = [...this.refusedParts];
     const current = this.sync;
     if (
       current.status === status &&
       current.error === error &&
-      current.lastSyncedAt?.getTime() === this.lastSyncedAt?.getTime()
+      current.lastSyncedAt?.getTime() === this.lastSyncedAt?.getTime() &&
+      current.missing.join() === missing.join()
     )
       return;
-    this.sync = { status, lastSyncedAt: this.lastSyncedAt, error };
+    this.sync = { status, lastSyncedAt: this.lastSyncedAt, error, missing };
     for (const listener of this.syncListeners) listener(this.sync);
   }
 
   /**
    * Keeps a part of the plan up to date. A part with a fallback is not essential: when it cannot
-   * be read, the plan opens without it.
+   * be read, the plan opens without it, and its name says what is missing.
    */
   private listen(
     path: string,
     apply: (snapshot: QuerySnapshot) => void,
-    optional?: { fallback: () => void },
+    optional?: { part: PlanPart; fallback: () => void },
   ): void {
     let first = true;
     const stop = onSnapshot(
@@ -603,8 +688,8 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       },
       (error: FirestoreError) => {
         if (optional) {
-          this.unavailable =
-            error.code === 'permission-denied' ? MEMOS_UNAVAILABLE : describeFirestoreError(error);
+          if (error.code === 'permission-denied') this.refusedParts.add(optional.part);
+          else this.unreadable = describeFirestoreError(error);
           optional.fallback();
           this.updateSync();
           this.emitIfComplete();
@@ -619,13 +704,21 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
   }
 
   private emitIfComplete(): void {
-    const { lanes, tasks, metricIds, values, notes, memos, privateMemos } = this.parts;
-    if (!lanes || !tasks || !metricIds || !values || !notes || !memos || !privateMemos) return;
+    const { lanes, tasks, metricIds, values, notes, memos, privateMemos, projects } = this.parts;
+    if (!lanes || !tasks || !metricIds || !values || !notes || !memos || !privateMemos || !projects)
+      return;
     // Should a shared note ever have the id of a private one, the private note wins: what the
     // author writes there never reaches the shared one.
     const privateIds = new Set(privateMemos.map((memo) => memo.id));
     const shared = memos.filter((memo) => !privateIds.has(memo.id));
-    this.plan = buildPlan({ lanes, tasks, values, notes, memos: [...shared, ...privateMemos] });
+    this.plan = buildPlan({
+      lanes,
+      tasks,
+      values,
+      notes,
+      memos: [...shared, ...privateMemos],
+      projects,
+    });
     this.markReady();
     for (const listener of this.planListeners) listener(this.plan);
   }

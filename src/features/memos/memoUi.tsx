@@ -1,6 +1,7 @@
-import { Bell, BellRing, Lock, UserRound } from 'lucide-react';
+import { Bell, BellRing, Lock } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { splitMemoTitle } from '../../domain/memos';
+import { Highlight } from '../../shared/ui/Highlight';
 import type { Memo } from '../../domain/types';
 import { taskColorStyle } from '../../themes';
 import { formatDateToIT } from '../../utils/dateUtils';
@@ -61,31 +62,47 @@ export function MemoDot({ memo }: { memo: Pick<Memo, 'colorId'> }) {
 /** The title, with what comes before its colon in bold: "**App mobile:** rilascio a gennaio". */
 export function MemoTitle({ title }: { title: string }) {
   const { lead, rest } = splitMemoTitle(title);
-  if (!lead) return title;
+  if (!lead) return <Highlight text={title} />;
   return (
     <>
-      <strong className="font-bold">{lead}</strong> {rest}
+      <strong className="font-bold">
+        <Highlight text={lead} />
+      </strong>{' '}
+      <Highlight text={rest} />
     </>
   );
 }
 
-/** Who wrote a note, when it is someone else: the shape of a person, and the username. */
-export function MemoAuthorName({ login }: { login: string }) {
+/**
+ * Who wrote a note, in full, on a line of its own under the title and much smaller: the name is
+ * also in the label of the element that shows it.
+ */
+export function MemoAuthorLine({ name }: { name: string }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium">
-      <UserRound className="h-3 w-3 shrink-0" aria-hidden="true" />
-      {login}
+    <span aria-hidden="true" className="block truncate text-[0.8333em] leading-tight">
+      <Highlight text={name} />
     </span>
   );
 }
 
-/** The padlock of a private note; its name goes in the label of the element that shows it. */
+/**
+ * The padlock of a private note, first in the note, in the colors of the text turned around, so
+ * that it stands out on any note; its name goes in the label of the element that shows it.
+ */
 export function PrivateMark() {
-  return <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />;
+  return (
+    <span className="inline-flex shrink-0 items-center justify-center rounded-sm bg-fg p-0.5 text-canvas">
+      <Lock className="h-3 w-3" aria-hidden="true" />
+    </span>
+  );
 }
 
-/** Words for screen readers about whose a note is: "nota privata", or "di mario". */
-export function memoOwnership(memo: Memo, meId: string | null): string | null {
+/** Words for screen readers about whose a note is: "nota privata", or "di Mario Rossi". */
+export function memoOwnership(
+  memo: Memo,
+  meId: string | null,
+  authorName: string | null,
+): string | null {
   if (memo.private) return 'nota privata';
-  return meId && memo.author && memo.author.id !== meId ? `di ${memo.author.login}` : null;
+  return meId && memo.author && memo.author.id !== meId && authorName ? `di ${authorName}` : null;
 }

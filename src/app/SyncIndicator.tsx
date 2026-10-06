@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
 import { CircleCheck, CloudOff, CloudUpload, TriangleAlert } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { HoverCard, useHoverCard } from '../shared/ui/HoverCard';
 import { useNow } from '../shared/useNow';
 import { formatDateTimeLongIT, timeAgo } from '../utils/dateUtils';
 import type { PlanRepository, SyncState, SyncStatus } from './PlanRepository';
+import { useSyncState } from './useSyncState';
 
 const LABELS: Record<SyncStatus, { text: string; Icon: LucideIcon; tone: string; detail: string }> =
   {
@@ -72,12 +72,7 @@ function SyncDetails({ sync }: { sync: SyncState }) {
  * component. Resting on it, focusing it or tapping it shows when the plan was last synchronized.
  */
 export function SyncIndicator({ repository }: { repository: PlanRepository }) {
-  const [sync, setSync] = useState<SyncState>({
-    status: 'synced',
-    lastSyncedAt: null,
-    error: null,
-  });
-  useEffect(() => repository.subscribeSync(setSync), [repository]);
+  const sync = useSyncState(repository);
   const { card, triggerProps, cardProps } = useHoverCard<true>();
   const { text, Icon, tone } = LABELS[sync.status];
   const when = sync.lastSyncedAt

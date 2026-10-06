@@ -257,6 +257,28 @@ service cloud.firestore {
         allow delete: if isMember(planId);
       }
 
+      // A project of the roadmap: a row with a bar from its start to its end.
+      match /projects/{projectId} {
+        allow read: if isMember(planId);
+        function validProject() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['title', 'startDate', 'endDate', 'colorId', 'status',
+              'owner', 'description', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isText(data.title, 200)
+            && isIsoDate(data.startDate)
+            && isIsoDate(data.endDate)
+            && data.startDate <= data.endDate
+            && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple']
+            && data.status in ['idea', 'planned', 'in_progress', 'completed', 'on_hold']
+            && (!('owner' in data) || isText(data.owner, 100))
+            && (!('description' in data) || isText(data.description, 5000));
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validProject();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validProject();
+        allow delete: if isMember(planId);
+      }
+
       // Who changed what and when. Entries are written by the client together with the change
       // and can never be altered.
       match /history/{entryId} {
@@ -265,7 +287,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(
             ['entity', 'entityId', 'action', 'actor', 'at', 'before', 'after', 'summary'])
           && request.resource.data.entity
-            in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'memo', 'member']
+            in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'memo', 'project', 'member']
           && request.resource.data.action in ['create', 'update', 'delete', 'import', 'setup']
           && request.resource.data.actor.uid == request.auth.uid
           && request.resource.data.actor.githubId == githubId()

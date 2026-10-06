@@ -149,6 +149,43 @@ describe('free notes in the history', () => {
   });
 });
 
+describe('projects in the history', () => {
+  const projectEntry = (changes: Partial<HistoryEntry>): HistoryEntry =>
+    noteEntry({ entity: 'project', entityId: 'project-1', ...changes });
+
+  it('names the project, with its dates, state and owner when added', () => {
+    const entry = projectEntry({
+      action: 'create',
+      after: {
+        title: 'App mobile 3.0',
+        startDate: '2026-09-10',
+        endDate: '2026-12-20',
+        status: 'in_progress',
+        colorId: 'purple',
+        owner: 'Giulia',
+      },
+    });
+    expect(describeChange(entry)).toBe('ha aggiunto il progetto «App mobile 3.0»');
+    expect(fieldChanges(entry, () => undefined)).toEqual([
+      { label: 'Inizio', after: '10/09/2026' },
+      { label: 'Fine', after: '20/12/2026' },
+      { label: 'Stato', after: 'In corso' },
+      { label: 'Responsabile', after: 'Giulia' },
+    ]);
+  });
+
+  it('lists what changed, with the states only projects have', () => {
+    const entry = projectEntry({
+      before: { status: 'idea', endDate: '2026-12-20' },
+      after: { title: 'App mobile 3.0', status: 'on_hold', endDate: '2027-01-31' },
+    });
+    expect(fieldChanges(entry, () => undefined)).toEqual([
+      { label: 'Fine', before: '20/12/2026', after: '31/01/2027' },
+      { label: 'Stato', before: 'Idea', after: 'In pausa' },
+    ]);
+  });
+});
+
 describe('entries read from the database', () => {
   it('know their kinds of change and of entity', () => {
     expect(isHistoryEntity('memo')).toBe(true);

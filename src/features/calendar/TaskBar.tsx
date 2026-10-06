@@ -4,6 +4,7 @@ import type { TaskChanges } from '../../domain/plan';
 import { moveTask, resizeTask } from '../../domain/schedule';
 import type { PlacedTask } from '../../domain/schedule';
 import type { TaskItem } from '../../domain/types';
+import { CURRENT_RESULT, Highlight, useIsCurrentResult } from '../../shared/ui/Highlight';
 import { taskColorStyle } from '../../themes';
 import { daysBetween, formatDateToIT } from '../../utils/dateUtils';
 import { clampLines } from './timelineLayout';
@@ -13,6 +14,11 @@ import type { DragKind } from './useTaskDrag';
 const MIN_RESIZABLE_WIDTH = 40;
 /** Bars at least this wide, and two lines tall, show assignee and length under the title. */
 const MIN_DETAILED_WIDTH = 100;
+
+/** The element of a task's bar, to give it the focus or bring it into view. */
+export function taskBarId(taskId: string): string {
+  return `task-rect-${taskId}`;
+}
 
 interface TaskBarProps {
   placed: PlacedTask<TaskItem>;
@@ -59,6 +65,7 @@ export function TaskBar({
   const titleLines = detailed ? lines - 1 : lines;
   const length = daysBetween(task.startDate, task.endDate);
   const period = `dal ${formatDateToIT(task.startDate)} al ${formatDateToIT(task.endDate)}`;
+  const current = useIsCurrentResult('task', task.id);
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
@@ -87,7 +94,7 @@ export function TaskBar({
   return (
     <button
       type="button"
-      id={`task-rect-${task.id}`}
+      id={taskBarId(task.id)}
       aria-label={`${oneLine(task.title)}, ${period}, ${TASK_STATUS_LABELS[task.status]}`}
       aria-describedby={describedBy}
       title={`${task.title}\n${formatDateToIT(task.startDate)} → ${formatDateToIT(task.endDate)}`}
@@ -114,7 +121,9 @@ export function TaskBar({
         task.borderStyle === 'dashed' ? 'border-dashed' : 'border-solid'
       } ${continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'} ${
         continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'
-      } ${dragging ? 'z-30 opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'}`}
+      } ${dragging ? 'z-30 opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'} ${
+        current ? `z-20 ${CURRENT_RESULT}` : ''
+      }`}
     >
       {resizable && !continuesBefore && handle('start')}
       {/* The title stays in view while the start of a long bar scrolls past the left edge. */}
@@ -124,11 +133,15 @@ export function TaskBar({
         }`}
         style={titleLines === 1 ? undefined : clampLines(titleLines)}
       >
-        {task.title}
+        <Highlight text={task.title} />
       </span>
       {detailed && (
         <span className="flex items-center gap-1.5 text-xs">
-          {task.assignee && <span className="truncate">{task.assignee}</span>}
+          {task.assignee && (
+            <span className="truncate">
+              <Highlight text={task.assignee} />
+            </span>
+          )}
           {length > 1 && <span className="ml-auto shrink-0 tabular-nums">{length} g</span>}
         </span>
       )}

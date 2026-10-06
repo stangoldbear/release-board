@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isValidGitHubLogin, lookupGitHubUser, lookupGitHubUserById } from './users';
+import {
+  isValidGitHubLogin,
+  lookupGitHubNameById,
+  lookupGitHubUser,
+  lookupGitHubUserById,
+} from './users';
 
 function respond(status: number, body?: unknown): typeof fetch {
   return () =>
@@ -34,7 +39,25 @@ describe('lookupGitHubUser', () => {
       id: '583231',
       login: 'octocat',
       avatarUrl: 'https://example.com/a.png',
+      name: null,
     });
+  });
+
+  it('keeps the name of the public profile', async () => {
+    const fetchImpl = respond(200, {
+      id: 1,
+      login: 'octocat',
+      avatar_url: '',
+      name: ' The Octocat ',
+    });
+    await expect(lookupGitHubUser('octocat', fetchImpl)).resolves.toMatchObject({
+      name: 'The Octocat',
+    });
+    await expect(lookupGitHubNameById('1', fetchImpl)).resolves.toBe('The Octocat');
+    await expect(lookupGitHubNameById('99', respond(404))).resolves.toBeNull();
+    await expect(
+      lookupGitHubNameById('1', respond(200, { id: 1, login: 'octocat', name: '' })),
+    ).resolves.toBeNull();
   });
 
   it('returns null for unknown users and invalid names without calling GitHub', async () => {

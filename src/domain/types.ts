@@ -66,6 +66,24 @@ export interface Memo {
   private?: true;
 }
 
+/** How far a project of the roadmap has come. */
+export type ProjectStatus = 'idea' | 'planned' | 'in_progress' | 'completed' | 'on_hold';
+
+/** A project of the roadmap, past, current or future: one row, with a bar from start to end. */
+export interface Project {
+  id: string;
+  title: string;
+  /** YYYY-MM-DD */
+  startDate: string;
+  /** YYYY-MM-DD, inclusive */
+  endDate: string;
+  colorId: TaskColorId;
+  status: ProjectStatus;
+  /** Who leads it. */
+  owner?: string;
+  description?: string;
+}
+
 /** Everything that makes up a plan: what is saved, exported and restored. */
 export interface PlanSnapshot {
   lanes: Lane[];
@@ -74,6 +92,8 @@ export interface PlanSnapshot {
   dailyNotes: DailyNotes;
   /** In the order of the strip. */
   memos: Memo[];
+  /** The roadmap, in the order of its rows. */
+  projects: Project[];
 }
 
 /** Calendar rows the user chose to hide. New lanes are visible by default. */

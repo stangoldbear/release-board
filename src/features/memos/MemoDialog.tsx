@@ -21,10 +21,16 @@ import { MemoDot, MemoTitle, PrivateMark, ReminderBadge, memoSurface } from './m
 
 interface MemoDialogProps {
   memo: Memo;
-  /** The strip the note is chosen from, to pick its place in it. */
+  /** The strip the note is chosen from, or its group, to pick its place in it. */
   strip: Memo[];
+  /** The places are those of the note's group, among the notes of its author. */
+  inGroup?: boolean;
+  /** The note that follows it at a place; by default, in `strip`. */
+  follower?: (index: number) => string | null;
   /** In a shared instance, the signed-in member: notes have an author and can be private. */
   me: MemoAuthor | null;
+  /** The full name of who wrote the note, in a shared instance. */
+  authorName: string | null;
   /** The note is no longer in the plan: nothing can be saved, the text can still be copied. */
   gone: boolean;
   /** Saves the content, and puts the note before `beforeId` when its place was changed. */
@@ -37,7 +43,18 @@ interface MemoDialogProps {
  * Edits a free note: title, text, color, reminder, place in the strip and, for its author in a
  * shared instance, whether it is private. Mounted only while open.
  */
-export function MemoDialog({ memo, strip, me, gone, onSave, onDelete, onClose }: MemoDialogProps) {
+export function MemoDialog({
+  memo,
+  strip,
+  inGroup = false,
+  follower = (index) => followerAt(strip, memo.id, index),
+  me,
+  authorName,
+  gone,
+  onSave,
+  onDelete,
+  onClose,
+}: MemoDialogProps) {
   const [title, setTitle] = useState(memo.title);
   const [body, setBody] = useState(memo.body ?? '');
   const [colorId, setColorId] = useState<TaskColorId | undefined>(memo.colorId);
@@ -58,7 +75,7 @@ export function MemoDialog({ memo, strip, me, gone, onSave, onDelete, onClose }:
   const suggestionsLabelId = useId();
   const [activeSuggestion, setActiveSuggestion] = useState(0);
   const isMine = me !== null && memo.author?.id === me.id;
-  const author = me === null ? null : isMine ? 'te' : (memo.author?.login ?? 'un altro membro');
+  const author = me === null ? null : isMine ? 'te' : (authorName ?? 'un altro membro');
 
   const handleSuggestionKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const last = suggestions.length - 1;
@@ -90,7 +107,7 @@ export function MemoDialog({ memo, strip, me, gone, onSave, onDelete, onClose }:
     if (colorId) content.colorId = colorId;
     if (remindOn) content.remindOn = remindOn;
     if (isPrivate) content.private = true;
-    onSave(content, place === null ? undefined : followerAt(strip, memo.id, place));
+    onSave(content, place === null ? undefined : follower(place));
     onClose();
   };
 
@@ -286,7 +303,7 @@ export function MemoDialog({ memo, strip, me, gone, onSave, onDelete, onClose }:
           {index >= 0 && strip.length > 1 && (
             <div>
               <label htmlFor={placeId} className={LABEL_CLASS}>
-                Posizione nella fila
+                {inGroup ? 'Posizione nel gruppo' : 'Posizione nella fila'}
               </label>
               <select
                 id={placeId}

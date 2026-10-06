@@ -1,9 +1,13 @@
 import type { MemoChanges, MemoContent } from '../domain/memos';
+import type { ProjectChanges, ProjectContent } from '../domain/projects';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
 import type { DailyMetric, PlanSnapshot, TaskItem } from '../domain/types';
 
 /** Whether the changes made here have reached where the plan is kept. */
 export type SyncStatus = 'synced' | 'saving' | 'offline' | 'error';
+
+/** Parts of the plan that came with rules of their own, which a published copy may lack. */
+export type PlanPart = 'memos' | 'projects';
 
 export interface SyncState {
   status: SyncStatus;
@@ -14,7 +18,20 @@ export interface SyncState {
   lastSyncedAt: Date | null;
   /** Why the status is "error", when it is. */
   error: string | null;
+  /**
+   * The parts of the plan that the published security rules do not let anyone read or write yet:
+   * the plan goes on without them until the rules are published.
+   */
+  missing: readonly PlanPart[];
 }
+
+/** The state of a repository before it says otherwise. */
+export const INITIAL_SYNC: SyncState = {
+  status: 'synced',
+  lastSyncedAt: null,
+  error: null,
+  missing: [],
+};
 
 /**
  * Where the plan lives. The app reads it only through `subscribe` and changes it one entity, or one
@@ -60,6 +77,11 @@ export interface PlanRepository {
   deleteMemo(memoId: string): void;
   /** Puts a free note right before another one, or at the end of the strip when `beforeId` is null. */
   moveMemo(memoId: string, beforeId: string | null): void;
+  /** Adds a project to the roadmap and returns its id. */
+  createProject(content: ProjectContent): string;
+  /** Changes some fields of a project, null removing an optional one. */
+  updateProject(projectId: string, changes: ProjectChanges): void;
+  deleteProject(projectId: string): void;
   /** Replaces everything, as when a backup is restored. */
   replacePlan(plan: PlanSnapshot): void;
 }

@@ -6,9 +6,11 @@ import {
   contentWrites,
   importSummary,
   memoContent,
+  projectContent,
   readLane,
   readMemo,
   readNote,
+  readProject,
   readTask,
   readValue,
   taskContent,
@@ -55,6 +57,26 @@ describe('free note documents', () => {
   });
 });
 
+describe('project documents', () => {
+  it('keeps only the fields that are set, and skips documents that are not projects', () => {
+    const data = projectContent({
+      title: 'App mobile 3.0',
+      startDate: '2026-09-10',
+      endDate: '2026-12-20',
+      colorId: 'purple',
+      status: 'in_progress',
+      owner: '',
+    });
+    expect(Object.keys(data).sort()).toEqual(
+      ['colorId', 'endDate', 'startDate', 'status', 'title'].sort(),
+    );
+    expect(readProject('p1', data)).toEqual({ id: 'p1', ...data });
+    expect(readProject('p1', { ...data, endDate: '2026-01-01' })).toBeNull();
+    expect(readProject('p1', { ...data, status: 'done' })).toBeNull();
+    expect(readProject('p1', { ...data, colorId: 'pink' })?.colorId).toBe('yellow');
+  });
+});
+
 describe('plan documents', () => {
   it('round-trips the sample plan through its documents', () => {
     const writes = contentWrites(plan);
@@ -74,8 +96,12 @@ describe('plan documents', () => {
       memos: writes
         .filter((write) => write.path.startsWith('memos/'))
         .map((write) => readMemo(write.path.split('/')[1]!, write.data)!),
+      projects: writes
+        .filter((write) => write.path.startsWith('projects/'))
+        .map((write) => readProject(write.path.split('/')[1]!, write.data)!),
     };
     const rebuilt = buildPlan(parts);
+    expect(rebuilt.projects).toEqual(plan.projects);
     expect(rebuilt.lanes).toEqual(plan.lanes);
     expect(rebuilt.metrics).toEqual(plan.metrics);
     expect(rebuilt.dailyNotes).toEqual(plan.dailyNotes);
@@ -95,6 +121,7 @@ describe('plan documents', () => {
       values: [],
       notes: [],
       memos: [],
+      projects: [],
     });
     expect(rebuilt.lanes.map((lane) => lane.name)).toEqual(['Prima', 'Terza']);
   });
@@ -102,7 +129,7 @@ describe('plan documents', () => {
   it('writes the metric definition along with the content', () => {
     expect(contentWrites(plan).some((write) => write.path === 'metrics/metric-1')).toBe(true);
     expect(importSummary(plan)).toBe(
-      '3 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere',
+      '3 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere, 5 progetti',
     );
   });
 

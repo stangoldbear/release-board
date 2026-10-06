@@ -6,6 +6,68 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-05
+
+### Aggiunto
+
+- Roadmaps, una nuova area sotto il calendario: una riga per ogni progetto, passato, in corso o
+  futuro, con un rettangolo dal primo all'ultimo giorno su una linea del tempo tutta sua, a mesi
+  («Mesi», «Trimestri») o a trimestri («Anni»), con oggi a un quarto della larghezza.
+  - Un progetto ha titolo, inizio e fine, stato (idea, pianificato, in corso, completato, in pausa,
+    ognuno con la sua forma), colore, responsabile e descrizione. Si crea con «Nuovo progetto» o
+    con un clic su un mese dell'ultima riga, e si apre con un clic sul rettangolo.
+  - Il rettangolo si sposta trascinandolo e i suoi bordi cambiano inizio e fine; dalla tastiera le
+    frecce lo spostano di una settimana, con Maiusc cambiano la fine, e un lettore di schermo
+    sente le date nuove.
+  - Sotto la roadmap, «Informazioni visibili» sceglie cosa mostrare accanto al titolo: date, stato,
+    responsabile, descrizione, oppure solo il titolo. Un clic sul titolo apre il progetto, come sul
+    rettangolo, e porta il rettangolo in vista.
+  - Sopra, il numero di progetti per stato. I progetti stanno nei backup (schema 5), nella
+    cronologia e, nell'istanza condivisa, in Firestore con regole proprie.
+- Le note libere si possono raggruppare per utente («Per utente», accanto a «Espandi»): una riga di
+  note per autore, o una colonna quando sono espanse. L'ordine dei gruppi si cambia trascinando il
+  nome dell'autore, con le frecce accanto al nome (comode sul telefono) o con Alt e le frecce sulla
+  sua maniglia, e il browser lo ricorda; il proprio gruppo viene prima finché non si sposta. Dentro
+  un gruppo le note non ripetono il nome dell'autore.
+- La ricerca trova ciò che ha tutte le parole cercate, anche in punti diversi (per esempio titolo e
+  assegnatario), oppure, con «Almeno una», ciò che ne ha almeno una. Le parole trovate sono
+  evidenziate in attività, note, note libere e progetti.
+- Mentre si cerca, sotto l'intestazione una barra dice cosa è stato trovato in ogni area e porta in
+  vista i risultati uno alla volta, con le sue frecce o con Invio e Maiusc + Invio nel campo; sul
+  telefono le frecce restano a portata di pollice in basso a destra. Il risultato ha un contorno
+  tratteggiato, diverso da quello del focus; la sua area compare se era nascosta e il calendario
+  va al suo giorno, mostrando i giorni passati se serve.
+
+### Modificato
+
+- La pagina è divisa in tre aree, Note, Next Releases e Roadmaps, che i pulsanti dell'intestazione
+  mostrano o nascondono; un'area che compare viene portata in vista.
+- L'intestazione tiene solo nome, lenti, «Compatta», i pulsanti delle aree, la ricerca, la
+  sincronizzazione e le impostazioni. Mese, frecce, «Oggi», viste, «Nuova attività» e i comandi del
+  fatturato stanno nel titolo dell'area Next Releases; il filtro per stato nel riepilogo delle
+  attività.
+- In Next Releases riepilogo, calendario e «Righe visibili» formano una sola scheda, con gli angoli
+  arrotondati solo in cima e in fondo. Il fatturato è la prima delle righe visibili, prima delle
+  corsie; «Festivi e weekend» e «Nascondi giorni passati» stanno a destra della stessa barra.
+- I giorni passati sono nascosti di serie, anche nei browser che avevano già scelto di mostrarli.
+- Le lenti scendono anche all'85% e al 75%, e ora valgono per note libere, fatturato, giorni,
+  corsie, note dei giorni e roadmap: rimpiccioliscono testo, interlinea, spaziatura tra le lettere e
+  lo spazio intorno alle barre.
+- Ogni nota libera dice chi l'ha scritta, anche quelle proprie, su una seconda riga più piccola: il
+  nome per esteso dal profilo GitHub, lo username finché il nome non è noto. La ricerca trova le
+  note anche per nome.
+- Le note libere hanno il testo a 12 pixel invece di 14, con meno spazio intorno, così ne entrano
+  di più; quelle private iniziano con un lucchetto a colori invertiti, più visibile.
+- «Espandi» mette le note una sotto l'altra, e si riordinano trascinandole in su o in giù, dentro il
+  loro gruppo quando sono raggruppate.
+- Nella Bacheca il fatturato dei giorni segue la riga «Fatturato» delle righe visibili.
+
+### Corretto
+
+- La linea di oggi nel calendario è piena: semitrasparente aveva un contrasto troppo basso.
+- La vista scelta (Dettaglio, Mese, Trimestre, Bacheca) ha un segno di spunta, non solo uno sfondo
+  diverso.
+
 ## [0.5.0] - 2026-10-05
 
 ### Aggiunto
@@ -315,7 +377,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/stangoldbear/release-board/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/stangoldbear/release-board/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/stangoldbear/release-board/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/stangoldbear/release-board/compare/v0.2.5...v0.3.0

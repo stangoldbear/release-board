@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  TEXT_SCALES,
-  buildColumns,
-  calendarTextStyle,
-  columnTone,
-  monthSpans,
-  timelineMetrics,
-} from './timelineLayout';
+import { TEXT_SCALES } from '../../shared/ui/textScale';
+import { buildColumns, columnTone, monthSpans, timelineMetrics } from './timelineLayout';
 
 describe('buildColumns', () => {
   const range = { start: '2026-09-28', end: '2026-10-04' };
@@ -92,22 +86,14 @@ describe('timelineMetrics', () => {
   });
 });
 
-describe('calendarTextStyle', () => {
-  it('scales the text sizes and leaves the line height alone outside compact mode', () => {
-    expect(calendarTextStyle(1.5, false)).toEqual({
-      '--text-xs': '1.125rem',
-      '--text-sm': '1.3125rem',
-      '--text-base': '1.5rem',
-      letterSpacing: '0.02em',
-    });
-  });
-
-  it('tightens the lines in compact mode', () => {
-    expect(calendarTextStyle(1, true)).toMatchObject({
-      '--text-xs': '0.75rem',
-      '--text-xs--line-height': '1.15',
-      '--text-sm--line-height': '1.15',
-      letterSpacing: '0em',
-    });
+describe('timelineMetrics below the normal size', () => {
+  it('brings the bars closer, and keeps the lines that fit', () => {
+    const small = timelineMetrics('month', 0.75, false);
+    const normal = timelineMetrics('month', 1, false);
+    expect(small.barHeight).toBeLessThan(normal.barHeight);
+    expect(small.trackGap).toBeLessThan(normal.trackGap);
+    expect(small.lanePadding).toBeLessThan(normal.lanePadding);
+    expect(small.labelWidth).toBe(72);
+    expect(small.barLines).toBe(2);
   });
 });

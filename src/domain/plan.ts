@@ -1,11 +1,15 @@
-import { applyMemoChanges, memoMoves, sortMemos } from './memos';
+import { applyChanges } from './changes';
+import { memoMoves, sortMemos } from './memos';
 import type { MemoChanges } from './memos';
+import { sortProjects } from './projects';
+import type { ProjectChanges } from './projects';
 import type {
   BorderStyle,
   DailyMetric,
   Lane,
   Memo,
   PlanSnapshot,
+  Project,
   TaskItem,
   TaskStatus,
 } from './types';
@@ -38,6 +42,7 @@ export function createEmptyPlan(): PlanSnapshot {
     metrics: [],
     dailyNotes: {},
     memos: [],
+    projects: [],
   };
 }
 
@@ -55,6 +60,7 @@ export function planContentSummary(plan: PlanSnapshot): string[] {
     `${values} ${values === 1 ? 'valore giornaliero' : 'valori giornalieri'}`,
     `${notes} ${notes === 1 ? 'nota' : 'note'}`,
     `${memos} ${memos === 1 ? 'nota libera' : 'note libere'}`,
+    `${plan.projects.length} ${plan.projects.length === 1 ? 'progetto' : 'progetti'}`,
   ];
 }
 
@@ -63,7 +69,8 @@ export function isPlanEmpty(plan: PlanSnapshot): boolean {
     plan.tasks.length === 0 &&
     plan.metrics.length === 0 &&
     Object.keys(plan.dailyNotes).length === 0 &&
-    plan.memos.length === 0
+    plan.memos.length === 0 &&
+    plan.projects.length === 0
   );
 }
 
@@ -170,7 +177,7 @@ export function updateMemo(plan: PlanSnapshot, memoId: string, changes: MemoChan
   return {
     ...plan,
     memos: sortMemos(
-      plan.memos.map((memo) => (memo.id === memoId ? applyMemoChanges(memo, changes) : memo)),
+      plan.memos.map((memo) => (memo.id === memoId ? applyChanges<Memo>(memo, changes) : memo)),
     ),
   };
 }
@@ -196,4 +203,28 @@ export function moveMemo(
       }),
     ),
   };
+}
+
+export function addProject(plan: PlanSnapshot, project: Project): PlanSnapshot {
+  return { ...plan, projects: sortProjects([...plan.projects, project]) };
+}
+
+/** Applies the changes to the project; a project that no longer exists stays deleted. */
+export function updateProject(
+  plan: PlanSnapshot,
+  projectId: string,
+  changes: ProjectChanges,
+): PlanSnapshot {
+  return {
+    ...plan,
+    projects: sortProjects(
+      plan.projects.map((project) =>
+        project.id === projectId ? applyChanges<Project>(project, changes) : project,
+      ),
+    ),
+  };
+}
+
+export function removeProject(plan: PlanSnapshot, projectId: string): PlanSnapshot {
+  return { ...plan, projects: plan.projects.filter((project) => project.id !== projectId) };
 }

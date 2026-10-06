@@ -1,19 +1,24 @@
+import { INITIAL_SYNC } from '../app/PlanRepository';
 import type { PlanRepository, SyncState } from '../app/PlanRepository';
 import { createBackupFile, parseBackupText, serializeBackup } from '../domain/backup';
 import { endPosition } from '../domain/memos';
 import type { MemoChanges, MemoContent } from '../domain/memos';
+import type { ProjectChanges, ProjectContent } from '../domain/projects';
 import {
   addMemo,
+  addProject,
   addTask,
   createEmptyPlan,
   importDailyValues,
   moveMemo,
   moveNote,
   removeMemo,
+  removeProject,
   removeTask,
   setMetricValues,
   setNote,
   updateMemo,
+  updateProject,
   updateTask,
 } from '../domain/plan';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
@@ -57,7 +62,7 @@ export class LocalPlanRepository implements PlanRepository {
 
   /** Local data is saved at once: there is never anything in flight, nor anywhere to sync with. */
   subscribeSync(listener: (state: SyncState) => void): () => void {
-    listener({ status: 'synced', lastSyncedAt: null, error: null });
+    listener(INITIAL_SYNC);
     return () => {};
   }
 
@@ -124,6 +129,20 @@ export class LocalPlanRepository implements PlanRepository {
 
   moveMemo(memoId: string, beforeId: string | null): void {
     this.change(moveMemo(this.plan, memoId, beforeId));
+  }
+
+  createProject(content: ProjectContent): string {
+    const id = this.createId();
+    this.change(addProject(this.plan, { ...content, id }));
+    return id;
+  }
+
+  updateProject(projectId: string, changes: ProjectChanges): void {
+    this.change(updateProject(this.plan, projectId, changes));
+  }
+
+  deleteProject(projectId: string): void {
+    this.change(removeProject(this.plan, projectId));
   }
 
   replacePlan(plan: PlanSnapshot): void {

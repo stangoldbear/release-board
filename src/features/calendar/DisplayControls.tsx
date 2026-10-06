@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Check, FoldVertical, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '../../shared/ui/Button';
-import { TEXT_SCALES } from './timelineLayout';
-import type { TextScale } from './timelineLayout';
+import { TEXT_SCALES } from '../../shared/ui/textScale';
+import type { TextScale } from '../../shared/ui/textScale';
 
 interface TextSizeControlsProps {
   textScale: TextScale;
@@ -10,9 +10,10 @@ interface TextSizeControlsProps {
 }
 
 /**
- * The magnifiers that make the calendar's text bigger or smaller, with the current size between
- * them: pressing it goes back to the normal size. Only the calendar changes, not the rest. At the
- * ends the buttons do nothing but keep the focus, and the new size is announced.
+ * The magnifiers that make the text of the notes and the calendars bigger or smaller, with the
+ * current size between them: pressing it goes back to the normal size. Header, buttons and windows
+ * keep theirs. At the ends the buttons do nothing but keep the focus, and the new size is
+ * announced.
  */
 export function TextSizeControls({ textScale, onChange }: TextSizeControlsProps) {
   const [announcement, setAnnouncement] = useState('');
@@ -23,12 +24,12 @@ export function TextSizeControls({ textScale, onChange }: TextSizeControlsProps)
   const change = (scale: TextScale | undefined) => {
     if (scale === undefined || scale === textScale) return;
     onChange(scale);
-    setAnnouncement(`Testo del calendario al ${Math.round(scale * 100)}%`);
+    setAnnouncement(`Testo di note e calendari al ${Math.round(scale * 100)}%`);
   };
   return (
     <div
       role="group"
-      aria-label="Testo del calendario"
+      aria-label="Testo di note e calendari"
       className="relative flex items-center gap-0.5 rounded-xl border border-line bg-surface-strong p-1"
     >
       <Button
@@ -37,8 +38,8 @@ export function TextSizeControls({ textScale, onChange }: TextSizeControlsProps)
         className="p-1.5 aria-disabled:cursor-default aria-disabled:opacity-50"
         aria-disabled={smaller === undefined}
         onClick={() => change(smaller)}
-        aria-label="Testo del calendario più piccolo"
-        title="Testo del calendario più piccolo"
+        aria-label="Testo più piccolo"
+        title="Testo di note e calendari più piccolo"
       >
         <ZoomOut className="h-4 w-4" aria-hidden="true" />
       </Button>
@@ -46,11 +47,7 @@ export function TextSizeControls({ textScale, onChange }: TextSizeControlsProps)
         type="button"
         onClick={() => change(1)}
         aria-disabled={textScale === 1}
-        aria-label={
-          textScale === 1
-            ? 'Testo del calendario al 100%'
-            : `Testo del calendario al ${percent}: torna al 100%`
-        }
+        aria-label={textScale === 1 ? 'Testo al 100%' : `Testo al ${percent}: torna al 100%`}
         title={textScale === 1 ? 'Dimensione normale' : 'Torna alla dimensione normale'}
         className="min-w-11 cursor-pointer rounded-lg px-1 py-1.5 text-center text-xs font-semibold text-fg tabular-nums hover:bg-surface aria-disabled:cursor-default aria-disabled:hover:bg-transparent"
       >
@@ -62,8 +59,8 @@ export function TextSizeControls({ textScale, onChange }: TextSizeControlsProps)
         className="p-1.5 aria-disabled:cursor-default aria-disabled:opacity-50"
         aria-disabled={bigger === undefined}
         onClick={() => change(bigger)}
-        aria-label="Testo del calendario più grande"
-        title="Testo del calendario più grande"
+        aria-label="Testo più grande"
+        title="Testo di note e calendari più grande"
       >
         <ZoomIn className="h-4 w-4" aria-hidden="true" />
       </Button>

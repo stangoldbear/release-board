@@ -15,7 +15,11 @@ import type { FirebaseConfig } from '../infra/firebase/config';
 import { PLAN_ID } from '../infra/firebase/planDocs';
 import { checkAccess, createPlan } from '../infra/firebase/setup';
 import type { Access } from '../infra/firebase/setup';
-import { lookupGitHubUser, lookupGitHubUserById } from '../infra/github/users';
+import {
+  lookupGitHubNameById,
+  lookupGitHubUser,
+  lookupGitHubUserById,
+} from '../infra/github/users';
 import { PLAN_STORAGE_KEY } from '../infra/LocalPlanRepository';
 import { LoadingScreen } from '../shared/ui/Screen';
 import { createId } from '../utils/id';
@@ -286,6 +290,7 @@ function MemberSession({
     role: access.role,
     members: session.members,
     history: session.repository,
+    lookupName: lookupGitHubNameById,
     signOut: onSignOut,
   };
   return <App repository={session.repository} instance={instance} loadWarning={null} />;

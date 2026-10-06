@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { applyChanges } from './changes';
 import {
-  applyMemoChanges,
   diffMemo,
   dueMemos,
   endPosition,
   followerAt,
+  followerInGroup,
+  groupMemos,
   memoMoves,
+  moveGroup,
   memoSuggestions,
   memosInScope,
+  readGroupOrder,
   readSeenReminders,
   rememberReminders,
   sortMemos,
@@ -178,7 +182,7 @@ describe('changes to a note', () => {
   });
 
   it('applies them, removing the fields set to null', () => {
-    expect(applyMemoChanges(full, { body: null, colorId: 'blue', title: 'Nuovo' })).toEqual({
+    expect(applyChanges(full, { body: null, colorId: 'blue', title: 'Nuovo' })).toEqual({
       id: 'a',
       title: 'Nuovo',
       colorId: 'blue',
@@ -298,5 +302,64 @@ describe('titles of the form "lead: rest"', () => {
     );
     expect(withMilestone('  ', 'Rollout 100%')).toBe('Rollout 100%');
     expect(withMilestone('x'.repeat(199), 'Golive')).toHaveLength(200);
+  });
+});
+
+describe('the notes grouped by author', () => {
+  const mario = { id: '1', login: 'mario' };
+  const anna = { id: '2', login: 'anna' };
+  const mixed = [
+    memo('a', 1, { author: anna }),
+    memo('b', 2, { author: mario }),
+    memo('c', 3),
+    memo('d', 4, { author: anna }),
+    memo('e', 5, { author: mario }),
+  ];
+  const keys = (order: string[]) => groupMemos(mixed, order).map((group) => group.key);
+
+  it('keeps the order of the strip inside each group', () => {
+    const groups = groupMemos(mixed, []);
+    expect(groups.map((group) => [group.key, group.memos.map((item) => item.id)])).toEqual([
+      ['2', ['a', 'd']],
+      ['1', ['b', 'e']],
+      ['', ['c']],
+    ]);
+    expect(groups[0]?.author).toEqual(anna);
+    expect(groups[2]?.author).toBeNull();
+  });
+
+  it('puts the groups in the order chosen, then the others as they come', () => {
+    expect(keys(['1'])).toEqual(['1', '2', '']);
+    expect(keys(['', '1', '2'])).toEqual(['', '1', '2']);
+    expect(keys(['someone-else', '2'])).toEqual(['2', '1', '']);
+  });
+
+  it('moves a group among those shown, keeping the others after them', () => {
+    expect(moveGroup([], ['2', '1', ''], '', 0)).toEqual(['', '2', '1']);
+    expect(moveGroup(['9', '2', '1'], ['2', '1'], '2', 1)).toEqual(['1', '2', '9']);
+    expect(moveGroup([], ['2', '1'], '1', -3)).toEqual(['1', '2']);
+  });
+
+  it('reads the order a browser saved', () => {
+    expect(readGroupOrder(['1', '2'])).toEqual(['1', '2']);
+    expect(readGroupOrder(['1', 2])).toBeNull();
+    expect(readGroupOrder('1')).toBeNull();
+  });
+
+  it('moves a note inside its group without carrying it past the others', () => {
+    const marios = mixed.filter((item) => item.author === mario);
+    // "b" after "e", the last of the group: right before the note that follows "e".
+    expect(followerInGroup(mixed, marios, 'b', 1)).toBeNull();
+    const annas = mixed.filter((item) => item.author === anna);
+    expect(followerInGroup(mixed, annas, 'a', 1)).toBe('e');
+    expect(followerInGroup(mixed, annas, 'd', 0)).toBe('a');
+    expect(followerInGroup(mixed, [mixed[2]!], 'c', 0)).toBeNull();
+    // Applied, the note ends up last of its group and the other authors keep their notes.
+    const moved = moveMemo(
+      { ...createEmptyPlan(), memos: mixed },
+      'a',
+      followerInGroup(mixed, annas, 'a', 1),
+    );
+    expect(order(moved.memos)).toEqual(['b', 'c', 'd', 'a', 'e']);
   });
 });

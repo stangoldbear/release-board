@@ -3,12 +3,12 @@ import { ChevronDown, Monitor, Palette } from 'lucide-react';
 import { CUSTOM_THEME_IDS, SYSTEM_THEMES, getTheme, isDarkTheme } from '../../themes';
 import type { CustomThemeId, Theme, ThemePreference } from '../../themes';
 import { TextSizeControls } from '../calendar/DisplayControls';
-import type { TextScale } from '../calendar/timelineLayout';
+import type { TextScale } from '../../shared/ui/textScale';
 
 interface AppearanceSectionProps {
   theme: ThemePreference;
   onChangeTheme: (theme: ThemePreference) => void;
-  /** The size of the calendar's text: on phones the header has no room for its magnifiers. */
+  /** The size of the text of notes and calendars: on phones the header has no room for it. */
   textScale: TextScale;
   onTextScaleChange: (scale: TextScale) => void;
 }
@@ -152,7 +152,7 @@ export function AppearanceSection({
         </div>
       </fieldset>
       <div className="flex flex-wrap items-center justify-between gap-2 sm:hidden">
-        <p className="text-xs text-fg-muted">Testo del calendario</p>
+        <p className="text-xs text-fg-muted">Testo di note e calendari</p>
         <TextSizeControls textScale={textScale} onChange={onTextScaleChange} />
       </div>
     </section>

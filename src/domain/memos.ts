@@ -1,6 +1,6 @@
 import { ITALIAN_MONTHS, parseISODate } from '../utils/dateUtils';
 import type { TaskColorId } from './colors';
-import type { Memo } from './types';
+import type { Memo, MemoAuthor } from './types';
 
 /** Longest title and text of a free note; the security rules enforce the same. */
 export const MEMO_TITLE_MAX = 200;
@@ -35,16 +35,6 @@ export function sortMemos(memos: readonly Memo[]): Memo[] {
 /** The position of a note added after all the others. */
 export function endPosition(memos: readonly Memo[]): number {
   return memos.reduce((last, memo) => Math.max(last, memo.position), 0) + 1;
-}
-
-/** The note with the changes applied; null removes an optional field. */
-export function applyMemoChanges(memo: Memo, changes: MemoChanges): Memo {
-  const next: Record<string, unknown> = { ...memo };
-  for (const [key, value] of Object.entries(changes)) {
-    if (value === null) delete next[key];
-    else if (value !== undefined) next[key] = value;
-  }
-  return next as unknown as Memo;
 }
 
 /**
@@ -138,6 +128,73 @@ function numberStrip(strip: readonly Memo[]): [string, number][] {
   }
   placeRun();
   return numbers;
+}
+
+/** The notes of one author, in the order of the strip. */
+export interface MemoGroup {
+  /** The author's id; empty for the notes without an author. */
+  key: string;
+  author: MemoAuthor | null;
+  memos: Memo[];
+}
+
+/**
+ * The notes by author: first the groups whose key is in `order`, in that order, then the others in
+ * the order of their first note.
+ */
+export function groupMemos(memos: readonly Memo[], order: readonly string[]): MemoGroup[] {
+  const groups = new Map<string, MemoGroup>();
+  for (const memo of memos) {
+    const key = memo.author?.id ?? '';
+    const group = groups.get(key) ?? { key, author: memo.author ?? null, memos: [] };
+    group.memos.push(memo);
+    groups.set(key, group);
+  }
+  const rank = (key: string) => {
+    const at = order.indexOf(key);
+    return at < 0 ? order.length : at;
+  };
+  return [...groups.values()].sort((a, b) => rank(a.key) - rank(b.key));
+}
+
+/**
+ * The order of the groups once `key` is at `index` among the `shown` ones. Groups not shown now,
+ * as those of the authors the search leaves out, keep their place after them.
+ */
+export function moveGroup(
+  order: readonly string[],
+  shown: readonly string[],
+  key: string,
+  index: number,
+): string[] {
+  const others = shown.filter((item) => item !== key);
+  const placed = [...others.slice(0, Math.max(index, 0)), key, ...others.slice(Math.max(index, 0))];
+  return [...placed, ...order.filter((item) => !shown.includes(item))];
+}
+
+/** The order of the groups, as a browser saved it; null when the saved value is not one. */
+export function readGroupOrder(value: unknown): string[] | null {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : null;
+}
+
+/**
+ * The note that follows `memoId` once it is at `index` of its group, within `strip`: the next note
+ * of the group, or, at the end of the group, the note right after the group's last one, so that
+ * the move does not carry the note past the notes of other authors. Null at the end of the strip.
+ */
+export function followerInGroup(
+  strip: readonly Memo[],
+  group: readonly Memo[],
+  memoId: string,
+  index: number,
+): string | null {
+  const others = group.filter((memo) => memo.id !== memoId);
+  const next = others[Math.max(index, 0)];
+  if (next) return next.id;
+  const last = others.at(-1);
+  if (!last) return null;
+  const rest = strip.filter((memo) => memo.id !== memoId);
+  return rest[rest.findIndex((memo) => memo.id === last.id) + 1]?.id ?? null;
 }
 
 /** Reminders already shown by a browser: note id → the reminder day it was shown for. */

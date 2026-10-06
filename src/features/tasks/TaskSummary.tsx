@@ -1,6 +1,6 @@
 import { Ban, CircleCheck, CircleDashed, CircleDot, Eye, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { TASK_STATUSES } from '../../domain/plan';
+import { TASK_STATUSES, TASK_STATUS_LABELS } from '../../domain/plan';
 import { countByStatus } from '../../domain/stats';
 import type { TaskItem, TaskStatus } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
@@ -22,85 +22,71 @@ const STATUS_ICONS: Record<TaskStatus, LucideIcon> = {
   blocked: Ban,
 };
 
-/** What the filters find. */
-export interface FilterResult {
-  /** Tasks shown. */
-  tasks: number;
-  /** While text is searched: the notes of the days and the free notes that have it. */
-  search: { notes: number; allNotes: number; memos: number; allMemos: number } | null;
-}
-
 interface TaskSummaryProps {
   tasks: readonly TaskItem[];
-  /** Null when no filter is active. */
-  found: FilterResult | null;
-  onClearFilter: () => void;
+  /** Tasks shown while a status is chosen; null for all of them. */
+  found: number | null;
+  /** Only the tasks in this status; null for all of them. */
+  status: TaskStatus | null;
+  onStatusChange: (status: TaskStatus | null) => void;
 }
 
-function count(shown: number, total: number, one: string, many: string) {
-  return (
-    <>
-      <strong className="text-fg">{shown}</strong> {shown === 1 ? one : many} su {total}
-    </>
-  );
-}
-
-/** "Trovate 3 attività su 11, 1 nota su 2 e 0 note libere su 3", or what the status filter keeps. */
-function FoundText({ found, total }: { found: FilterResult; total: number }) {
-  const { search } = found;
-  if (search) {
-    if (found.tasks + search.notes + search.memos === 0) {
-      return <span className="font-semibold">Nessun risultato per la ricerca</span>;
-    }
-    return (
-      <span className="text-fg-muted">
-        Trovate {count(found.tasks, total, 'attività', 'attività')},{' '}
-        {count(search.notes, search.allNotes, 'nota', 'note')} e{' '}
-        {count(search.memos, search.allMemos, 'nota libera', 'note libere')}
-      </span>
-    );
-  }
-  if (found.tasks === 0) {
-    return <span className="font-semibold">Nessuna attività corrisponde ai filtri</span>;
-  }
-  return (
-    <span className="text-fg-muted">
-      Filtro attivo: <strong className="text-fg">{found.tasks}</strong> su {total}
-    </span>
-  );
-}
-
-/** Task counts by status, each with an icon and a label so that color is never the only cue. */
-export function TaskSummary({ tasks, found, onClearFilter }: TaskSummaryProps) {
+/**
+ * Task counts by status, each with an icon and a label so that color is never the only cue, and
+ * the filter by status.
+ */
+export function TaskSummary({ tasks, found, status, onStatusChange }: TaskSummaryProps) {
   const counts = countByStatus(tasks);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-2.5 text-xs shadow-2xs">
-      <ul aria-label="Attività per stato" className="flex items-center gap-x-4 gap-y-1 flex-wrap">
+    <div className="flex flex-wrap items-center justify-between gap-3 bg-surface px-4 py-2.5 text-xs">
+      <ul aria-label="Attività per stato" className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <li className="font-semibold">
           Attività: <strong>{tasks.length}</strong>
         </li>
-        {TASK_STATUSES.map((status) => {
-          const Icon = STATUS_ICONS[status];
+        {TASK_STATUSES.map((value) => {
+          const Icon = STATUS_ICONS[value];
           return (
-            <li key={status} className="flex items-center gap-1.5 text-fg-muted">
-              <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-              {SUMMARY_LABELS[status]}: <strong className="text-fg">{counts[status]}</strong>
+            <li key={value} className="flex items-center gap-1.5 text-fg-muted">
+              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              {SUMMARY_LABELS[value]}: <strong className="text-fg">{counts[value]}</strong>
             </li>
           );
         })}
       </ul>
-      {/* Always mounted, so that screen readers announce how many tasks the filter finds. */}
-      <p role="status" className="flex flex-wrap items-center gap-2">
-        {found && (
-          <>
-            <FoundText found={found} total={tasks.length} />
-            <Button size="sm" onClick={onClearFilter}>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          aria-label="Filtra per stato"
+          value={status ?? ''}
+          onChange={(event) =>
+            onStatusChange(event.target.value === '' ? null : (event.target.value as TaskStatus))
+          }
+          className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-xs"
+        >
+          <option value="">Tutti gli stati</option>
+          {TASK_STATUSES.map((value) => (
+            <option key={value} value={value}>
+              {TASK_STATUS_LABELS[value]}
+            </option>
+          ))}
+        </select>
+        {/* Always mounted, so that screen readers announce how many tasks the filter keeps. */}
+        <p role="status" className="flex flex-wrap items-center gap-2">
+          {found !== null &&
+            (found === 0 ? (
+              <span className="font-semibold">Nessuna attività in questo stato</span>
+            ) : (
+              <span className="text-fg-muted">
+                Filtro attivo: <strong className="text-fg">{found}</strong> su {tasks.length}
+              </span>
+            ))}
+          {status !== null && (
+            <Button size="sm" onClick={() => onStatusChange(null)}>
               <X className="h-3.5 w-3.5" aria-hidden="true" />
-              Azzera i filtri
+              Tutti gli stati
             </Button>
-          </>
-        )}
-      </p>
+          )}
+        </p>
+      </div>
     </div>
   );
 }

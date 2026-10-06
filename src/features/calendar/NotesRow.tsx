@@ -1,12 +1,23 @@
-import { memo } from 'react';
+import { memo, useContext } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import { StickyNote } from 'lucide-react';
 import { isNoteShown } from '../../domain/filters';
 import type { DailyNotes } from '../../domain/types';
+import {
+  CURRENT_RESULT,
+  Highlight,
+  SearchHighlightContext,
+  resultKey,
+} from '../../shared/ui/Highlight';
 import { formatDateToIT, todayIso } from '../../utils/dateUtils';
 import { LABEL_CELL, clampLines, columnEdge } from './timelineLayout';
 import type { Column } from './timelineLayout';
 import type { NoteDrag } from './useNoteDrag';
+
+/** The cell of the note of a day, to give it the focus or bring it into view. */
+export function noteCellId(date: string): string {
+  return `note-cell-${date}`;
+}
 
 interface NotesRowProps {
   columns: Column[];
@@ -50,6 +61,7 @@ export const NotesRow = memo(function NotesRow({
   // each be a stop. From there a note goes to any day, with the day field of its window.
   const today = todayIso();
   const entry = columns.some((column) => column.start === today) ? today : columns[0]?.start;
+  const { current } = useContext(SearchHighlightContext);
   return (
     <div className="flex border-t-2 border-warning">
       <div className={`${LABEL_CELL} flex flex-col justify-center bg-warning-soft`}>
@@ -100,7 +112,7 @@ export const NotesRow = memo(function NotesRow({
         return (
           <button
             key={date}
-            id={`note-cell-${date}`}
+            id={noteCellId(date)}
             type="button"
             onPointerDown={text ? (event) => onStartDrag(event, date) : undefined}
             onClick={() => onOpen(date)}
@@ -120,7 +132,7 @@ export const NotesRow = memo(function NotesRow({
               text ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
             } ${column.past ? 'bg-past' : column.red ? 'bg-holiday' : ''} ${
               isTarget ? `ring-2 ring-inset ${drag.allowed ? 'ring-link' : 'ring-danger'}` : ''
-            }`}
+            } ${current === resultKey('note', date) ? `relative z-10 ${CURRENT_RESULT}` : ''}`}
           >
             {text ? (
               <span
@@ -129,7 +141,7 @@ export const NotesRow = memo(function NotesRow({
                   isSource ? 'opacity-40' : ''
                 }`}
               >
-                {text}
+                <Highlight text={text} />
               </span>
             ) : hidden ? null : preview ? (
               <span

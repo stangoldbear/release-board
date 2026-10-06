@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import type { DateRange } from '../../domain/schedule';
+import { prefersReducedMotion } from '../../shared/motion';
 import { addDaysIso, diffDays } from '../../utils/dateUtils';
 import { isNearEnd } from './calendarView';
 import type { CalendarJump } from './calendarView';
@@ -20,10 +21,6 @@ interface TimelineScrollOptions {
   jump: CalendarJump;
   /** First and last day in view; `settled` once scrolling has stopped. */
   onScrolled: (first: string, last: string, settled: boolean) => void;
-}
-
-function prefersReducedMotion(): boolean {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /**

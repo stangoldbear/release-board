@@ -2,6 +2,7 @@ import type { DocumentData } from 'firebase/firestore';
 import { APPROVAL_LIGHTS } from '../../domain/approval';
 import { DEFAULT_COLOR_ID, isKnownColorId } from '../../domain/colors';
 import { sortMemos } from '../../domain/memos';
+import { PROJECT_STATUSES, sortProjects } from '../../domain/projects';
 import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES, planContentSummary } from '../../domain/plan';
 import type {
   DailyMetric,
@@ -10,6 +11,7 @@ import type {
   Memo,
   MemoAuthor,
   PlanSnapshot,
+  Project,
   TaskItem,
 } from '../../domain/types';
 import { isIsoDate } from '../../utils/dateUtils';
@@ -22,6 +24,7 @@ import { isIsoDate } from '../../utils/dateUtils';
 //   notes/{date}                      text
 //   memos/{memoId}                    title, position, author, and body, colorId, remindOn when set
 //   members/{githubId}/memos/{memoId} a member's private free notes: the same without author
+//   projects/{projectId}              the project of the roadmap without its id
 // Every document but the private notes also carries updatedAt, updatedBy and lastHistoryId,
 // added by the repository: private notes leave no history, since nobody else may read them.
 // Reading is lenient: the rules validate writes, and a document that does not fit is skipped.
@@ -154,12 +157,45 @@ export function readPrivateMemo(id: string, data: DocumentData, author: MemoAuth
   return memo && { ...memo, author, private: true };
 }
 
+/** A project without its id, which is the document id, and without empty optional fields. */
+export function projectContent(project: Omit<Project, 'id'>): DocumentData {
+  const data: DocumentData = {
+    title: project.title,
+    startDate: project.startDate,
+    endDate: project.endDate,
+    colorId: project.colorId,
+    status: project.status,
+  };
+  if (project.owner) data.owner = project.owner;
+  if (project.description) data.description = project.description;
+  return data;
+}
+
+export function readProject(id: string, data: DocumentData): Project | null {
+  const { title, startDate, endDate, colorId, status } = data;
+  if (!isText(title) || !isIsoDate(startDate) || !isIsoDate(endDate) || endDate < startDate)
+    return null;
+  if (!oneOf(status, PROJECT_STATUSES)) return null;
+  const project: Project = {
+    id,
+    title,
+    startDate,
+    endDate,
+    colorId: typeof colorId === 'string' && isKnownColorId(colorId) ? colorId : DEFAULT_COLOR_ID,
+    status,
+  };
+  if (isText(data.owner)) project.owner = data.owner;
+  if (isText(data.description)) project.description = data.description;
+  return project;
+}
+
 export interface PlanParts {
   lanes: { lane: Lane; position: number }[];
   tasks: TaskItem[];
   values: DailyMetric[];
   notes: [string, string][];
   memos: Memo[];
+  projects: Project[];
 }
 
 /** The plan as the app sees it: lanes in position order, values and tasks in a stable order. */
@@ -172,7 +208,14 @@ export function buildPlan(parts: PlanParts): PlanSnapshot {
   );
   const metrics = [...parts.values].sort((a, b) => a.date.localeCompare(b.date));
   const dailyNotes: DailyNotes = Object.fromEntries(parts.notes);
-  return { lanes, tasks, metrics, dailyNotes, memos: sortMemos(parts.memos) };
+  return {
+    lanes,
+    tasks,
+    metrics,
+    dailyNotes,
+    memos: sortMemos(parts.memos),
+    projects: sortProjects(parts.projects),
+  };
 }
 
 /** The definition of the plan's only metric, in this version. */
@@ -210,6 +253,10 @@ export function contentWrites(plan: PlanSnapshot): ContentWrite[] {
     ...sharedMemos(plan).map(({ id, ...content }) => ({
       path: `memos/${id}`,
       data: memoContent(content),
+    })),
+    ...plan.projects.map(({ id, ...content }) => ({
+      path: `projects/${id}`,
+      data: projectContent(content),
     })),
   ];
 }

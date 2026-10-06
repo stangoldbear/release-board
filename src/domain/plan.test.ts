@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addProject,
   addTask,
   copyOfTask,
   createEmptyPlan,
@@ -8,9 +9,11 @@ import {
   isPlanEmpty,
   moveNote,
   planContentSummary,
+  removeProject,
   removeTask,
   setMetricValues,
   setNote,
+  updateProject,
   updateTask,
 } from './plan';
 import type { PlanSnapshot, TaskItem } from './types';
@@ -166,6 +169,7 @@ describe('planContentSummary', () => {
       '1 valore giornaliero',
       '1 nota',
       '1 nota libera',
+      '0 progetti',
     ]);
     expect(planContentSummary(createEmptyPlan())).toEqual([
       '3 corsie',
@@ -173,6 +177,35 @@ describe('planContentSummary', () => {
       '0 valori giornalieri',
       '0 note',
       '0 note libere',
+      '0 progetti',
     ]);
+  });
+});
+
+describe('the projects of the roadmap', () => {
+  const project = {
+    id: 'p1',
+    title: 'App mobile',
+    startDate: '2026-11-01',
+    endDate: '2027-01-31',
+    colorId: 'blue' as const,
+    status: 'planned' as const,
+  };
+
+  it('are added in the order of their start, changed and removed', () => {
+    const early = { ...project, id: 'p0', startDate: '2026-10-01' };
+    let plan = addProject(addProject(createEmptyPlan(), project), early);
+    expect(plan.projects.map((item) => item.id)).toEqual(['p0', 'p1']);
+    expect(isPlanEmpty(plan)).toBe(false);
+    plan = updateProject(plan, 'p1', { startDate: '2026-09-01', owner: 'Giulia' });
+    expect(plan.projects.map((item) => item.id)).toEqual(['p1', 'p0']);
+    expect(plan.projects[0]).toMatchObject({ owner: 'Giulia' });
+    plan = updateProject(plan, 'p1', { owner: null });
+    expect(plan.projects[0]).not.toHaveProperty('owner');
+    expect(removeProject(plan, 'p1').projects.map((item) => item.id)).toEqual(['p0']);
+  });
+
+  it('leave a project removed elsewhere as it is', () => {
+    expect(updateProject(createEmptyPlan(), 'gone', { title: 'X' }).projects).toEqual([]);
   });
 });

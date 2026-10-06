@@ -53,7 +53,8 @@ function matchesSample(plan: PlanSnapshot): boolean {
     plan.tasks.length === sample.tasks.length &&
     plan.metrics.length === sample.metrics.length &&
     Object.keys(plan.dailyNotes).length === Object.keys(sample.dailyNotes).length &&
-    plan.memos.length === sample.memos.length
+    plan.memos.length === sample.memos.length &&
+    plan.projects.length === sample.projects.length
   );
 }
 
@@ -175,7 +176,14 @@ describe('access and setup', () => {
   it('starts from an empty plan and imports the initial content in batches', async () => {
     const repository = await bootstrap();
     const initial = await planWhere(repository, () => true);
-    expect(initial).toEqual({ lanes: [], tasks: [], metrics: [], dailyNotes: {}, memos: [] });
+    expect(initial).toEqual({
+      lanes: [],
+      tasks: [],
+      metrics: [],
+      dailyNotes: {},
+      memos: [],
+      projects: [],
+    });
 
     repository.replacePlan(createEmptyPlan());
     const empty = await planWhere(repository, (plan) => plan.lanes.length === 3);
@@ -186,6 +194,7 @@ describe('access and setup', () => {
     expect(imported.lanes).toEqual(sample.lanes);
     expect(imported.metrics).toEqual(sample.metrics);
     expect(imported.dailyNotes).toEqual(sample.dailyNotes);
+    expect(imported.projects).toEqual(sample.projects);
     expect(new Set(imported.tasks.map((task) => task.id))).toEqual(
       new Set(sample.tasks.map((task) => task.id)),
     );
@@ -360,6 +369,57 @@ describe('changes', () => {
     expect(notes.docs.find((item) => item.id === taken)?.data().text).toBe(
       sample.dailyNotes[taken],
     );
+  });
+
+  it('adds, changes and deletes projects, and another member sees them', async () => {
+    const other = repositoryFor(editorDb, EDITOR);
+    await other.whenReady();
+    const id = repository.createProject({
+      title: 'Nuovo magazzino',
+      startDate: '2026-11-01',
+      endDate: '2027-03-31',
+      colorId: 'gray',
+      status: 'idea',
+      owner: 'Marco',
+    });
+    const created = await planWhere(other, (plan) => plan.projects.some((item) => item.id === id));
+    expect(created.projects.find((item) => item.id === id)).toEqual({
+      id,
+      title: 'Nuovo magazzino',
+      startDate: '2026-11-01',
+      endDate: '2027-03-31',
+      colorId: 'gray',
+      status: 'idea',
+      owner: 'Marco',
+    });
+
+    // Changes read the project from the plan of whoever makes them.
+    other.updateProject(id, { endDate: '2027-06-30', owner: null, description: 'Due sedi' });
+    const updated = await planWhere(repository, (plan) =>
+      plan.projects.some((item) => item.id === id && item.endDate === '2027-06-30'),
+    );
+    expect(updated.projects.find((item) => item.id === id)).toMatchObject({
+      description: 'Due sedi',
+      startDate: '2026-11-01',
+    });
+    expect(updated.projects.find((item) => item.id === id)).not.toHaveProperty('owner');
+
+    repository.deleteProject(id);
+    await planWhere(other, (plan) => plan.projects.every((item) => item.id !== id));
+    await whenSynced(repository);
+    await whenSynced(other);
+    const history = await getDocs(collection(ownerDb, `plans/${PLAN_ID}/history`));
+    const entries = history.docs
+      .map((item) => item.data() as HistoryEntry)
+      .filter((data) => data.entity === 'project' && data.entityId === id);
+    expect(entries.map((entry) => entry.action).sort()).toEqual(['create', 'delete', 'update']);
+    const change = entries.find((entry) => entry.action === 'update');
+    expect(change?.before).toEqual({ endDate: '2027-03-31', owner: 'Marco' });
+    expect(change?.after).toEqual({
+      title: 'Nuovo magazzino',
+      endDate: '2027-06-30',
+      description: 'Due sedi',
+    });
   });
 
   it('adds, changes, moves and deletes free notes, and another member sees them', async () => {
@@ -575,15 +635,16 @@ describe('changes', () => {
   });
 });
 
-describe('rules older than the free notes', () => {
-  // As the rules of 0.4, which have no free notes: everything else is allowed to the signed-in.
+describe('rules older than the free notes and the projects', () => {
+  // As the rules of 0.4, which have no free notes nor projects: everything else is allowed to the
+  // signed-in.
   const legacyRules = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /plans/{planId} {
       allow read: if request.auth != null;
       match /{collection}/{id} {
-        allow read, write: if request.auth != null && collection != 'memos';
+        allow read, write: if request.auth != null && !(collection in ['memos', 'projects']);
       }
       match /metrics/{metricId}/values/{date} {
         allow read, write: if request.auth != null;
@@ -592,7 +653,7 @@ service cloud.firestore {
   }
 }`;
 
-  it('opens the plan without free notes, and says why', async () => {
+  it('opens the plan without free notes and projects, and says why', async () => {
     const projectId = 'demo-release-board-legacy';
     const legacy = await setupRulesEnvironment({ rules: legacyRules, projectId });
     try {
@@ -601,6 +662,13 @@ service cloud.firestore {
         await db.doc(`plans/${PLAN_ID}`).set({ name: 'Piano', createdBy: OWNER.uid });
         await db.doc(`plans/${PLAN_ID}/lanes/lane-1`).set({ name: 'Corsia', position: 0 });
         await db.doc(`plans/${PLAN_ID}/memos/m1`).set({ title: 'Nota', position: 1 });
+        await db.doc(`plans/${PLAN_ID}/projects/p1`).set({
+          title: 'Progetto',
+          startDate: '2026-01-01',
+          endDate: '2026-02-01',
+          colorId: 'blue',
+          status: 'idea',
+        });
       });
       const repository = new FirestorePlanRepository({
         db: clientAs(OWNER, projectId),
@@ -613,6 +681,7 @@ service cloud.firestore {
       const plan = await planWhere(repository, () => true);
       expect(plan.lanes.map((lane) => lane.name)).toEqual(['Corsia']);
       expect(plan.memos).toEqual([]);
+      expect(plan.projects).toEqual([]);
       const sync = await new Promise((resolve) => {
         const stop = repository.subscribeSync((state) => {
           if (state.status !== 'error') return;
@@ -620,7 +689,26 @@ service cloud.firestore {
           setTimeout(() => stop());
         });
       });
-      expect(sync).toMatch(/Note libere non disponibili.*regole/);
+      expect(sync).toMatch(/Note libere e progetti non disponibili.*regole/);
+
+      // The sample and a backup still go in, without the parts the rules refuse.
+      repository.replacePlan(sample);
+      const restored = await planWhere(
+        repository,
+        (current) => current.tasks.length === sample.tasks.length,
+      );
+      expect(restored.projects).toEqual([]);
+      await whenSynced(repository);
+      const state = await new Promise<{ error: string | null; missing: readonly string[] }>(
+        (resolve) => {
+          const stop = repository.subscribeSync((current) => {
+            resolve(current);
+            setTimeout(() => stop());
+          });
+        },
+      );
+      expect(state.missing).toEqual(['memos', 'projects']);
+      expect(state.error).toMatch(/non disponibili/);
     } finally {
       await legacy.cleanup();
     }
@@ -630,7 +718,9 @@ service cloud.firestore {
 describe('members', () => {
   it('lets the owner invite, change roles and remove, and reports unknown or repeated users', async () => {
     await bootstrap();
-    const known = [{ id: '1003', login: 'stranger', avatarUrl: 'https://example.com/s.png' }];
+    const known = [
+      { id: '1003', login: 'stranger', avatarUrl: 'https://example.com/s.png', name: null },
+    ];
     const members = new FirestoreMembersRepository({
       db: ownerDb,
       planId: PLAN_ID,

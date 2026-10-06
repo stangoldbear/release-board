@@ -1,6 +1,13 @@
 import { APPROVAL_LIGHTS } from './approval';
 import { DEFAULT_COLOR_ID, isKnownColorId, normalizeColorId } from './colors';
 import { MEMO_BODY_MAX, MEMO_TITLE_MAX, sortMemos } from './memos';
+import {
+  PROJECT_DESCRIPTION_MAX,
+  PROJECT_OWNER_MAX,
+  PROJECT_STATUSES,
+  PROJECT_TITLE_MAX,
+  sortProjects,
+} from './projects';
 import type {
   DailyMetric,
   DailyNotes,
@@ -8,6 +15,7 @@ import type {
   Memo,
   MemoAuthor,
   PlanSnapshot,
+  Project,
   TaskItem,
 } from './types';
 import { formatDateToIT, formatDateToISO, isIsoDate } from '../utils/dateUtils';
@@ -15,9 +23,9 @@ import { parseLocaleNumber } from './numberFormat';
 import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES } from './plan';
 
 export const BACKUP_FORMAT = 'release-board/backup';
-export const BACKUP_SCHEMA_VERSION = 4;
-/** Older schemas this version still reads: 3 had no free notes. */
-const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, BACKUP_SCHEMA_VERSION];
+export const BACKUP_SCHEMA_VERSION = 5;
+/** Older schemas this version still reads: 3 had no free notes, 4 no projects. */
+const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, 4, BACKUP_SCHEMA_VERSION];
 /** Larger files are rejected before parsing: a real plan weighs a few hundred kilobytes. */
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 const MAX_REPORTED_ERRORS = 20;
@@ -40,6 +48,7 @@ export interface BackupFile {
   metrics: BackupMetric[];
   notes: { date: string; text: string }[];
   memos: Memo[];
+  projects: Project[];
 }
 
 /** Where a restored plan came from: a current backup or a file of the previous app version. */
@@ -64,6 +73,7 @@ export function createBackupFile(plan: PlanSnapshot, exportedAt: Date): BackupFi
       .sort(byDate),
     // Private notes are their author's alone: a backup of the plan never carries them.
     memos: sortMemos(plan.memos.filter((memo) => !memo.private)),
+    projects: sortProjects(plan.projects),
   };
 }
 
@@ -173,11 +183,12 @@ function readPlan(file: JsonObject, source: BackupSource): BackupParseResult {
   const metrics = readMetrics(file.metrics, errors);
   const dailyNotes = readNotes(file.notes, errors);
   const memos = readMemos(file.memos, errors);
+  const projects = readProjects(file.projects, errors);
 
   if (errors.length > 0) return { ok: false, errors: limitErrors(errors) };
   return {
     ok: true,
-    plan: { lanes, tasks, metrics, dailyNotes, memos },
+    plan: { lanes, tasks, metrics, dailyNotes, memos, projects },
     source,
     exportedAt: typeof file.exportedAt === 'string' ? file.exportedAt : null,
   };
@@ -398,6 +409,61 @@ function readMemos(value: unknown, errors: string[]): Memo[] {
     memos.push(memo);
   });
   return sortMemos(memos);
+}
+
+function readProjects(value: unknown, errors: string[]): Project[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push('Progetti: formato non valido.');
+    return [];
+  }
+  const projects: Project[] = [];
+  value.forEach((item: unknown, index) => {
+    if (!isObject(item)) {
+      errors.push(`Progetto ${index + 1}: formato non valido.`);
+      return;
+    }
+    const owner = optionalString(item.owner);
+    const description = optionalString(item.description);
+    const problems: string[] = [];
+    if (!isFilledString(item.id)) problems.push("manca l'identificativo");
+    else if (projects.some((project) => project.id === item.id))
+      problems.push(`identificativo "${item.id}" ripetuto`);
+    if (!isFilledString(item.title)) problems.push('manca il titolo');
+    else if (item.title.length > PROJECT_TITLE_MAX) problems.push('titolo troppo lungo');
+    if (!isIsoDate(item.startDate)) problems.push('data di inizio non valida');
+    if (!isIsoDate(item.endDate)) problems.push('data di fine non valida');
+    if (isIsoDate(item.startDate) && isIsoDate(item.endDate) && item.endDate < item.startDate)
+      problems.push("la fine precede l'inizio");
+    if (!(typeof item.colorId === 'string' && isKnownColorId(item.colorId)))
+      problems.push('colore non riconosciuto');
+    const status = oneOf(item.status, PROJECT_STATUSES);
+    if (!status) problems.push('stato non valido');
+    if (owner === null || (owner !== undefined && owner.length > PROJECT_OWNER_MAX))
+      problems.push('responsabile non valido');
+    if (
+      description === null ||
+      (description !== undefined && description.length > PROJECT_DESCRIPTION_MAX)
+    )
+      problems.push('descrizione non valida');
+    if (problems.length > 0 || !status) {
+      const name = isFilledString(item.title) ? `"${item.title}"` : String(index + 1);
+      errors.push(`Progetto ${name}: ${problems.join(', ')}.`);
+      return;
+    }
+    const project: Project = {
+      id: item.id as string,
+      title: item.title as string,
+      startDate: item.startDate as string,
+      endDate: item.endDate as string,
+      colorId: item.colorId as Project['colorId'],
+      status,
+    };
+    if (owner?.trim()) project.owner = owner;
+    if (description?.trim()) project.description = description;
+    projects.push(project);
+  });
+  return sortProjects(projects);
 }
 
 function limitErrors(errors: string[]): string[] {

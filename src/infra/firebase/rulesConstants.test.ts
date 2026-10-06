@@ -5,6 +5,12 @@ import { TASK_COLOR_IDS } from '../../domain/colors';
 import { HISTORY_ACTIONS, HISTORY_ENTITIES } from '../../domain/history';
 import { MEMO_BODY_MAX, MEMO_TITLE_MAX } from '../../domain/memos';
 import { BORDER_STYLES, TASK_STATUSES } from '../../domain/plan';
+import {
+  PROJECT_DESCRIPTION_MAX,
+  PROJECT_OWNER_MAX,
+  PROJECT_STATUSES,
+  PROJECT_TITLE_MAX,
+} from '../../domain/projects';
 
 // The security rules repeat some lists and limits of the app. When they part, saving in a shared
 // instance fails, and only there: these tests compare the two without the emulator.
@@ -20,12 +26,16 @@ function allowedLists(field: string): string[][] {
 const sorted = (values: readonly string[]) => [...values].sort();
 
 describe('the security rules', () => {
-  it('allow the colors of tasks and free notes that the app has', () => {
-    expect(allowedLists('colorId')).toEqual([sorted(TASK_COLOR_IDS), sorted(TASK_COLOR_IDS)]);
+  it('allow the colors of tasks, free notes and projects that the app has', () => {
+    expect(allowedLists('colorId')).toEqual([
+      sorted(TASK_COLOR_IDS),
+      sorted(TASK_COLOR_IDS),
+      sorted(TASK_COLOR_IDS),
+    ]);
   });
 
   it('allow the states, borders and approval lights that the app has', () => {
-    expect(allowedLists('status')).toEqual([sorted(TASK_STATUSES)]);
+    expect(allowedLists('status')).toEqual([sorted(TASK_STATUSES), sorted(PROJECT_STATUSES)]);
     expect(allowedLists('borderStyle')).toEqual([sorted(BORDER_STYLES)]);
     expect(allowedLists('approval')).toEqual([sorted(APPROVAL_LIGHTS)]);
   });
@@ -38,5 +48,16 @@ describe('the security rules', () => {
   it('limit the free notes as the app does', () => {
     expect(rules).toContain(`isText(data.title, ${MEMO_TITLE_MAX})`);
     expect(rules).toContain(`isText(data.body, ${MEMO_BODY_MAX})`);
+  });
+
+  it('limit the projects as the app does', () => {
+    // Only the block of the projects: the notes have a title limit of their own.
+    const projects = rules.slice(
+      rules.indexOf('match /projects/'),
+      rules.indexOf('match /history/'),
+    );
+    expect(projects).toContain(`isText(data.title, ${PROJECT_TITLE_MAX})`);
+    expect(projects).toContain(`isText(data.owner, ${PROJECT_OWNER_MAX})`);
+    expect(projects).toContain(`isText(data.description, ${PROJECT_DESCRIPTION_MAX})`);
   });
 });

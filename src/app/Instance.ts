@@ -1,3 +1,4 @@
+import type { NameLookup } from './authorNames';
 import type { HistoryReader } from './HistoryReader';
 import type { MembersRepository, Role } from './MembersRepository';
 
@@ -24,5 +25,7 @@ export type Instance =
       role: Role;
       members: MembersRepository;
       history: HistoryReader;
+      /** The full name of a member, from their GitHub profile, to show beside what they wrote. */
+      lookupName: NameLookup;
       signOut: () => Promise<void>;
     };

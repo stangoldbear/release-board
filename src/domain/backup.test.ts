@@ -55,6 +55,26 @@ const plan: PlanSnapshot = {
       author: { id: '1002', login: 'editor' },
     },
   ],
+  projects: [
+    {
+      id: 'project-1',
+      title: 'App mobile 3.0',
+      startDate: '2026-09-10',
+      endDate: '2026-12-20',
+      colorId: 'purple',
+      status: 'in_progress',
+      owner: 'Giulia',
+      description: 'Nuovo carrello',
+    },
+    {
+      id: 'project-2',
+      title: 'Programma fedeltà',
+      startDate: '2027-01-01',
+      endDate: '2027-03-31',
+      colorId: 'yellow',
+      status: 'idea',
+    },
+  ],
 };
 
 /** A file written by the previous app version, with invented content. */
@@ -186,6 +206,7 @@ describe('files of the previous app version', () => {
       ],
       dailyNotes: { '2026-09-10': 'Nota di prova' },
       memos: [],
+      projects: [],
     });
   });
 
@@ -208,7 +229,7 @@ describe('invalid backups', () => {
   it('reject unknown files and newer versions', () => {
     expect(errorsOf([])).toEqual(['Il file non contiene un backup.']);
     expect(errorsOf({ hello: 'world' })).toEqual(['Il file non è un backup di Release Board.']);
-    expect(errorsOf({ ...valid, schemaVersion: 5 })).toEqual([
+    expect(errorsOf({ ...valid, schemaVersion: 6 })).toEqual([
       'Il backup è stato creato con una versione più recente di Release Board.',
     ]);
     expect(errorsOf({ ...valid, schemaVersion: 2 })).toEqual([
@@ -224,6 +245,63 @@ describe('invalid backups', () => {
       ok: true,
       plan: { lanes: plan.lanes, tasks: plan.tasks, dailyNotes: plan.dailyNotes, memos: [] },
     });
+  });
+
+  it('read the backups of 0.5, which have no projects', () => {
+    const { projects, ...withoutProjects } = valid;
+    const result = parseBackup({ ...withoutProjects, schemaVersion: 4 });
+    expect(projects).toHaveLength(2);
+    expect(result).toMatchObject({ ok: true, plan: { memos: plan.memos, projects: [] } });
+  });
+
+  it('explain every problem of a project', () => {
+    const broken = {
+      ...valid,
+      projects: [
+        {
+          id: 'p-1',
+          title: '',
+          startDate: '2026-01-01',
+          endDate: '2026-02-01',
+          colorId: 'blue',
+          status: 'idea',
+        },
+        {
+          id: 'p-2',
+          title: 'Due',
+          startDate: '2026-03-01',
+          endDate: '2026-02-01',
+          colorId: 'rainbow',
+          status: 'done',
+        },
+        {
+          id: 'p-2',
+          title: 'Tre',
+          startDate: 'ieri',
+          endDate: '2026-02-01',
+          colorId: 'blue',
+          status: 'idea',
+          owner: 7,
+        },
+        {
+          id: 'p-4',
+          title: 'Quattro',
+          startDate: '2026-01-01',
+          endDate: '2026-02-01',
+          colorId: 'blue',
+          status: 'idea',
+          description: 'x'.repeat(5001),
+        },
+        'nope',
+      ],
+    };
+    expect(errorsOf(broken)).toEqual([
+      'Progetto 1: manca il titolo.',
+      'Progetto "Due": la fine precede l\'inizio, colore non riconosciuto, stato non valido.',
+      'Progetto "Tre": data di inizio non valida, responsabile non valido.',
+      'Progetto "Quattro": descrizione non valida.',
+      'Progetto 5: formato non valido.',
+    ]);
   });
 
   it('explain every problem of a free note', () => {
