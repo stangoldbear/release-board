@@ -27,6 +27,8 @@ interface ProjectBarProps {
   /** Pixels from the top of the row, or a CSS length such as one that centers the bar. */
   top: number | string;
   height: number;
+  /** The title on one line, out of the bar when longer, rather than cut. */
+  overflowTitle?: boolean;
   dragging: boolean;
   /** Id of the text that explains the keyboard commands. */
   describedBy: string;
@@ -45,6 +47,7 @@ export function ProjectBar({
   dayWidth,
   top,
   height,
+  overflowTitle = false,
   dragging,
   describedBy,
   onPointerDown,
@@ -105,17 +108,23 @@ export function ProjectBar({
         height,
       }}
       // Clipped rather than hidden: a hidden overflow would keep the title from sticking.
-      className={`group/bar pointer-events-auto absolute flex cursor-grab items-center overflow-clip border-2 px-2 text-left text-xs font-semibold active:cursor-grabbing in-data-compact:px-1 ${
+      className={`group/bar pointer-events-auto absolute flex cursor-grab items-center border-2 px-2 text-left text-xs font-semibold active:cursor-grabbing in-data-compact:px-1 ${
+        overflowTitle ? 'overflow-visible' : 'overflow-clip'
+      } ${
         continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'
       } ${continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'} ${
-        dragging ? 'z-30 opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'
-      } ${current ? `z-20 ${CURRENT_RESULT}` : ''}`}
+        dragging ? 'z-[1000] opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'
+      } ${current ? `z-[500] ${CURRENT_RESULT}` : ''}`}
     >
       {resizable && !continuesBefore && handle('start')}
       {/* The title stays in view while the start of a long bar scrolls past the left edge. */}
-      <span className="sticky left-[calc(var(--gantt-label-width)+6px)] flex max-w-full min-w-0 items-center gap-1">
+      <span
+        className={`sticky left-[calc(var(--gantt-label-width)+6px)] flex items-center gap-1 ${
+          overflowTitle ? 'max-w-none' : 'max-w-full min-w-0'
+        }`}
+      >
         <ProjectStatusMark status={project.status} iconOnly />
-        <span className="truncate">
+        <span className={overflowTitle ? 'whitespace-nowrap' : 'truncate'}>
           <Highlight text={project.title} />
         </span>
       </span>

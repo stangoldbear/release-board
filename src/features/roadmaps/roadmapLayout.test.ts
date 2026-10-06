@@ -42,6 +42,7 @@ describe('projectPeriod', () => {
 describe('roadmapMetrics', () => {
   it('takes the width of the days from the calendar and grows with the text', () => {
     expect(roadmapMetrics('month', 1, false).dayWidth).toBe(56);
+    expect(roadmapMetrics('bimester', 1, false).dayWidth).toBe(28);
     expect(roadmapMetrics('quarter', 1, false).dayWidth).toBe(12);
     const normal = roadmapMetrics('month', 1, false);
     const bigger = roadmapMetrics('month', 1.5, false);

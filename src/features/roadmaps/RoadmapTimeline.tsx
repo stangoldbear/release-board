@@ -24,7 +24,13 @@ import { diffDays, formatDateToIT } from '../../utils/dateUtils';
 import type { CalendarJump } from '../calendar/calendarView';
 import { DragHint } from '../calendar/DragHint';
 import { DayHeaderRow, MonthBand } from '../calendar/TimelineHeader';
-import { LABEL_CELL, buildColumns, clampLines, columnEdge } from '../calendar/timelineLayout';
+import {
+  LABEL_CELL,
+  TIMELINE_SCROLLER,
+  buildColumns,
+  clampLines,
+  columnEdge,
+} from '../calendar/timelineLayout';
 import type { Column } from '../calendar/timelineLayout';
 import { useTimelineScroll } from '../calendar/useTimelineScroll';
 import { useZoomGestures } from '../calendar/useZoomGestures';
@@ -57,6 +63,8 @@ interface RoadmapTimelineProps {
   assignments: Assignment[];
   /** While searching, the rows are those found, and no row adds a project. */
   searching: boolean;
+  /** Titles on one line, out of their bars when longer, rather than cut. */
+  oneLineTitles: boolean;
   textScale: TextScale;
   compact: boolean;
   /** -1 zooms in, 1 zooms out. */
@@ -206,6 +214,7 @@ export function RoadmapTimeline({
   searching,
   textScale,
   compact,
+  oneLineTitles,
   onZoom,
   onShowDays,
   onOpen,
@@ -298,7 +307,7 @@ export function RoadmapTimeline({
             '--gantt-label-width': `min(${labelWidth}px, 40vw)`,
           } as CSSProperties
         }
-        className="relative w-full touch-pan-x touch-pan-y overflow-x-auto [overflow-anchor:none]"
+        className={TIMELINE_SCROLLER}
       >
         <div style={{ width: `calc(var(--gantt-label-width) + ${totalWidth}px)` }}>
           <MonthBand range={range} dayWidth={dayWidth} metrics={null} />
@@ -353,6 +362,7 @@ export function RoadmapTimeline({
                         dayWidth={dayWidth}
                         top={`calc(50% - ${barHeight / 2}px)`}
                         height={barHeight}
+                        overflowTitle={oneLineTitles}
                         dragging={drag?.project.id === project.id}
                         describedBy={helpId}
                         onPointerDown={(event, kind) => startDrag(event, project, kind)}
@@ -418,6 +428,7 @@ export function RoadmapTimeline({
                             range={range}
                             dayWidth={dayWidth}
                             height={assignmentHeight}
+                            overflowTitle={oneLineTitles}
                             dragging={personDrag.drag?.assignment.id === assignment.id}
                             describedBy={assignmentHelpId}
                             onPointerDown={(event) => personDrag.startDrag(event, assignment)}

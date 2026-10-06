@@ -153,6 +153,7 @@ export function ReleasesArea({
             highlightWeekends={display.highlightWeekends}
             textScale={textScale}
             compact={compact}
+            oneLineTitles={display.oneLineTitles}
             visibility={display.visibility}
             onShowAllRows={displayControls.showAllRows}
             onZoom={(step) => onViewAction({ type: 'zoomBy', step })}

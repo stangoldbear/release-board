@@ -49,6 +49,8 @@ interface AssignmentBarProps {
   range: DateRange;
   dayWidth: number;
   height: number;
+  /** The words on one line, out of the bar when longer, rather than cut. */
+  overflowTitle?: boolean;
   dragging: boolean;
   /** Id of the text that explains the keyboard commands. */
   describedBy: string;
@@ -70,6 +72,7 @@ export function AssignmentBar({
   range,
   dayWidth,
   height,
+  overflowTitle = false,
   dragging,
   describedBy,
   onPointerDown,
@@ -110,11 +113,13 @@ export function AssignmentBar({
         top: `calc(50% - ${height / 2}px)`,
         height,
       }}
-      className={`pointer-events-auto absolute flex cursor-grab items-center overflow-clip border-2 text-left text-xs active:cursor-grabbing ${
+      className={`pointer-events-auto absolute flex cursor-grab items-center border-2 text-left text-xs active:cursor-grabbing ${
+        overflowTitle ? 'overflow-visible' : 'overflow-clip'
+      } ${
         team ? '' : 'border-line-strong bg-surface text-fg'
       } ${continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'} ${
         continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'
-      } ${dragging ? 'z-30 opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'}`}
+      } ${dragging ? 'z-[1000] opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'}`}
     >
       {schedule.absences.map((absence) => {
         const from = Math.max(first, diffDays(range.start, absence.start));
@@ -138,7 +143,11 @@ export function AssignmentBar({
       })}
       {/* The words stay in view while the start of a long bar scrolls past the left edge. */}
       {/* One line cut as a whole: a narrow bar shows the start of the name, not a clipped glyph. */}
-      <span className="sticky left-[calc(var(--gantt-label-width)+6px)] z-10 block max-w-full min-w-0 truncate px-1.5 in-data-compact:px-1">
+      <span
+        className={`sticky left-[calc(var(--gantt-label-width)+6px)] z-10 block px-1.5 in-data-compact:px-1 ${
+          overflowTitle ? 'max-w-none whitespace-nowrap' : 'max-w-full min-w-0 truncate'
+        }`}
+      >
         <span className="font-semibold">{name}</span>
         <span className="tabular-nums">
           {' '}

@@ -10,6 +10,8 @@ export interface CalendarDisplay {
   showMetrics: boolean;
   /** The timeline starts today. */
   hidePastDays: boolean;
+  /** Titles on one line, out of their bars when longer; bars and notes one line tall. */
+  oneLineTitles: boolean;
   /** The lanes and the notes row. */
   visibility: RowVisibility;
 }
@@ -18,6 +20,7 @@ export interface CalendarDisplayControls {
   toggleWeekends: () => void;
   toggleMetrics: () => void;
   togglePastDays: () => void;
+  toggleOneLineTitles: () => void;
   toggleLane: (laneId: string) => void;
   toggleNotes: () => void;
   /** Every row, the revenue included. */
@@ -39,13 +42,15 @@ export function useCalendarDisplay(): [CalendarDisplay, CalendarDisplayControls]
   const [showMetrics, setShowMetrics] = usePreference('show-metrics', isBoolean, true);
   // A new key: the past is hidden by default since 0.6, also where the old choice was saved.
   const [hidePastDays, setHidePastDays] = usePreference('past-days-hidden', isBoolean, true);
+  const [oneLineTitles, setOneLineTitles] = usePreference('titles-one-line', isBoolean, false);
 
   return [
-    { highlightWeekends, showMetrics, hidePastDays, visibility },
+    { highlightWeekends, showMetrics, hidePastDays, oneLineTitles, visibility },
     {
       toggleWeekends: () => setHighlightWeekends((value) => !value),
       toggleMetrics: () => setShowMetrics((value) => !value),
       togglePastDays: () => setHidePastDays((value) => !value),
+      toggleOneLineTitles: () => setOneLineTitles((value) => !value),
       toggleLane: (laneId) => setVisibility((current) => toggleLane(current, laneId)),
       toggleNotes: () =>
         setVisibility((current) => ({ ...current, showNotes: !current.showNotes })),

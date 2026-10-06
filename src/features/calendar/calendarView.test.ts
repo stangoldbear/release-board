@@ -110,6 +110,13 @@ describe('calendarViewReducer', () => {
     const detail = calendarViewReducer(opened, { type: 'zoomBy', step: -1 });
     expect(detail).toEqual({ ...opened, zoom: 'detail' });
     expect(calendarViewReducer(detail, { type: 'zoomBy', step: -1 })).toBe(detail);
+    // Out from a month: two months, then the quarter.
+    const bimester = calendarViewReducer(opened, { type: 'zoomBy', step: 1 });
+    expect(bimester).toEqual({ ...opened, zoom: 'bimester' });
+    expect(calendarViewReducer(bimester, { type: 'zoomBy', step: 1 })).toEqual({
+      ...opened,
+      zoom: 'quarter',
+    });
     const quarter = { ...opened, zoom: 'quarter' as const };
     expect(calendarViewReducer(quarter, { type: 'zoomBy', step: 1 })).toBe(quarter);
   });

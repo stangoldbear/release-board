@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, History, Plus } from 'lucide-react';
+import { ArrowRightFromLine, Check, History, Plus } from 'lucide-react';
 import { assignmentsOfProject } from '../../domain/assignments';
 import { notesOfProject } from '../../domain/projectNotes';
 import { PROJECT_STATUSES } from '../../domain/projects';
@@ -218,6 +218,7 @@ export function RoadmapArea({
           searching={searching}
           textScale={textScale}
           compact={compact}
+          oneLineTitles={display.oneLineTitles}
           onZoom={(step) => onViewAction({ type: 'zoomBy', step })}
           onShowDays={(date) => onViewAction({ type: 'goTo', date, zoom: 'detail' })}
           onOpen={(project) => openProject(project)}
@@ -280,6 +281,14 @@ export function RoadmapArea({
             <ToggleChip pressed={display.hidePastDays} onClick={displayControls.togglePastDays}>
               <History className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               Nascondi giorni passati
+            </ToggleChip>
+            <ToggleChip
+              pressed={display.oneLineTitles}
+              onClick={displayControls.toggleOneLineTitles}
+              title="Titoli interi su una riga, anche oltre il rettangolo"
+            >
+              <ArrowRightFromLine className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Titoli su una riga
             </ToggleChip>
           </div>
         </div>

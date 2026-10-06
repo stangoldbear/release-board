@@ -19,14 +19,26 @@ import {
  * --gantt-label-width, which the timeline sets for the size of its text.
  */
 export const LABEL_CELL =
-  'sticky left-0 z-20 w-(--gantt-label-width) shrink-0 border-r border-line-strong p-2 in-data-compact:px-1.5 in-data-compact:py-1';
+  'sticky left-0 z-[700] w-(--gantt-label-width) shrink-0 border-r border-line-strong p-2 in-data-compact:px-1.5 in-data-compact:py-1';
+
+/**
+ * The scrolling part of a timeline: its own stacking context, so that the bars (by closeness to
+ * today, then the one under the pointer, the result in view and the dragged one) and the sticky
+ * names stack among themselves, under the page's header.
+ */
+export const TIMELINE_SCROLLER =
+  'relative isolate w-full touch-pan-x touch-pan-y overflow-x-auto [overflow-anchor:none]';
 
 /** Pixels per day and height of a task bar at each zoom level, with text of the normal size. */
 const SCALES: Record<ZoomLevel, { dayWidth: number; barHeight: number }> = {
   detail: { dayWidth: 112, barHeight: 46 },
   month: { dayWidth: 56, barHeight: 46 },
+  bimester: { dayWidth: 28, barHeight: 46 },
   quarter: { dayWidth: 12, barHeight: 28 },
 };
+
+/** Day columns narrower than this show the initial of the weekday and an icon for a note. */
+export const NARROW_DAY_WIDTH = 40;
 
 /** Width of the column with the row names, with text of the normal size. */
 const LABEL_WIDTH = 96;
@@ -36,6 +48,17 @@ const TEXT_SIZE = 12;
 
 /** The border of a bar takes 2 pixels at the top and 2 at the bottom, at every text size. */
 const BAR_BORDER = 4;
+
+/** Around the one line of a note: the paddings of its day and of its chip, and the chip's border. */
+const NOTE_CHROME = 18;
+
+/**
+ * The order in which bars that start closer to today are drawn over the others, when their titles
+ * run out of them: 400 for a bar that starts today, down to 10 a year or more away.
+ */
+export function stackingOrder(today: string, start: string): number {
+  return Math.max(10, 400 - Math.abs(diffDays(today, start)));
+}
 
 /** The sizes of the timeline for a zoom level, a text size and a density. */
 export interface TimelineMetrics {
@@ -60,14 +83,17 @@ export interface TimelineMetrics {
 /**
  * Bigger text makes the bars, the names column and the notes taller or wider with it, not the
  * days, which the zoom level sets; smaller text also brings the bars closer. Compact mode tightens
- * lines and spacing, so that every box shows more of its text.
+ * lines and spacing, so that every box shows more of its text. With the titles on one line, bars
+ * and notes are one line tall at every zoom, as in the quarter view.
  */
 export function timelineMetrics(
   zoom: ZoomLevel,
   textScale: number,
   compact: boolean,
+  oneLineTitles = false,
 ): TimelineMetrics {
-  const { dayWidth, barHeight: normalBarHeight } = SCALES[zoom];
+  const { dayWidth, barHeight: zoomBarHeight } = SCALES[zoom];
+  const normalBarHeight = oneLineTitles ? SCALES.quarter.barHeight : zoomBarHeight;
   // The room inside the border grows and shrinks with the text, so the same lines always fit.
   const barHeight = Math.round((normalBarHeight - BAR_BORDER) * textScale) + BAR_BORDER;
   const line = TEXT_SIZE * textScale * (compact ? LINE_HEIGHT.compact : LINE_HEIGHT.normal);
@@ -78,9 +104,9 @@ export function timelineMetrics(
     trackGap: Math.round((compact ? 3 : 6) * spacing),
     lanePadding: Math.round((compact ? 3 : 8) * spacing),
     labelWidth: Math.round(LABEL_WIDTH * textScale),
-    barLines: Math.max(1, Math.floor((barHeight - BAR_BORDER) / line)),
-    noteHeight: Math.round(64 * textScale),
-    noteLines: compact ? 4 : 3,
+    barLines: oneLineTitles ? 1 : Math.max(1, Math.floor((barHeight - BAR_BORDER) / line)),
+    noteHeight: oneLineTitles ? Math.round(line) + NOTE_CHROME : Math.round(64 * textScale),
+    noteLines: oneLineTitles ? 1 : compact ? 4 : 3,
     weekNoteHeight: Math.round(56 * textScale),
     digitWidth: 7 * textScale,
   };

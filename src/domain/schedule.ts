@@ -1,15 +1,19 @@
 import type { TaskItem } from './types';
 import { addDaysIso, diffDays, startOfWeek } from '../utils/dateUtils';
 
-/** How much of the calendar is visible at once, from the closest to the widest. */
-export type ZoomLevel = 'detail' | 'month' | 'quarter';
+/**
+ * How much of the calendar is visible at once, from the closest to the widest: wide days, a month
+ * of days, two months of days half as wide, a quarter of weeks.
+ */
+export type ZoomLevel = 'detail' | 'month' | 'bimester' | 'quarter';
 
-export const ZOOM_LEVELS: readonly ZoomLevel[] = ['detail', 'month', 'quarter'];
+export const ZOOM_LEVELS: readonly ZoomLevel[] = ['detail', 'month', 'bimester', 'quarter'];
 
 /** What one column of the calendar stands for at each zoom level. */
 export const ZOOM_COLUMN_UNIT: Record<ZoomLevel, 'day' | 'week'> = {
   detail: 'day',
   month: 'day',
+  bimester: 'day',
   quarter: 'week',
 };
 

@@ -6,6 +6,27 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-06
+
+### Aggiunto
+
+- La vista «2 mesi» di Next Releases e Roadmap, tra «Mese» e «Trimestre»: un giorno per colonna,
+  largo la metà che in «Mese», così due mesi stanno nello schermo. Nelle intestazioni ogni giorno
+  ha l'iniziale del giorno della settimana e il numero; una nota del calendario è un'icona, con il
+  testo al passaggio del mouse e nel nome che legge lo screen reader. Anche Ctrl + rotellina e il
+  pizzico passano per questa vista.
+- «Titoli su una riga», accanto a «Nascondi giorni passati» in Next Releases e in Roadmap,
+  ricordato dal browser per ciascuna area: le barre delle attività e le note sono alte una riga e
+  il titolo resta intero su una riga, uscendo dal rettangolo quando è più lungo, con il colore
+  della barra dietro di sé. Dove due titoli si toccano resta sopra la barra che inizia più vicino a
+  oggi; la barra sotto il puntatore o con il focus viene in primo piano con tutto il suo titolo.
+  Nella roadmap i titoli dei progetti e delle persone non vengono più accorciati con i puntini.
+
+### Modificato
+
+- Le colonne dei nomi del calendario e della roadmap restano sopra le barre anche quando una barra
+  è in primo piano; la barra trascinata resta sopra tutto.
+
 ## [0.7.0] - 2026-10-06
 
 ### Aggiunto
@@ -429,7 +450,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/stangoldbear/release-board/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/stangoldbear/release-board/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/stangoldbear/release-board/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/stangoldbear/release-board/compare/v0.4.0...v0.5.0

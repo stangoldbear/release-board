@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { Eye, EyeOff, History, RotateCcw } from 'lucide-react';
+import { ArrowRightFromLine, Eye, EyeOff, History, RotateCcw } from 'lucide-react';
 import { DAILY_METRIC } from '../../domain/plan';
 import type { Lane } from '../../domain/types';
 import { ToggleChip } from '../../shared/ui/ToggleChip';
@@ -88,6 +88,16 @@ export function RowVisibilityBar({ lanes, display, controls, onTimeline }: RowVi
           <ToggleChip pressed={display.hidePastDays} onClick={controls.togglePastDays}>
             <History className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             Nascondi giorni passati
+          </ToggleChip>
+        )}
+        {onTimeline && (
+          <ToggleChip
+            pressed={display.oneLineTitles}
+            onClick={controls.toggleOneLineTitles}
+            title="Titoli interi su una riga, anche oltre il rettangolo; barre e note alte una riga"
+          >
+            <ArrowRightFromLine className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            Titoli su una riga
           </ToggleChip>
         )}
       </div>

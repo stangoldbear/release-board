@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { TEXT_SCALES } from '../../shared/ui/textScale';
-import { buildColumns, columnTone, monthSpans, timelineMetrics } from './timelineLayout';
+import {
+  buildColumns,
+  columnTone,
+  monthSpans,
+  timelineMetrics,
+  stackingOrder,
+} from './timelineLayout';
 
 describe('buildColumns', () => {
   const range = { start: '2026-09-28', end: '2026-10-04' };
@@ -64,6 +70,30 @@ describe('timelineMetrics', () => {
       noteLines: 3,
     });
     expect(timelineMetrics('quarter', 1, false)).toMatchObject({ barHeight: 28, barLines: 1 });
+    // Two months: days half as wide as in a month, bars as tall.
+    expect(timelineMetrics('bimester', 1, false)).toMatchObject({
+      dayWidth: 28,
+      barHeight: 46,
+      barLines: 2,
+    });
+  });
+
+  it('makes bars and notes one line tall when the titles are on one line', () => {
+    expect(timelineMetrics('month', 1, false, true)).toMatchObject({
+      dayWidth: 56,
+      barHeight: 28,
+      barLines: 1,
+      noteHeight: 34,
+      noteLines: 1,
+    });
+    expect(timelineMetrics('detail', 1.5, true, true).barLines).toBe(1);
+  });
+
+  it('draws the bars that start closer to today over the others', () => {
+    expect(stackingOrder('2026-10-06', '2026-10-06')).toBe(400);
+    expect(stackingOrder('2026-10-06', '2026-10-16')).toBe(390);
+    expect(stackingOrder('2026-10-06', '2026-09-26')).toBe(390);
+    expect(stackingOrder('2026-10-06', '2028-01-01')).toBe(10);
   });
 
   it('grows bars, names and notes with the text, never the days', () => {

@@ -19,7 +19,15 @@ import { NotesRow, noteCellId } from './NotesRow';
 import { TaskBar, taskBarId } from './TaskBar';
 import { TaskContextMenu } from './TaskContextMenu';
 import { DayHeaderRow, MonthBand } from './TimelineHeader';
-import { LABEL_CELL, buildColumns, columnEdge, dayName, timelineMetrics } from './timelineLayout';
+import {
+  LABEL_CELL,
+  buildColumns,
+  columnEdge,
+  dayName,
+  timelineMetrics,
+  stackingOrder,
+  TIMELINE_SCROLLER,
+} from './timelineLayout';
 import type { Column } from './timelineLayout';
 import { useNoteDrag } from './useNoteDrag';
 import { draggedTask, useTaskDrag } from './useTaskDrag';
@@ -47,6 +55,8 @@ interface TimelineProps {
   /** Size of the calendar's text, 1 being the normal one, and whether it is compact. */
   textScale: TextScale;
   compact: boolean;
+  /** Titles on one line, out of their bars when longer; bars and notes one line tall. */
+  oneLineTitles: boolean;
   visibility: RowVisibility;
   onShowAllRows: () => void;
   /** -1 zooms in, 1 zooms out. */
@@ -103,6 +113,7 @@ export function Timeline({
   highlightWeekends,
   textScale,
   compact,
+  oneLineTitles,
   visibility,
   onShowAllRows,
   onZoom,
@@ -115,7 +126,7 @@ export function Timeline({
   onSaveNote,
   onMoveNote,
 }: TimelineProps) {
-  const sizes = timelineMetrics(zoom, textScale, compact);
+  const sizes = timelineMetrics(zoom, textScale, compact, oneLineTitles);
   const { dayWidth, barHeight, trackGap, lanePadding, labelWidth } = sizes;
   const today = todayIso();
   const columns = useMemo(
@@ -213,7 +224,7 @@ export function Timeline({
             '--gantt-label-width': `${labelWidth}px`,
           } as CSSProperties
         }
-        className="relative w-full touch-pan-x touch-pan-y overflow-x-auto [overflow-anchor:none]"
+        className={TIMELINE_SCROLLER}
       >
         <div style={{ width: labelWidth + totalWidth }}>
           <MonthBand range={range} dayWidth={dayWidth} metrics={showMetrics ? metrics : null} />
@@ -275,6 +286,8 @@ export function Timeline({
                           top={lanePadding + item.track * (barHeight + trackGap)}
                           height={barHeight}
                           lines={sizes.barLines}
+                          overflowTitle={oneLineTitles}
+                          stacking={stackingOrder(today, item.task.startDate)}
                           dragging={drag?.task.id === item.task.id}
                           describedBy={helpId}
                           onPointerDown={(event, kind) => {
@@ -304,6 +317,7 @@ export function Timeline({
               dayHeight={sizes.noteHeight}
               weekHeight={sizes.weekNoteHeight}
               lines={sizes.noteLines}
+              overflowText={oneLineTitles}
               drag={noteDrag.drag}
               describedBy={noteHelpId}
               onStartDrag={startNoteDrag}

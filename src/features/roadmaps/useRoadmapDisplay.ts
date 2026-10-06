@@ -10,11 +10,14 @@ export interface RoadmapDisplay {
   hidePastDays: boolean;
   /** How much each project shows under its title. */
   level: DetailLevel;
+  /** Titles of projects and people on one line, out of their bars when longer, rather than cut. */
+  oneLineTitles: boolean;
 }
 
 export interface RoadmapDisplayControls {
   toggleWeekends: () => void;
   togglePastDays: () => void;
+  toggleOneLineTitles: () => void;
   setLevel: (level: DetailLevel) => void;
 }
 
@@ -37,11 +40,17 @@ export function useRoadmapDisplay(): [RoadmapDisplay, RoadmapDisplayControls] {
     oneOf(LEVEL_IDS),
     'main',
   );
+  const [oneLineTitles, setOneLineTitles] = usePreference(
+    'roadmap-titles-one-line',
+    isBoolean,
+    false,
+  );
   return [
-    { highlightWeekends, hidePastDays, level },
+    { highlightWeekends, hidePastDays, level, oneLineTitles },
     {
       toggleWeekends: () => setHighlightWeekends((value) => !value),
       togglePastDays: () => setHidePastDays((value) => !value),
+      toggleOneLineTitles: () => setOneLineTitles((value) => !value),
       setLevel,
     },
   ];

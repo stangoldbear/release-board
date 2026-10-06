@@ -6,7 +6,14 @@ import type { DateRange } from '../../domain/schedule';
 import type { DailyMetric } from '../../domain/types';
 import { formatDateToIT } from '../../utils/dateUtils';
 import { monthLabel } from './calendarView';
-import { LABEL_CELL, columnEdge, columnTone, dayLabel, monthSpans } from './timelineLayout';
+import {
+  LABEL_CELL,
+  NARROW_DAY_WIDTH,
+  columnEdge,
+  columnTone,
+  dayLabel,
+  monthSpans,
+} from './timelineLayout';
 import type { Column } from './timelineLayout';
 
 interface MonthBandProps {
@@ -100,6 +107,8 @@ export const DayHeaderRow = memo(function DayHeaderRow({
             </button>
           );
         }
+        // A narrow day has room for the initial of the weekday and a smaller number.
+        const narrow = column.width < NARROW_DAY_WIDTH;
         return (
           <div
             key={column.start}
@@ -108,10 +117,19 @@ export const DayHeaderRow = memo(function DayHeaderRow({
             className={`shrink-0 py-1 text-center in-data-compact:py-0.5 ${columnEdge(column)} ${columnTone(column)} ${column.isToday ? 'font-bold' : ''}`}
           >
             <span className="block text-xs uppercase">
-              {start.weekday}
+              {narrow ? (
+                <>
+                  <span aria-hidden="true">{start.weekday.charAt(0)}</span>
+                  <span className="sr-only">{start.weekday}</span>
+                </>
+              ) : (
+                start.weekday
+              )}
               {holidayText && <span aria-hidden="true"> •</span>}
             </span>
-            <span className={`block text-sm leading-tight font-bold ${todayMark}`}>
+            <span
+              className={`block leading-tight font-bold ${narrow ? 'text-xs' : 'text-sm'} ${todayMark}`}
+            >
               {start.day}
               {showMonth && ` ${start.month}`}
             </span>

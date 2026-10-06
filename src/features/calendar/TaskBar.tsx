@@ -1,4 +1,4 @@
-import type { KeyboardEvent, PointerEvent } from 'react';
+import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react';
 import { TASK_STATUS_LABELS } from '../../domain/plan';
 import type { TaskChanges } from '../../domain/plan';
 import { moveTask, resizeTask } from '../../domain/schedule';
@@ -27,6 +27,10 @@ interface TaskBarProps {
   height: number;
   /** Lines of text that fit in the bar. */
   lines: number;
+  /** The title on one line, out of the bar when longer, rather than wrapped or cut. */
+  overflowTitle: boolean;
+  /** Bars that start closer to today are drawn over the others: see stackingOrder. */
+  stacking: number;
   dragging: boolean;
   /** Id of the text that explains the keyboard commands. */
   describedBy: string;
@@ -50,6 +54,8 @@ export function TaskBar({
   top,
   height,
   lines,
+  overflowTitle,
+  stacking,
   dragging,
   describedBy,
   onPointerDown,
@@ -107,31 +113,40 @@ export function TaskBar({
         onContextMenu(event.clientX || rect.left, event.clientY || rect.bottom);
       }}
       onKeyDown={handleKeyDown}
-      style={{
-        ...taskColorStyle(task.colorId),
-        left: first * dayWidth + 2,
-        width: Math.max(width, 6),
-        top,
-        height,
-      }}
-      // Clipped rather than hidden: a hidden overflow would keep the title from sticking.
-      className={`group/bar pointer-events-auto absolute flex cursor-grab flex-col justify-center overflow-clip border-2 text-left active:cursor-grabbing ${
+      style={
+        {
+          ...taskColorStyle(task.colorId),
+          left: first * dayWidth + 2,
+          width: Math.max(width, 6),
+          top,
+          height,
+          // The bar being dragged is above everything, then the result in view, then by closeness.
+          '--bar-z': dragging ? 1000 : current ? 500 : stacking,
+        } as CSSProperties
+      }
+      // Clipped rather than hidden: a hidden overflow would keep the title from sticking. With the
+      // titles on one line nothing is clipped, and the bar under the pointer or the focus comes up.
+      className={`group/bar pointer-events-auto absolute flex cursor-grab flex-col justify-center border-2 text-left active:cursor-grabbing z-(--bar-z) hover:z-[600] focus-visible:z-[600] ${
+        overflowTitle ? 'overflow-visible' : 'overflow-clip'
+      } ${
         width < MIN_DETAILED_WIDTH ? 'px-1 in-data-compact:px-0.5' : 'px-2.5 in-data-compact:px-1.5'
       } ${
         task.borderStyle === 'dashed' ? 'border-dashed' : 'border-solid'
       } ${continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'} ${
         continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'
-      } ${dragging ? 'z-30 opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'} ${
-        current ? `z-20 ${CURRENT_RESULT}` : ''
+      } ${dragging ? 'opacity-90 shadow-xl ring-2 ring-fg' : 'shadow-xs hover:shadow-md'} ${
+        current ? CURRENT_RESULT : ''
       }`}
     >
       {resizable && !continuesBefore && handle('start')}
       {/* The title stays in view while the start of a long bar scrolls past the left edge. */}
       <span
-        className={`sticky left-[calc(var(--gantt-label-width)+6px)] block w-fit max-w-full text-xs font-semibold wrap-break-word hyphens-auto ${
-          titleLines === 1 ? 'truncate' : ''
+        className={`sticky left-[calc(var(--gantt-label-width)+6px)] block text-xs font-semibold ${
+          overflowTitle
+            ? 'w-max max-w-none rounded-r-xs bg-inherit pr-1.5 whitespace-nowrap'
+            : `w-fit max-w-full wrap-break-word hyphens-auto ${titleLines === 1 ? 'truncate' : ''}`
         }`}
-        style={titleLines === 1 ? undefined : clampLines(titleLines)}
+        style={overflowTitle || titleLines === 1 ? undefined : clampLines(titleLines)}
       >
         <Highlight text={task.title} />
       </span>

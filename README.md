@@ -9,8 +9,9 @@ giornalieri.
 
 - Due aree, Note e Next Releases, da mostrare o nascondere dall'intestazione; una terza, Roadmap,
   in beta: compare attivando «Funzioni beta» nelle Impostazioni.
-- Calendario continuo a corsie, con i mesi uno dopo l'altro, tre livelli di zoom e i giorni passati
-  in grigio o nascosti, e bacheca settimanale.
+- Calendario continuo a corsie, con i mesi uno dopo l'altro, quattro livelli di zoom («Dettaglio»,
+  «Mese», «2 mesi», «Trimestre») e i giorni passati in grigio o nascosti, e bacheca settimanale. A
+  scelta, titoli interi su una riga che escono dalle loro barre, alte una riga.
 - Testo di note e calendari regolabile con le lenti, dal 75% al 175%, e vista compatta che mostra
   più testo in ogni casella.
 - Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e

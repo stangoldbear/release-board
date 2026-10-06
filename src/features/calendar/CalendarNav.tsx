@@ -17,7 +17,7 @@ interface CalendarNavProps {
   board?: boolean;
 }
 
-/** The three zoom levels of the timeline, then the board of one week. */
+/** The four zoom levels of the timeline, then the board of one week. */
 const VIEW_OPTIONS: {
   key: ZoomLevel | 'week';
   label: string;
@@ -25,6 +25,7 @@ const VIEW_OPTIONS: {
 }[] = [
   { key: 'detail', label: 'Dettaglio', title: 'Colonne larghe, un giorno per colonna' },
   { key: 'month', label: 'Mese', title: 'Un giorno per colonna' },
+  { key: 'bimester', label: '2 mesi', title: 'Un giorno per colonna, largo la metà' },
   { key: 'quarter', label: 'Trimestre', title: 'Una settimana per colonna' },
   { key: 'week', label: 'Bacheca', title: 'Una settimana, con le attività in schede' },
 ];
