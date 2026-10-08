@@ -56,6 +56,12 @@ computer e nessun aggiornamento li tocca.
 mette la configurazione dell'istanza: così il codice resta uguale per tutti e la tua
 configurazione non sta in nessun file.
 
+**HTTPS e SSH**: Git parla con GitHub in due modi. Con un indirizzo `https://github.com/…` usa
+la porta 443, la stessa del browser, e si autentica con un token; con un indirizzo
+`git@github.com:…` usa SSH sulla porta 22 e si autentica con una chiave. Funzionano uguale; la
+differenza conta sulle reti aziendali, che spesso chiudono la 22 e lasciano aperta la 443. Questa
+guida usa HTTPS; il capitolo 3a dice come passare a SSH se lo preferisci.
+
 **Workflow**: un'automazione di GitHub Actions. `deploy-pages.yml` compila il sito e lo pubblica su
 GitHub Pages a ogni push su `main`; `ci.yml` controlla formattazione, lint, tipi, test e regole.
 
@@ -98,8 +104,8 @@ tuo.
 
 1. Su GitHub crea un repository **vuoto** (senza README, senza `.gitignore`, senza licenza):
    **New repository**, scegli nome e visibilità, premi **Create repository**. Prendi nota
-   dell'indirizzo, per esempio `git@github.com:tuo-utente/release-board-azienda.git` (SSH) o
-   `https://github.com/tuo-utente/release-board-azienda.git` (HTTPS).
+   dell'indirizzo HTTPS, per esempio `https://github.com/tuo-utente/release-board-azienda.git`:
+   il pulsante **Code** lo mostra.
 
 2. Sul tuo computer, in un terminale:
 
@@ -107,7 +113,7 @@ tuo.
    git clone https://github.com/stangoldbear/release-board.git release-board-azienda
    cd release-board-azienda
    git remote rename origin upstream
-   git remote add origin git@github.com:tuo-utente/release-board-azienda.git
+   git remote add origin https://github.com/tuo-utente/release-board-azienda.git
    git push -u origin main
    git push origin --tags
    ```
@@ -116,6 +122,15 @@ tuo.
    da cui è nato in `upstream`, perché d'ora in poi è la sorgente degli aggiornamenti; aggiungi il
    tuo repository come `origin`; spingi `main` su GitHub, e `-u` ricorda che `main` locale segue
    `origin/main`; spingi anche i tag, così le versioni si vedono anche nel tuo repository.
+
+   Al primo `push` Git chiede le credenziali. Username è il tuo utente GitHub; Password **non** è
+   la password dell'account, che GitHub non accetta da Git, ma un token: lo crei in GitHub →
+   **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new
+   token**, con un nome, una scadenza, **Repository access → Only select repositories** con il
+   repository dell'istanza e, in **Repository permissions**, **Contents: Read and write**.
+   Incollalo al posto della password: su macOS il portachiavi lo ricorda, su Windows lo fa Git
+   Credential Manager. In alternativa GitHub CLI fa tutto da sé: `gh auth login`, poi GitHub.com,
+   HTTPS e accesso dal browser (`brew install gh` su macOS).
 
 3. Su GitHub, nel tuo repository: scheda **Actions**, abilita i workflow se te lo chiede; poi
    **Settings → Pages**, alla voce **Source** scegli **GitHub Actions**.
@@ -134,6 +149,35 @@ tuo.
 
 Controllo finale: `git remote -v` deve mostrare `origin` con il tuo indirizzo e `upstream` con
 quello pubblico, due righe ciascuno (fetch e push).
+
+#### Se preferisci SSH
+
+Con SSH non servono token: una chiave sul computer e la sua parte pubblica nel tuo account.
+
+```sh
+ssh-keygen -t ed25519 -C "il-mio-computer"   # Invio a tutte le domande
+cat ~/.ssh/id_ed25519.pub                     # la chiave pubblica, da copiare tutta
+```
+
+Incollala in GitHub → **Settings → SSH and GPG keys → New SSH key**. Poi `ssh -T git@github.com`
+deve rispondere «Hi tuo-utente!». Se invece resta appeso e finisce in «Operation timed out», la
+rete chiude la porta 22: GitHub risponde anche sulla 443, basta dirlo a SSH nel file
+`~/.ssh/config` (crealo se manca):
+
+```
+Host github.com
+  HostName ssh.github.com
+  Port 443
+  User git
+```
+
+Riprova `ssh -T git@github.com`; quando risponde, dai a `origin` l'indirizzo SSH:
+
+```sh
+git remote set-url origin git@github.com:tuo-utente/release-board-azienda.git
+```
+
+`upstream` può restare HTTPS: da lì si legge soltanto, e la porta 443 è aperta ovunque.
 
 ### 3b. Copia dei file (funziona, ma è sconsigliata)
 
@@ -264,6 +308,20 @@ elenca i file; dentro, Git segna le due versioni tra `<<<<<<<`, `=======` e `>>>
 togli i segni, poi `git add` dei file e `git commit`. Per annullare tutto e tornare a prima del
 merge: `git merge --abort`.
 
+**`git push` resta appeso e finisce in «Operation timed out»**: `origin` ha un indirizzo SSH
+(`git@github.com:…`) e la rete chiude la porta 22, come molte reti aziendali. Prova
+`ssh -T git@github.com`: se va in timeout è questo. O passi `origin` a HTTPS
+(`git remote set-url origin https://github.com/tuo-utente/nome.git`: il push chiede utente e
+token, capitolo 3a), o fai passare SSH dalla porta 443 (capitolo 3a, «Se preferisci SSH»).
+
+**«Permission denied (publickey)»**: la porta è aperta, ma GitHub non conosce la chiave di questo
+computer. Registra la chiave pubblica (capitolo 3a, «Se preferisci SSH») o passa a HTTPS.
+
+**«Authentication failed», o «Support for password authentication was removed», con HTTPS**: hai
+messo la password dell'account; serve un token (capitolo 3a). Se il portachiavi ha memorizzato
+una credenziale sbagliata, su macOS cancella la voce `github.com` in Accesso Portachiavi, oppure
+lancia `gh auth login`.
+
 **`git push` rifiutato ("rejected")**: su GitHub ci sono commit che in locale non hai, per esempio
 di un collega. `git pull origin main`, poi di nuovo `git push`.
 
@@ -283,6 +341,8 @@ le regole pubblicate in Firebase sono quelle vecchie. Ripubblica `firestore/fire
 
 ## 9. Glossario minimo
 
+- **chiave SSH**: una coppia di file; la parte pubblica si registra su GitHub, la privata resta
+  sul computer e firma gli accessi.
 - **clone**: copia locale di un repository, con tutta la storia.
 - **commit**: fotografia dei file con un messaggio; l'unità della storia.
 - **fast-forward**: un merge che non crea commit perché basta avanzare il branch.
@@ -292,6 +352,7 @@ le regole pubblicate in Firebase sono quelle vecchie. Ripubblica `firestore/fire
 - **push**: manda i tuoi commit a un remoto.
 - **remote**: indirizzo di un repository altrove, con un nome breve.
 - **tag**: etichetta fissa su un commit; qui, una versione.
+- **token**: una password a scadenza creata su GitHub, con cui Git si autentica via HTTPS.
 - **upstream**: per convenzione, il remoto da cui arrivano gli aggiornamenti; qui, il repository
   pubblico di Release Board.
 - **working tree**: i file reali nella cartella.

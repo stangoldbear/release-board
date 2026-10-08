@@ -6,6 +6,16 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-10-08
+
+### Modificato
+
+- La guida `docs/ISTANZA-101.md` usa HTTPS come indirizzo del proprio repository e spiega il token
+  che il primo push chiede al posto della password (o GitHub CLI); SSH è l'alternativa, con la
+  chiave da registrare e il passaggio dalla porta 443 quando la rete chiude la 22. Tra i problemi
+  comuni: il push che va in timeout, «Permission denied (publickey)» e la password rifiutata via
+  HTTPS.
+
 ## [0.10.1] - 2026-10-08
 
 ### Aggiunto
