@@ -1,13 +1,13 @@
 import { Fragment, memo, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Plus, UserRound } from 'lucide-react';
+import { CalendarRange, Plus, UserRound } from 'lucide-react';
 import { assignmentsOfProject, scheduleAssignment } from '../../domain/assignments';
 import type { AssignmentChanges } from '../../domain/assignments';
 import { applyChanges } from '../../domain/changes';
 import type { ProjectChanges } from '../../domain/projects';
-import { groupProjects, teamOf } from '../../domain/roadmapConfig';
-import { ZOOM_COLUMN_UNIT, placeTasks } from '../../domain/schedule';
-import type { DateRange, ZoomLevel } from '../../domain/schedule';
+import { coloredValueOf, groupProjects, teamOf } from '../../domain/roadmapConfig';
+import { ZOOM_DAY_WIDTH, placeTasks } from '../../domain/schedule';
+import type { DateRange } from '../../domain/schedule';
 import type {
   Assignment,
   FieldOption,
@@ -31,9 +31,11 @@ import {
   buildColumns,
   clampLines,
   columnEdge,
+  columnUnit,
 } from '../calendar/timelineLayout';
 import type { Column } from '../calendar/timelineLayout';
 import { useTimelineScroll } from '../calendar/useTimelineScroll';
+import { useViewportWidth } from '../calendar/useViewportWidth';
 import { useZoomGestures } from '../calendar/useZoomGestures';
 import { AssignmentBar, assignmentBarId } from './AssignmentBar';
 import { FieldTag, FieldValues } from './fieldUi';
@@ -49,12 +51,15 @@ interface RoadmapTimelineProps {
   projects: Project[];
   /** The days the roadmap holds; it scrolls through them. */
   range: DateRange;
-  zoom: ZoomLevel;
+  /** Pixels per day, as the view sets them. */
+  dayWidth: number;
   /** The first day in view when the roadmap opens, where the user left it. */
   anchor: string;
   /** The last navigation: the roadmap scrolls so that its day is at the left edge. */
   jump: CalendarJump;
   onScrolled: (first: string, last: string, settled: boolean) => void;
+  /** The width of the days beside the column of the projects, on opening and once the window settles. */
+  onResized: (width: number) => void;
   today: string;
   highlightWeekends: boolean;
   /** How much each row shows under the title of its project. */
@@ -68,6 +73,8 @@ interface RoadmapTimelineProps {
   oneLineTitles: boolean;
   /** A field that groups: the projects with the same value go together, under its tag. */
   groupBy: ProjectField | null;
+  /** A field that colors: the value of a project marks the left of its name in the value's color. */
+  colorBy: ProjectField | null;
   textScale: TextScale;
   compact: boolean;
   /** -1 zooms in, 1 zooms out. */
@@ -75,6 +82,8 @@ interface RoadmapTimelineProps {
   /** Shows the days of a week, from the quarter view. */
   onShowDays: (date: string) => void;
   onOpen: (project: Project) => void;
+  /** Adds a project from the days in view, as the button above the roadmap does. */
+  onAdd: () => void;
   /** Adds a project from a day. */
   onAddAt: (date: string) => void;
   onChange: (projectId: string, changes: ProjectChanges) => void;
@@ -173,7 +182,11 @@ function GroupHeader({
   );
 }
 
-/** The title of a project and, from the "Info principali" level on, what describes it. */
+/**
+ * The title of a project and, from the "Info principali" level on, what describes it: a line in
+ * grey with state, months and owner, each with its icon, the description cut short, and, set
+ * apart, the main fields.
+ */
 function ProjectInfo({
   project,
   level,
@@ -190,6 +203,7 @@ function ProjectInfo({
   descriptionLines: number;
   onOpen: () => void;
 }) {
+  const mainFields = fields.filter((field) => field.main && field.id !== hiddenFieldId);
   return (
     <>
       {/*
@@ -205,7 +219,7 @@ function ProjectInfo({
           onOpen();
         }}
         title="Apri il progetto"
-        className="cursor-pointer text-left text-xs font-bold wrap-break-word hyphens-auto hover:underline"
+        className="cursor-pointer text-left text-xs leading-snug font-bold wrap-break-word hyphens-auto hover:underline"
       >
         <Highlight text={project.title} />
       </button>
@@ -214,13 +228,16 @@ function ProjectInfo({
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-fg-muted">
             <ProjectStatusMark status={project.status} />
             <span
+              className="inline-flex items-center gap-1 whitespace-nowrap"
               title={`${formatDateToIT(project.startDate)} → ${formatDateToIT(project.endDate)}`}
             >
+              <CalendarRange className="h-3 w-3 shrink-0" aria-hidden="true" />
               {projectPeriod(project)}
             </span>
             {project.owner && (
               <span className="flex min-w-0 items-center gap-1">
                 <UserRound className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="sr-only">responsabile </span>
                 <span className="truncate">
                   <Highlight text={project.owner} />
                 </span>
@@ -231,15 +248,18 @@ function ProjectInfo({
             <span
               style={clampLines(descriptionLines)}
               className="text-xs whitespace-pre-line text-fg-muted"
+              title={project.description}
             >
               <Highlight text={project.description} />
             </span>
           )}
-          {fields
-            .filter((field) => field.main && field.id !== hiddenFieldId)
-            .map((field) => (
-              <FieldValues key={field.id} project={project} field={field} />
-            ))}
+          {mainFields.length > 0 && (
+            <span className="mt-1 flex flex-col gap-1">
+              {mainFields.map((field) => (
+                <FieldValues key={field.id} project={project} field={field} />
+              ))}
+            </span>
+          )}
         </>
       )}
     </>
@@ -255,10 +275,11 @@ function ProjectInfo({
 export function RoadmapTimeline({
   projects,
   range,
-  zoom,
+  dayWidth,
   anchor,
   jump,
   onScrolled,
+  onResized,
   today,
   highlightWeekends,
   level,
@@ -269,9 +290,11 @@ export function RoadmapTimeline({
   compact,
   oneLineTitles,
   groupBy,
+  colorBy,
   onZoom,
   onShowDays,
   onOpen,
+  onAdd,
   onAddAt,
   onChange,
   onOpenAssignment,
@@ -279,13 +302,13 @@ export function RoadmapTimeline({
   onChangeAssignment,
   onOpenStakeholder,
 }: RoadmapTimelineProps) {
-  const metrics = roadmapMetrics(zoom, textScale, compact);
-  const { dayWidth, barHeight, assignmentHeight, rowPadding, labelWidth } = metrics;
+  const metrics = roadmapMetrics(dayWidth, textScale, compact, level);
+  const { barHeight, assignmentHeight, rowPadding, labelWidth } = metrics;
   const columns = useMemo(
-    () => buildColumns(range, zoom, highlightWeekends, today),
-    [range, zoom, highlightWeekends, today],
+    () => buildColumns(range, dayWidth, highlightWeekends, today),
+    [range, dayWidth, highlightWeekends, today],
   );
-  const weekColumns = ZOOM_COLUMN_UNIT[zoom] === 'week';
+  const weekColumns = columnUnit(dayWidth) === 'week';
   const totalWidth = columns.reduce((sum, column) => sum + column.width, 0);
   const todayOffset =
     range.start <= today && today <= range.end
@@ -298,6 +321,7 @@ export function RoadmapTimeline({
   const personDrag = useAssignmentDrag(dayWidth, onChangeAssignment);
 
   useZoomGestures(scrollRef, onZoom);
+  useViewportWidth(scrollRef, onResized);
   useTimelineScroll(scrollRef, {
     range,
     dayWidth,
@@ -370,7 +394,7 @@ export function RoadmapTimeline({
           <DayHeaderRow
             columns={columns}
             weekColumns={weekColumns}
-            showMonth={zoom === 'detail'}
+            showMonth={dayWidth >= ZOOM_DAY_WIDTH.detail}
             onShowDays={showDays}
           />
 
@@ -393,6 +417,14 @@ export function RoadmapTimeline({
                   const people =
                     level === 'team' ? assignmentsOfProject(assignments, project.id) : [];
                   const rows = 1 + people.length + (level === 'team' && !searching ? 1 : 0);
+                  const mark = colorBy ? coloredValueOf(project, colorBy) : null;
+                  // The tag under the title already names the value, unless the level or the
+                  // group hides it: then the name is there for the screen reader alone.
+                  const markNamed =
+                    colorBy !== null &&
+                    level !== 'titles' &&
+                    colorBy.main &&
+                    colorBy.id !== groupBy?.id;
                   return (
                     <div key={project.id} className="grid border-b border-line" style={rowStyle}>
                       <div
@@ -413,6 +445,13 @@ export function RoadmapTimeline({
                         className={`${LABEL_CELL} flex flex-col justify-center gap-0.5 bg-surface-muted`}
                         style={{ gridColumn: 1, gridRow: 1, minHeight: projectRowHeight }}
                       >
+                        {mark && (
+                          <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-y-1.5 left-0 w-1 rounded-r-sm"
+                            style={{ backgroundColor: `var(--rb-task-${mark.colorId}-border)` }}
+                          />
+                        )}
                         <ProjectInfo
                           project={project}
                           level={level}
@@ -421,6 +460,11 @@ export function RoadmapTimeline({
                           descriptionLines={metrics.descriptionLines}
                           onOpen={() => onOpen(project)}
                         />
+                        {mark && colorBy && !markNamed && (
+                          <span className="sr-only">
+                            {colorBy.label}: {mark.label}
+                          </span>
+                        )}
                       </div>
                       <div
                         className="pointer-events-none relative"
@@ -546,18 +590,20 @@ export function RoadmapTimeline({
               )
             ) : (
               <div className="grid" style={rowStyle}>
+                {/* The row that adds a project: a button in the column, a day to click beside it. */}
                 <div
-                  className={`${LABEL_CELL} flex flex-col justify-center gap-0.5 bg-surface-muted text-xs text-fg-muted`}
+                  className={`${LABEL_CELL} flex items-center bg-surface-muted`}
                   style={{ gridColumn: 1, gridRow: 1, minHeight: projectRowHeight }}
                 >
-                  <span className="flex items-center gap-1 font-semibold">
-                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    {projects.length === 0 ? 'Nessun progetto' : 'Nuovo progetto'}
-                  </span>
-                  <span className="pointer-coarse:hidden">Clic su un giorno per crearne uno</span>
-                  <span className="hidden pointer-coarse:inline">
-                    Tocca un giorno per crearne uno
-                  </span>
+                  <button
+                    type="button"
+                    onClick={onAdd}
+                    title="Crea un progetto da oggi, o dal mese in vista. Per partire da un altro giorno, clic su quel giorno in questa riga"
+                    className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong px-2 py-1.5 text-xs font-semibold text-link hover:border-link hover:bg-accent-soft"
+                  >
+                    <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    Nuovo progetto
+                  </button>
                 </div>
                 <div className="relative flex" style={{ gridColumn: 2, gridRow: 1 }}>
                   <RowCells columns={columns} onAdd={addAt} />

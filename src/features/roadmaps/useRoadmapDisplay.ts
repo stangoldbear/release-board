@@ -15,6 +15,11 @@ export interface RoadmapDisplay {
   oneLineTitles: boolean;
   /** The id of the field the projects are grouped by; null for no groups. */
   groupBy: string | null;
+  /**
+   * The id of the field whose value colors the mark of each project; false for no mark, null for
+   * the first field that can color, until a choice is made.
+   */
+  colorBy: string | false | null;
 }
 
 export interface RoadmapDisplayControls {
@@ -23,6 +28,7 @@ export interface RoadmapDisplayControls {
   toggleOneLineTitles: () => void;
   setLevel: (level: DetailLevel) => void;
   setGroupBy: (fieldId: string | null) => void;
+  setColorBy: (fieldId: string | false) => void;
 }
 
 const LEVEL_IDS = DETAIL_LEVELS.map((level) => level.id);
@@ -55,14 +61,21 @@ export function useRoadmapDisplay(): [RoadmapDisplay, RoadmapDisplayControls] {
     (value) => (isRoadmapId(value) ? value : null),
     null,
   );
+  // A field that no longer colors, or no longer exists, means the first that can: the area checks it.
+  const [colorBy, setColorBy] = usePreference<string | false | null>(
+    'roadmap-color-by',
+    (value) => (value === false || isRoadmapId(value) ? value : null),
+    null,
+  );
   return [
-    { highlightWeekends, hidePastDays, level, oneLineTitles, groupBy },
+    { highlightWeekends, hidePastDays, level, oneLineTitles, groupBy, colorBy },
     {
       toggleWeekends: () => setHighlightWeekends((value) => !value),
       togglePastDays: () => setHidePastDays((value) => !value),
       toggleOneLineTitles: () => setOneLineTitles((value) => !value),
       setLevel,
       setGroupBy,
+      setColorBy,
     },
   ];
 }

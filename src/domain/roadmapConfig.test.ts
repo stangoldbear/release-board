@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  coloredValueOf,
+  colorsProjects,
   defaultRoadmapConfig,
   fieldValuesOf,
   fitsField,
@@ -146,6 +148,27 @@ describe('the fields that group the projects', () => {
       ['b', 'd'],
     ]);
     expect(groupProjects([], size)).toEqual([]);
+  });
+
+  it('color the projects when they are exclusive and have a colored value, group or not', () => {
+    expect(colorsProjects(size)).toBe(true);
+    expect(colorsProjects({ ...size, group: undefined })).toBe(true);
+    expect(colorsProjects({ ...size, multiple: true })).toBe(false);
+    expect(colorsProjects({ ...size, options: [{ id: 'small', label: 'Small project' }] })).toBe(
+      false,
+    );
+    expect(colorsProjects({ ...size, type: 'text', options: undefined })).toBe(false);
+  });
+
+  it('give a project the colored value it has, and nothing for a value without color', () => {
+    expect(coloredValueOf({ fields: { size: ['big'] } }, size)).toEqual({
+      id: 'big',
+      label: 'Big project',
+      colorId: 'purple',
+    });
+    expect(coloredValueOf({ fields: { size: ['small'] } }, size)).toBeNull();
+    expect(coloredValueOf({ fields: { size: ['gone'] } }, size)).toBeNull();
+    expect(coloredValueOf({ fields: {} }, size)).toBeNull();
   });
 });
 

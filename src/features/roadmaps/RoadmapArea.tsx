@@ -3,13 +3,13 @@ import { ArrowRightFromLine, Check, History, Plus } from 'lucide-react';
 import { assignmentsOfProject } from '../../domain/assignments';
 import { notesOfProject } from '../../domain/projectNotes';
 import { PROJECT_STATUSES } from '../../domain/projects';
-import { isGroupable } from '../../domain/roadmapConfig';
-import { ZOOM_COLUMN_UNIT } from '../../domain/schedule';
+import { colorsProjects, isGroupable } from '../../domain/roadmapConfig';
 import type {
   Assignment,
   MemoAuthor,
   PlanSnapshot,
   Project,
+  ProjectField,
   Stakeholder,
 } from '../../domain/types';
 import { Area } from '../../shared/ui/Area';
@@ -20,7 +20,9 @@ import type { TextScale } from '../../shared/ui/textScale';
 import { ToggleChip } from '../../shared/ui/ToggleChip';
 import { startOfMonth, startOfWeek } from '../../utils/dateUtils';
 import { CalendarNav } from '../calendar/CalendarNav';
+import { dayWidthOf } from '../calendar/calendarView';
 import type { CalendarAction, CalendarView } from '../calendar/calendarView';
+import { columnUnit } from '../calendar/timelineLayout';
 import { AssignmentDialog } from './AssignmentDialog';
 import { ProjectDialog } from './ProjectDialog';
 import type { ProjectTab } from './ProjectDialog';
@@ -105,6 +107,51 @@ function ProjectSummary({ projects, found }: { projects: Project[]; found: numbe
 }
 
 /**
+ * A field to group or to color by, among those that can. Without any, the menu stays, disabled,
+ * and says so: the choice is there to be found, and its title says where to add a field.
+ */
+function FieldChoice({
+  label,
+  none,
+  hint,
+  fields,
+  value,
+  onChange,
+}: {
+  label: string;
+  /** The choice of no field. */
+  none: string;
+  /** What kind of field it takes, shown while there is none. */
+  hint: string;
+  fields: ProjectField[];
+  value: string;
+  onChange: (fieldId: string) => void;
+}) {
+  const empty = fields.length === 0;
+  return (
+    <label
+      className="flex items-center gap-2"
+      title={empty ? `${hint}: Impostazioni → Roadmap → «Modifica i campi…»` : undefined}
+    >
+      <span className="text-xs font-bold tracking-wide uppercase">{label}</span>
+      <select
+        value={empty ? '' : value}
+        disabled={empty}
+        onChange={(event) => onChange(event.target.value)}
+        className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:text-fg-muted"
+      >
+        <option value="">{empty ? 'Nessun campo adatto' : none}</option>
+        {fields.map((field) => (
+          <option key={field.id} value={field.id}>
+            {field.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/**
  * The roadmap of the projects, past, current and to come, over the same days as the calendar:
  * its period and views on the line of the title, then one card with the projects by state, the
  * rows and, under them, how much each row shows and the days to mark or hide.
@@ -143,17 +190,27 @@ export function RoadmapArea({
     () => roadmapRange(view.range, plan.projects),
     [view.range, plan.projects],
   );
-  const firstShownDay = ZOOM_COLUMN_UNIT[view.zoom] === 'week' ? startOfWeek(today) : today;
+  const dayWidth = dayWidthOf(view);
+  const firstShownDay = columnUnit(dayWidth) === 'week' ? startOfWeek(today) : today;
   const start =
     display.hidePastDays && firstShownDay > fullRange.start ? firstShownDay : fullRange.start;
   const range = useMemo(() => ({ start, end: fullRange.end }), [start, fullRange.end]);
 
   const openNew = (from: string) => setOpen({ project: null, period: newProjectPeriod(from) });
+  // From today while this month is in view, otherwise from the first day in view.
+  const openNewFromView = () =>
+    openNew(startOfMonth(view.anchor) === startOfMonth(today) ? today : view.anchor);
   const openProject = (project: Project, tab?: ProjectTab) =>
     setOpen({ project, period: project, tab });
   const current = open?.project ? plan.projects.find((item) => item.id === open.project?.id) : null;
   const groupable = plan.roadmap.fields.filter(isGroupable);
   const groupBy = groupable.find((field) => field.id === display.groupBy) ?? null;
+  // The first field that can color marks the projects until the user chooses another, or none.
+  const coloring = plan.roadmap.fields.filter(colorsProjects);
+  const colorBy =
+    display.colorBy === false
+      ? null
+      : (coloring.find((field) => field.id === display.colorBy) ?? coloring[0] ?? null);
 
   if (unavailable) {
     return (
@@ -177,13 +234,7 @@ export function RoadmapArea({
             board={false}
           />
           <div className="ml-auto">
-            <Button
-              id={NEW_PROJECT_ID}
-              variant="primary"
-              onClick={() =>
-                openNew(startOfMonth(view.anchor) === startOfMonth(today) ? today : view.anchor)
-              }
-            >
+            <Button id={NEW_PROJECT_ID} variant="primary" onClick={openNewFromView}>
               <Plus className="h-4 w-4" aria-hidden="true" />
               Nuovo progetto
             </Button>
@@ -207,12 +258,13 @@ export function RoadmapArea({
         <RoadmapTimeline
           projects={shown}
           range={range}
-          zoom={view.zoom}
+          dayWidth={dayWidth}
           anchor={view.anchor}
           jump={view.jump}
           onScrolled={(first, last, settled) =>
             onViewAction({ type: 'scrolled', first, last, settled })
           }
+          onResized={(viewport) => onViewAction({ type: 'resized', viewport })}
           today={today}
           highlightWeekends={display.highlightWeekends}
           level={detailsUnavailable && display.level === 'team' ? 'main' : display.level}
@@ -223,9 +275,11 @@ export function RoadmapArea({
           compact={compact}
           oneLineTitles={display.oneLineTitles}
           groupBy={groupBy}
+          colorBy={colorBy}
           onZoom={(step) => onViewAction({ type: 'zoomBy', step })}
           onShowDays={(date) => onViewAction({ type: 'goTo', date, zoom: 'detail' })}
           onOpen={(project) => openProject(project)}
+          onAdd={openNewFromView}
           onAddAt={openNew}
           onChange={projectActions.onUpdate}
           onOpenAssignment={(assignment) => {
@@ -274,23 +328,22 @@ export function RoadmapArea({
               })}
             </div>
           </div>
-          {groupable.length > 0 && (
-            <label className="flex items-center gap-2">
-              <span className="text-xs font-bold tracking-wide uppercase">Raggruppa per</span>
-              <select
-                value={groupBy?.id ?? ''}
-                onChange={(event) => displayControls.setGroupBy(event.target.value || null)}
-                className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-xs"
-              >
-                <option value="">Nessun gruppo</option>
-                {groupable.map((field) => (
-                  <option key={field.id} value={field.id}>
-                    {field.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <FieldChoice
+            label="Raggruppa per"
+            none="Nessun gruppo"
+            hint="Serve una lista di valori esclusivi con «Raggruppa»"
+            fields={groupable}
+            value={groupBy?.id ?? ''}
+            onChange={(fieldId) => displayControls.setGroupBy(fieldId || null)}
+          />
+          <FieldChoice
+            label="Colora per"
+            none="Nessun colore"
+            hint="Serve una lista di valori esclusivi con un colore per valore"
+            fields={coloring}
+            value={colorBy?.id ?? ''}
+            onChange={(fieldId) => displayControls.setColorBy(fieldId || false)}
+          />
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <ToggleChip
               pressed={display.highlightWeekends}

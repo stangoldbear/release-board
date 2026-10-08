@@ -1,4 +1,4 @@
-import { ZOOM_LEVELS, weekRange } from '../../domain/schedule';
+import { FIXED_ZOOM_LEVELS, ZOOM_DAY_WIDTH, weekRange } from '../../domain/schedule';
 import type { DateRange, ZoomLevel } from '../../domain/schedule';
 import {
   ITALIAN_MONTHS,
@@ -30,6 +30,13 @@ export interface CalendarView {
   jump: CalendarJump;
   /** The days the timeline holds, from a Monday to a Sunday. It grows, and never shrinks. */
   range: DateRange;
+  /**
+   * Width in pixels of the part of the timeline that shows days, after the column of the names,
+   * as the timeline measures it; null until it has. The fitted level divides it among its days.
+   */
+  viewport: number | null;
+  /** How many whole days the fitted level shows: the window shows exactly these, side by side. */
+  fitDays: number;
 }
 
 export type CalendarAction =
@@ -41,11 +48,21 @@ export type CalendarAction =
   | { type: 'setZoom'; zoom: ZoomLevel }
   /** -1 zooms in, towards fewer days; 1 zooms out. Stops at the first and last level. */
   | { type: 'zoomBy'; step: -1 | 1 }
+  /** The timeline reports the width of its days, when it opens and once the window stops changing. */
+  | { type: 'resized'; viewport: number }
+  /** How many days the fitted level shows, within its limits. */
+  | { type: 'setFitDays'; days: number }
   /**
    * The timeline reports the first and last day in view. `settled` once scrolling has stopped:
    * only then may the timeline grow at its start, which moves everything after it.
    */
   | { type: 'scrolled'; first: string; last: string; settled: boolean };
+
+/** The fitted level shows at least a week, and never a day narrower than this. */
+export const MIN_FIT_DAYS = 7;
+export const MIN_FIT_DAY_WIDTH = 8;
+/** Days of the fitted level before the window has been measured, or when nothing is remembered. */
+export const DEFAULT_FIT_DAYS = 30;
 
 /** Months before and after today that the timeline holds when it opens. */
 const MONTHS_BEFORE = 3;
@@ -103,6 +120,48 @@ function grownRange(view: CalendarView, first: string, last: string, settled: bo
   return start === range.start && end === range.end ? range : { start, end };
 }
 
+/** A remembered number of days of the fitted level, or null for anything else. */
+export function parseFitDays(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= MIN_FIT_DAYS
+    ? value
+    : null;
+}
+
+/** The most days the fitted level can show in a viewport without days narrower than the least. */
+export function maxFitDays(viewport: number): number {
+  return Math.max(MIN_FIT_DAYS, Math.floor(viewport / MIN_FIT_DAY_WIDTH));
+}
+
+/** Pixels per day of the view: fixed at each level, a share of the viewport at the fitted one. */
+export function dayWidthOf(view: Pick<CalendarView, 'zoom' | 'viewport' | 'fitDays'>): number {
+  if (view.zoom !== 'fit') return ZOOM_DAY_WIDTH[view.zoom];
+  // Before the window is measured, the fitted level looks like two months.
+  return view.viewport === null ? ZOOM_DAY_WIDTH.bimester : view.viewport / view.fitDays;
+}
+
+/** The whole days the viewport shows at the view's level; null before the window is measured. */
+export function daysInView(
+  view: Pick<CalendarView, 'zoom' | 'viewport' | 'fitDays'>,
+): number | null {
+  if (view.viewport === null) return null;
+  if (view.zoom === 'fit') return view.fitDays;
+  return Math.max(1, Math.floor(view.viewport / dayWidthOf(view)));
+}
+
+/** The fixed level a step away from the view's width: closer with -1, wider with 1, or none. */
+function fixedLevelFrom(view: CalendarView, step: -1 | 1): ZoomLevel | undefined {
+  if (view.zoom !== 'fit') {
+    const index = FIXED_ZOOM_LEVELS.indexOf(view.zoom) + step;
+    return FIXED_ZOOM_LEVELS[Math.min(Math.max(index, 0), FIXED_ZOOM_LEVELS.length - 1)];
+  }
+  // From the fitted level, the nearest fixed one in the direction of the step.
+  const width = dayWidthOf(view);
+  const candidates = FIXED_ZOOM_LEVELS.filter((level) =>
+    step === -1 ? ZOOM_DAY_WIDTH[level] > width : ZOOM_DAY_WIDTH[level] < width,
+  );
+  return step === -1 ? candidates.at(-1) : candidates[0];
+}
+
 export function calendarViewReducer(view: CalendarView, action: CalendarAction): CalendarView {
   switch (action.type) {
     case 'previous':
@@ -126,12 +185,25 @@ export function calendarViewReducer(view: CalendarView, action: CalendarAction):
         view.mode === 'week'
           ? calendarViewReducer(view, { type: 'setMode', mode: 'timeline' })
           : view;
-      return timeline.zoom === action.zoom ? timeline : { ...timeline, zoom: action.zoom };
+      if (timeline.zoom === action.zoom) return timeline;
+      // The fitted level starts from the whole days the window shows at the level it leaves.
+      const fitDays =
+        action.zoom === 'fit'
+          ? Math.max(MIN_FIT_DAYS, daysInView(timeline) ?? timeline.fitDays)
+          : timeline.fitDays;
+      return { ...timeline, zoom: action.zoom, fitDays };
     }
     case 'zoomBy': {
-      const index = ZOOM_LEVELS.indexOf(view.zoom) + action.step;
-      const zoom = ZOOM_LEVELS[Math.min(Math.max(index, 0), ZOOM_LEVELS.length - 1)];
+      const zoom = fixedLevelFrom(view, action.step);
       return zoom === undefined || zoom === view.zoom ? view : { ...view, zoom };
+    }
+    case 'resized':
+      return view.viewport === action.viewport ? view : { ...view, viewport: action.viewport };
+    case 'setFitDays': {
+      if (!Number.isFinite(action.days)) return view;
+      const most = view.viewport === null ? Infinity : maxFitDays(view.viewport);
+      const fitDays = Math.min(Math.max(Math.round(action.days), MIN_FIT_DAYS), most);
+      return fitDays === view.fitDays ? view : { ...view, fitDays };
     }
     case 'scrolled': {
       const range = grownRange(view, action.first, action.last, action.settled);
@@ -143,13 +215,19 @@ export function calendarViewReducer(view: CalendarView, action: CalendarAction):
 }
 
 /** The view when the app opens: the timeline, with today at its left edge. */
-export function initialView(zoom: ZoomLevel, today: string): CalendarView {
+export function initialView(
+  zoom: ZoomLevel,
+  today: string,
+  fitDays = DEFAULT_FIT_DAYS,
+): CalendarView {
   return {
     mode: 'timeline',
     zoom,
     anchor: today,
     jump: { date: today, id: 0 },
     range: initialRange(today),
+    viewport: null,
+    fitDays,
   };
 }
 

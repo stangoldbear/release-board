@@ -1,4 +1,4 @@
-import type { DateRange, ZoomLevel } from '../../domain/schedule';
+import type { DateRange } from '../../domain/schedule';
 import type { Project } from '../../domain/types';
 import { LINE_HEIGHT } from '../../shared/ui/textScale';
 import {
@@ -8,7 +8,7 @@ import {
   endOfMonth,
   startOfWeek,
 } from '../../utils/dateUtils';
-import { timelineMetrics } from '../calendar/timelineLayout';
+import type { DetailLevel } from './projectUi';
 
 /** Months of room before the first project and after the last one, to move them further. */
 const MARGIN_MONTHS = 1;
@@ -61,22 +61,22 @@ export interface RoadmapMetrics {
   assignmentHeight: number;
   /** Space above and below the bars of a row. */
   rowPadding: number;
-  /** Width of the column with the projects, before the phone's limit. */
+  /** Width of the column with the projects, before the phone's limit: wider with more to show. */
   labelWidth: number;
   /** Lines of a description that the column shows. */
   descriptionLines: number;
 }
 
 /**
- * The days are as wide as in the calendar at the same zoom; bigger text makes bars and the column
- * of the projects bigger, smaller text brings the rows closer, as compact mode does.
+ * The days are as wide as the view sets them, as in the calendar; bigger text makes bars and the
+ * column of the projects bigger, smaller text brings the rows closer, as compact mode does.
  */
 export function roadmapMetrics(
-  zoom: ZoomLevel,
+  dayWidth: number,
   textScale: number,
   compact: boolean,
+  level: DetailLevel = 'main',
 ): RoadmapMetrics {
-  const { dayWidth } = timelineMetrics(zoom, textScale, compact);
   const spacing = Math.min(1, textScale);
   const line = 12 * textScale * (compact ? LINE_HEIGHT.compact : LINE_HEIGHT.normal);
   return {
@@ -84,7 +84,7 @@ export function roadmapMetrics(
     barHeight: Math.round(24 * textScale) + 4,
     assignmentHeight: Math.round(line) + 8,
     rowPadding: Math.round((compact ? 3 : 6) * spacing),
-    labelWidth: Math.round(220 * textScale),
-    descriptionLines: compact ? 2 : 3,
+    labelWidth: Math.round((level === 'titles' ? 220 : 260) * textScale),
+    descriptionLines: compact ? 1 : 2,
   };
 }

@@ -6,6 +6,41 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-08
+
+### Aggiunto
+
+- «Mostra N giorni», la quinta vista di Next Releases e Roadmap, dopo «Trimestre». Finché è attiva
+  un'altra vista, la voce dice quanti giorni interi la finestra mostra con quella vista, e si
+  aggiorna quando la finestra cambia; scegliendola, esattamente quei giorni riempiono la finestra,
+  senza giorni tagliati ai bordi. Il numero si cambia nella casella dentro la voce, da 7 a quanti
+  giorni entrano con 8 px l'uno: resta anche quando la finestra viene ridimensionata, e i giorni
+  si adattano. Sotto i 20 px per giorno le colonne diventano settimane, come in «Trimestre». Il
+  browser ricorda la vista e il numero per ciascuna area. Ctrl + rotellina e il pizzico, da questa
+  vista, tornano alla vista fissa più vicina.
+- Roadmap (funzione beta): «Colora per», sotto la roadmap accanto a «Raggruppa per». Una barra di
+  4 px a sinistra del nome di ogni progetto prende il colore del valore che il progetto ha per una
+  lista di valori esclusivi con dei colori: di serie la prima, cioè «Dimensione»; «Nessun colore»
+  la toglie. La scelta resta nel browser. Il nome del valore c'è sempre: nell'etichetta sotto il
+  titolo, nell'intestazione del gruppo o, al livello «Solo titoli», per lo screen reader.
+- Nell'ultima riga della roadmap un pulsante «Nuovo progetto», che crea un progetto da oggi o dal
+  mese in vista come il pulsante in alto; i giorni della riga continuano a creare un progetto da
+  quel giorno, con il «+» al passaggio del mouse. Non c'è più la frase da leggere.
+
+### Modificato
+
+- La colonna dei progetti, ai livelli «Info principali» e «Team», è più larga e più ordinata:
+  sotto il titolo una riga in grigio con stato, mesi (con l'icona del calendario) e responsabile;
+  la descrizione su due righe (una in modalità compatta), intera al passaggio del mouse; poi i
+  campi principali, staccati: un valore solo resta accanto alla sua etichetta, una lista ha
+  l'etichetta sopra e i valori sotto, così le etichette di «Team impattati» non restano sole con la
+  prima.
+- «Raggruppa per» e «Colora per» restano visibili anche senza un campo adatto, disattivati, e il
+  loro titolo dice dove crearne uno.
+- Intestazioni e misure del calendario seguono la larghezza del giorno, non più il nome della
+  vista: sotto i 20 px per giorno colonne di una settimana e barre alte una riga, sotto i 40 px le
+  iniziali dei giorni e le note come icone.
+
 ## [0.9.0] - 2026-10-06
 
 ### Aggiunto

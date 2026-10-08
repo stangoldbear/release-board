@@ -1,5 +1,6 @@
 import { formatDateToIT, isIsoDate } from '../utils/dateUtils';
 import { isKnownColorId } from './colors';
+import type { TaskColorId } from './colors';
 import { formatLocaleNumber, parseLocaleNumber } from './numberFormat';
 import defaults from './roadmapDefaults.json';
 import type {
@@ -218,6 +219,28 @@ export function parseProjectField(
 /** Whether the roadmap can group the projects by a field: a choice of one value, marked so. */
 export function isGroupable(field: Pick<ProjectField, 'type' | 'multiple' | 'group'>): boolean {
   return field.group === true && field.type === 'choice' && !field.multiple;
+}
+
+/**
+ * Whether the roadmap can color the projects by a field: a choice of one value with at least one
+ * colored value. The value of a project gives its row a mark in that color.
+ */
+export function colorsProjects(field: ProjectField): boolean {
+  return (
+    field.type === 'choice' &&
+    !field.multiple &&
+    (field.options ?? []).some((option) => option.colorId !== undefined)
+  );
+}
+
+/** The colored value a project has for a field, or null when it has none or its value has no color. */
+export function coloredValueOf(
+  project: Pick<Project, 'fields'>,
+  field: ProjectField,
+): (FieldOption & { colorId: TaskColorId }) | null {
+  const [value] = fieldValuesOf(project, field);
+  const option = field.options?.find((item) => item.id === value);
+  return option?.colorId === undefined ? null : { ...option, colorId: option.colorId };
 }
 
 /** The projects with the same value of a field; the option is null for those without one. */

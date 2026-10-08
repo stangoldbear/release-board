@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
-import { ZOOM_COLUMN_UNIT, rangeColumns } from '../../domain/schedule';
+import { rangeColumns } from '../../domain/schedule';
 import { LINE_HEIGHT } from '../../shared/ui/textScale';
-import type { DateRange, ZoomLevel } from '../../domain/schedule';
+import type { DateRange } from '../../domain/schedule';
 import {
   ITALIAN_DAYS_SHORT,
   ITALIAN_MONTHS_SHORT,
@@ -21,6 +21,9 @@ import {
 export const LABEL_CELL =
   'sticky left-0 z-[700] w-(--gantt-label-width) shrink-0 border-r border-line-strong p-2 in-data-compact:px-1.5 in-data-compact:py-1';
 
+/** Finds the first name cell of a timeline, to measure the width the days have beside it. */
+export const LABEL_CELL_SELECTOR = '.sticky.left-0';
+
 /**
  * The scrolling part of a timeline: its own stacking context, so that the bars (by closeness to
  * today, then the one under the pointer, the result in view and the dragged one) and the sticky
@@ -29,16 +32,19 @@ export const LABEL_CELL =
 export const TIMELINE_SCROLLER =
   'relative isolate w-full touch-pan-x touch-pan-y overflow-x-auto [overflow-anchor:none]';
 
-/** Pixels per day and height of a task bar at each zoom level, with text of the normal size. */
-const SCALES: Record<ZoomLevel, { dayWidth: number; barHeight: number }> = {
-  detail: { dayWidth: 112, barHeight: 46 },
-  month: { dayWidth: 56, barHeight: 46 },
-  bimester: { dayWidth: 28, barHeight: 46 },
-  quarter: { dayWidth: 12, barHeight: 28 },
-};
+/** Height of a task bar with text of the normal size: two lines over days, one over weeks. */
+const BAR_HEIGHT = { day: 46, week: 28 };
+
+/** Days narrower than this are gathered in columns of a week, as in the quarter view. */
+export const MIN_DAY_COLUMN_WIDTH = 20;
 
 /** Day columns narrower than this show the initial of the weekday and an icon for a note. */
 export const NARROW_DAY_WIDTH = 40;
+
+/** What one column stands for at a width per day: a day, or a week when a day would be too narrow. */
+export function columnUnit(dayWidth: number): 'day' | 'week' {
+  return dayWidth < MIN_DAY_COLUMN_WIDTH ? 'week' : 'day';
+}
 
 /** Width of the column with the row names, with text of the normal size. */
 const LABEL_WIDTH = 96;
@@ -82,18 +88,17 @@ export interface TimelineMetrics {
 
 /**
  * Bigger text makes the bars, the names column and the notes taller or wider with it, not the
- * days, which the zoom level sets; smaller text also brings the bars closer. Compact mode tightens
+ * days, whose width the view sets; smaller text also brings the bars closer. Compact mode tightens
  * lines and spacing, so that every box shows more of its text. With the titles on one line, bars
- * and notes are one line tall at every zoom, as in the quarter view.
+ * and notes are one line tall at every width, as over columns of weeks.
  */
 export function timelineMetrics(
-  zoom: ZoomLevel,
+  dayWidth: number,
   textScale: number,
   compact: boolean,
   oneLineTitles = false,
 ): TimelineMetrics {
-  const { dayWidth, barHeight: zoomBarHeight } = SCALES[zoom];
-  const normalBarHeight = oneLineTitles ? SCALES.quarter.barHeight : zoomBarHeight;
+  const normalBarHeight = oneLineTitles ? BAR_HEIGHT.week : BAR_HEIGHT[columnUnit(dayWidth)];
   // The room inside the border grows and shrinks with the text, so the same lines always fit.
   const barHeight = Math.round((normalBarHeight - BAR_BORDER) * textScale) + BAR_BORDER;
   const line = TEXT_SIZE * textScale * (compact ? LINE_HEIGHT.compact : LINE_HEIGHT.normal);
@@ -138,12 +143,11 @@ export interface Column {
 
 export function buildColumns(
   range: DateRange,
-  zoom: ZoomLevel,
+  dayWidth: number,
   highlightWeekends: boolean,
   today: string,
 ): Column[] {
-  const { dayWidth } = SCALES[zoom];
-  return rangeColumns(range, ZOOM_COLUMN_UNIT[zoom]).map(({ start, end }) => {
+  return rangeColumns(range, columnUnit(dayWidth)).map(({ start, end }) => {
     const days = diffDays(start, end) + 1;
     const holidays: string[] = [];
     for (let offset = 0; offset < days; offset += 1) {

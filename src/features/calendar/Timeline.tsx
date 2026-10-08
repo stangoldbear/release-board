@@ -2,8 +2,8 @@ import { memo, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
 import { EyeOff } from 'lucide-react';
 import type { TaskChanges } from '../../domain/plan';
-import { ZOOM_COLUMN_UNIT, placeTasks } from '../../domain/schedule';
-import type { DateRange, ZoomLevel } from '../../domain/schedule';
+import { ZOOM_DAY_WIDTH, placeTasks } from '../../domain/schedule';
+import type { DateRange } from '../../domain/schedule';
 import type { DailyMetric, DailyNotes, Lane, RowVisibility, TaskItem } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
@@ -23,6 +23,7 @@ import {
   LABEL_CELL,
   buildColumns,
   columnEdge,
+  columnUnit,
   dayName,
   timelineMetrics,
   stackingOrder,
@@ -32,18 +33,22 @@ import type { Column } from './timelineLayout';
 import { useNoteDrag } from './useNoteDrag';
 import { draggedTask, useTaskDrag } from './useTaskDrag';
 import { useTimelineScroll } from './useTimelineScroll';
+import { useViewportWidth } from './useViewportWidth';
 import { useZoomGestures } from './useZoomGestures';
 
 interface TimelineProps {
   /** The days the timeline holds; it scrolls through them. */
   range: DateRange;
-  zoom: ZoomLevel;
+  /** Pixels per day, as the view sets them. */
+  dayWidth: number;
   /** The first day in view when the timeline opens, where the user left it. */
   anchor: string;
   /** The last navigation: the timeline scrolls so that its day is at the left edge. */
   jump: CalendarJump;
   /** First and last day in view, as the user scrolls; `settled` once scrolling has stopped. */
   onScrolled: (first: string, last: string, settled: boolean) => void;
+  /** The width of the days beside the column of the names, on opening and once the window settles. */
+  onResized: (width: number) => void;
   tasks: TaskItem[];
   lanes: Lane[];
   metrics: DailyMetric[];
@@ -100,10 +105,11 @@ const LaneCells = memo(function LaneCells({ columns, laneId, onAdd }: LaneCellsP
  */
 export function Timeline({
   range,
-  zoom,
+  dayWidth,
   anchor,
   jump,
   onScrolled,
+  onResized,
   tasks,
   lanes,
   metrics,
@@ -126,14 +132,14 @@ export function Timeline({
   onSaveNote,
   onMoveNote,
 }: TimelineProps) {
-  const sizes = timelineMetrics(zoom, textScale, compact, oneLineTitles);
-  const { dayWidth, barHeight, trackGap, lanePadding, labelWidth } = sizes;
+  const sizes = timelineMetrics(dayWidth, textScale, compact, oneLineTitles);
+  const { barHeight, trackGap, lanePadding, labelWidth } = sizes;
   const today = todayIso();
   const columns = useMemo(
-    () => buildColumns({ start: range.start, end: range.end }, zoom, highlightWeekends, today),
-    [range.start, range.end, zoom, highlightWeekends, today],
+    () => buildColumns({ start: range.start, end: range.end }, dayWidth, highlightWeekends, today),
+    [range.start, range.end, dayWidth, highlightWeekends, today],
   );
-  const weekColumns = ZOOM_COLUMN_UNIT[zoom] === 'week';
+  const weekColumns = columnUnit(dayWidth) === 'week';
   const totalWidth = columns.reduce((sum, column) => sum + column.width, 0);
   const todayOffset =
     range.start <= today && today <= range.end
@@ -151,6 +157,7 @@ export function Timeline({
   const noteDrag = useNoteDrag(dayWidth, range, isDayFree, onMoveNote);
 
   useZoomGestures(scrollRef, onZoom);
+  useViewportWidth(scrollRef, onResized);
   useTimelineScroll(scrollRef, {
     range,
     dayWidth,
@@ -239,7 +246,7 @@ export function Timeline({
           <DayHeaderRow
             columns={columns}
             weekColumns={weekColumns}
-            showMonth={zoom === 'detail'}
+            showMonth={dayWidth >= ZOOM_DAY_WIDTH.detail}
             onShowDays={showDays}
           />
 

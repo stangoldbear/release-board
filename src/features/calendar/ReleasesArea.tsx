@@ -7,6 +7,7 @@ import { Button } from '../../shared/ui/Button';
 import type { TextScale } from '../../shared/ui/textScale';
 import { TaskSummary } from '../tasks/TaskSummary';
 import { CalendarNav } from './CalendarNav';
+import { dayWidthOf } from './calendarView';
 import type { CalendarAction, CalendarView } from './calendarView';
 import { RowVisibilityBar } from './RowVisibilityBar';
 import { Timeline } from './Timeline';
@@ -138,12 +139,13 @@ export function ReleasesArea({
         {view.mode === 'timeline' ? (
           <Timeline
             range={timelineRange}
-            zoom={view.zoom}
+            dayWidth={dayWidthOf(view)}
             anchor={view.anchor}
             jump={view.jump}
             onScrolled={(first, last, settled) =>
               onViewAction({ type: 'scrolled', first, last, settled })
             }
+            onResized={(viewport) => onViewAction({ type: 'resized', viewport })}
             tasks={tasks}
             lanes={plan.lanes}
             metrics={plan.metrics}

@@ -55,17 +55,23 @@ export function FieldValueText({ field, value }: { field: ProjectField; value: F
 }
 
 /**
- * A field of a project after its label, as the column of the roadmap shows it: the values of a
- * list as tags in their colors, several texts as neutral tags, links side by side, the rest as
- * text. Nothing when the project has no value.
+ * A field of a project as the column of the roadmap shows it: the values of a list as tags in
+ * their colors, several texts as neutral tags, links side by side, the rest as text. A field of
+ * one value stays on the line of its label; a list has its label above its values, so that they
+ * wrap as a block. Nothing when the project has no value.
  */
 export function FieldValues({ project, field }: { project: Project; field: ProjectField }) {
   const values = fieldValuesOf(project, field);
   if (values.length === 0) return null;
   const tags = field.type === 'choice' || (field.type === 'text' && field.multiple);
-  return (
-    <span className="flex min-w-0 flex-wrap items-center gap-1 text-xs">
-      <span className="font-semibold text-fg-muted">{field.label}:</span>
+  const label = (
+    <span className="font-semibold text-fg-muted">
+      {field.label}
+      {field.multiple ? <span className="sr-only">:</span> : ':'}
+    </span>
+  );
+  const content = (
+    <>
       {tags ? (
         values.map((value, index) => {
           const words = formatFieldValue(field, value);
@@ -87,6 +93,17 @@ export function FieldValues({ project, field }: { project: Project; field: Proje
           <Highlight text={values.map((value) => formatFieldValue(field, value)).join(', ')} />
         </span>
       )}
+    </>
+  );
+  return field.multiple ? (
+    <span className="flex min-w-0 flex-col gap-0.5 text-xs">
+      {label}
+      <span className="flex min-w-0 flex-wrap items-center gap-1">{content}</span>
+    </span>
+  ) : (
+    <span className="flex min-w-0 flex-wrap items-center gap-1 text-xs">
+      {label}
+      {content}
     </span>
   );
 }

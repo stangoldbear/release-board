@@ -2,19 +2,30 @@ import type { TaskItem } from './types';
 import { addDaysIso, diffDays, startOfWeek } from '../utils/dateUtils';
 
 /**
- * How much of the calendar is visible at once, from the closest to the widest: wide days, a month
- * of days, two months of days half as wide, a quarter of weeks.
+ * How much of the calendar is visible at once: wide days, a month of days, two months of days
+ * half as wide, a quarter of weeks, or as many whole days as the user asks for, fitted to the
+ * window ("fit").
  */
-export type ZoomLevel = 'detail' | 'month' | 'bimester' | 'quarter';
+export type ZoomLevel = 'detail' | 'month' | 'bimester' | 'quarter' | 'fit';
 
-export const ZOOM_LEVELS: readonly ZoomLevel[] = ['detail', 'month', 'bimester', 'quarter'];
+/** The levels with a fixed width per day, from the closest to the widest. */
+export type FixedZoomLevel = Exclude<ZoomLevel, 'fit'>;
 
-/** What one column of the calendar stands for at each zoom level. */
-export const ZOOM_COLUMN_UNIT: Record<ZoomLevel, 'day' | 'week'> = {
-  detail: 'day',
-  month: 'day',
-  bimester: 'day',
-  quarter: 'week',
+export const FIXED_ZOOM_LEVELS: readonly FixedZoomLevel[] = [
+  'detail',
+  'month',
+  'bimester',
+  'quarter',
+];
+
+export const ZOOM_LEVELS: readonly ZoomLevel[] = [...FIXED_ZOOM_LEVELS, 'fit'];
+
+/** Pixels per day at each fixed level; the fitted level takes them from the window. */
+export const ZOOM_DAY_WIDTH: Record<FixedZoomLevel, number> = {
+  detail: 112,
+  month: 56,
+  bimester: 28,
+  quarter: 12,
 };
 
 /** Consecutive days as YYYY-MM-DD, both ends included. */

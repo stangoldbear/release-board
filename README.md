@@ -10,8 +10,9 @@ giornalieri.
 - Due aree, Note e Next Releases, da mostrare o nascondere dall'intestazione; una terza, Roadmap,
   in beta: compare attivando «Funzioni beta» nelle Impostazioni.
 - Calendario continuo a corsie, con i mesi uno dopo l'altro, quattro livelli di zoom («Dettaglio»,
-  «Mese», «2 mesi», «Trimestre») e i giorni passati in grigio o nascosti, e bacheca settimanale. A
-  scelta, titoli interi su una riga che escono dalle loro barre, alte una riga.
+  «Mese», «2 mesi», «Trimestre») più «Mostra N giorni», che riempie la finestra con quanti giorni
+  interi si vogliono, i giorni passati in grigio o nascosti, e bacheca settimanale. A scelta,
+  titoli interi su una riga che escono dalle loro barre, alte una riga.
 - Testo di note e calendari regolabile con le lenti, dal 75% al 175%, e vista compatta che mostra
   più testo in ogni casella.
 - Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e
@@ -24,7 +25,8 @@ giornalieri.
 - Roadmap (funzione beta): i progetti passati, in corso e futuri su una linea del tempo con le
   scale del calendario, con stato, responsabile, descrizione e campi personalizzati (link a Jira,
   Figma e Confluence, team impattati, stime…), i cui valori compaiono come etichette colorate; i
-  progetti si raggruppano a scelta per un campo, come la dimensione. Note con autore, scadenza e
+  progetti si raggruppano a scelta per un campo, come la dimensione, che colora anche una barra
+  accanto al nome di ogni progetto. Note con autore, scadenza e
   avviso; una vista Team con una barra per persona, che salta weekend, festività e assenze.
   Progetti e barre si spostano trascinandoli, anche da tastiera.
 - Ricerca in attività, note dei giorni, note libere e, con le funzioni beta, progetti (anche note

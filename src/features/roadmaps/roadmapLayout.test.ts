@@ -41,14 +41,23 @@ describe('projectPeriod', () => {
 
 describe('roadmapMetrics', () => {
   it('takes the width of the days from the calendar and grows with the text', () => {
-    expect(roadmapMetrics('month', 1, false).dayWidth).toBe(56);
-    expect(roadmapMetrics('bimester', 1, false).dayWidth).toBe(28);
-    expect(roadmapMetrics('quarter', 1, false).dayWidth).toBe(12);
-    const normal = roadmapMetrics('month', 1, false);
-    const bigger = roadmapMetrics('month', 1.5, false);
+    expect(roadmapMetrics(56, 1, false).dayWidth).toBe(56);
+    expect(roadmapMetrics(28, 1, false).dayWidth).toBe(28);
+    expect(roadmapMetrics(12, 1, false).dayWidth).toBe(12);
+    const normal = roadmapMetrics(56, 1, false);
+    const bigger = roadmapMetrics(56, 1.5, false);
     expect(bigger.barHeight).toBeGreaterThan(normal.barHeight);
     expect(bigger.assignmentHeight).toBeGreaterThan(normal.assignmentHeight);
-    expect(bigger.labelWidth).toBe(330);
-    expect(roadmapMetrics('month', 1, true).rowPadding).toBeLessThan(normal.rowPadding);
+    expect(bigger.labelWidth).toBe(390);
+    expect(roadmapMetrics(56, 1, true).rowPadding).toBeLessThan(normal.rowPadding);
+  });
+
+  it('gives the column of the projects more room when it shows more than the titles', () => {
+    expect(roadmapMetrics(56, 1, false, 'titles').labelWidth).toBe(220);
+    expect(roadmapMetrics(56, 1, false, 'main').labelWidth).toBe(260);
+    expect(roadmapMetrics(56, 1, false, 'team').labelWidth).toBe(260);
+    // Two lines of description, one in compact mode: the window has the whole text.
+    expect(roadmapMetrics(56, 1, false).descriptionLines).toBe(2);
+    expect(roadmapMetrics(56, 1, true).descriptionLines).toBe(1);
   });
 });

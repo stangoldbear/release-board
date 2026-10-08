@@ -31,7 +31,7 @@ import { diffProject } from '../domain/projects';
 import type { ProjectContent } from '../domain/projects';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
 import { buildSamplePlan } from '../domain/sample';
-import { ZOOM_COLUMN_UNIT, isInRange, weekRange } from '../domain/schedule';
+import { isInRange, weekRange } from '../domain/schedule';
 import type {
   DailyMetric,
   Memo,
@@ -48,6 +48,8 @@ import { noteCellId } from '../features/calendar/NotesRow';
 import { NEW_TASK_ID, ReleasesArea } from '../features/calendar/ReleasesArea';
 import { taskBarId } from '../features/calendar/TaskBar';
 import { useCalendarDisplay } from '../features/calendar/useCalendarDisplay';
+import { dayWidthOf } from '../features/calendar/calendarView';
+import { columnUnit } from '../features/calendar/timelineLayout';
 import { useCalendarView } from '../features/calendar/useCalendarView';
 import { HistoryPage } from '../features/history/HistoryPage';
 import { MemoDialog } from '../features/memos/MemoDialog';
@@ -170,7 +172,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
 
   const [view, dispatchView] = useCalendarView();
   // The roadmap has a view of its own, over the same kinds of days, and its own display choices.
-  const [roadmapView, dispatchRoadmapView] = useCalendarView('roadmap-zoom', 'quarter');
+  const [roadmapView, dispatchRoadmapView] = useCalendarView('roadmap-', 'quarter');
   const [roadmapDisplay, roadmapControls] = useRoadmapDisplay();
   const [seenNoteReminders, setSeenNoteReminders] = usePreference(
     'project-note-reminders-seen',
@@ -228,7 +230,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
 
   // Without the past, the timeline starts today, or on the Monday of this week in weekly columns.
   const today = todayIso();
-  const firstShownDay = ZOOM_COLUMN_UNIT[view.zoom] === 'week' ? startOfWeek(today) : today;
+  const firstShownDay = columnUnit(dayWidthOf(view)) === 'week' ? startOfWeek(today) : today;
   const timelineStart = display.hidePastDays ? firstShownDay : view.range.start;
   const timelineRange = useMemo(
     () => ({ start: timelineStart, end: view.range.end }),
