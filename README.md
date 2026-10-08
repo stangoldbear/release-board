@@ -48,12 +48,19 @@ Impostazioni → Backup.
 
 ## Pubblicare la tua copia
 
-1. Fai un fork del repository e abilita i workflow nella scheda **Actions**.
+Per un'istanza tua, pubblica o privata, serve un repository GitHub con questo codice. Il modo
+consigliato è un clone del repository pubblico spinto su un repository tuo: la guida
+[`docs/ISTANZA-101.md`](docs/ISTANZA-101.md) spiega da zero cosa sono clone, remote e tag, come
+creare il repository e come portarlo a ogni versione nuova (`git fetch upstream --tags` e un
+merge; per una copia nata da un incolla c'è lo script `scripts/update-from-release.sh`).
+
+1. Crea il repository come dice la guida e abilita i workflow nella scheda **Actions**.
 2. In **Settings → Pages** scegli **GitHub Actions** come sorgente.
 3. Il workflow **Deploy Pages** pubblica il sito a ogni push su `main`.
 
 Un repository privato pubblica solo se il suo piano include GitHub Pages e se la variabile di
-repository `PAGES_DEPLOY` vale `true`.
+repository `PAGES_DEPLOY` vale `true`. Un fork di un repository pubblico resta pubblico: per
+un'istanza privata non fare un fork, ma un clone.
 
 ## Istanza condivisa con Firebase
 

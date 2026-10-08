@@ -6,6 +6,26 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-08
+
+### Aggiunto
+
+- La guida `docs/ISTANZA-101.md` per chi ha una copia propria di Release Board: i concetti di Git
+  che servono spiegati da zero (repository, commit, tag, remote, `fetch` e `merge`), cosa è
+  dell'istanza e cosa del codice, i due modi di creare l'istanza (clone del repository pubblico,
+  consigliato, o copia dei file), come aggiornarla a ogni versione, come trasformare una copia in
+  un clone e i problemi comuni.
+- Lo script `scripts/update-from-release.sh`, per una copia nata da un incolla: specchia i file di
+  una versione pubblicata (l'ultima, o quella chiesta) sulla cartella della copia, toglie i file
+  che la versione non ha più e lascia stare ciò che è dell'istanza (`.git`, `node_modules`,
+  `dist`, `.env*`, cache, e i pattern di `.update-ignore`). Parte solo da un repository senza
+  modifiche in sospeso, ha `--dry-run` e non fa commit.
+
+### Modificato
+
+- Il README manda alla guida per pubblicare la propria copia e dice che un fork resta pubblico:
+  per un'istanza privata si fa un clone.
+
 ## [0.10.0] - 2026-10-08
 
 ### Aggiunto
