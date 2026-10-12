@@ -59,6 +59,7 @@ function matchesSample(plan: PlanSnapshot): boolean {
     plan.projects.length === sample.projects.length &&
     plan.projectNotes.length === sample.projectNotes.length &&
     plan.assignments.length === sample.assignments.length &&
+    plan.milestones.length === sample.milestones.length &&
     plan.roadmap.fields.length === sample.roadmap.fields.length &&
     plan.roadmap.teams.length === sample.roadmap.teams.length &&
     plan.roadmap.stakeholders.length === sample.roadmap.stakeholders.length &&
@@ -194,6 +195,7 @@ describe('access and setup', () => {
       projects: [],
       projectNotes: [],
       assignments: [],
+      milestones: [],
       roadmap: { fields: [], teams: [], stakeholders: [] },
     });
 
@@ -215,6 +217,7 @@ describe('access and setup', () => {
       })),
     );
     expect(imported.assignments).toEqual(sample.assignments);
+    expect(imported.milestones).toEqual(sample.milestones);
     expect(imported.roadmap).toEqual(sample.roadmap);
     expect(new Set(imported.tasks.map((task) => task.id))).toEqual(
       new Set(sample.tasks.map((task) => task.id)),
@@ -338,7 +341,7 @@ describe('changes', () => {
       });
     });
     expect(describeHistoryEntry(entries.at(-3) as HistoryEntry)).toMatch(
-      /ha importato: 2 giorni di fatturato previsto, dal 05\/10\/2026 al 06\/10\/2026$/,
+      /ha importato: 2 giorni di fatturato previsto, dal 05-10-26 al 06-10-26$/,
     );
   });
 
@@ -886,6 +889,67 @@ describe('the notes, the assignments and the configuration of the roadmap', () =
     );
   });
 
+  it('adds, changes and deletes the notes on the timeline, and removes those of a deleted project', async () => {
+    const other = repositoryFor(editorDb, EDITOR);
+    await other.whenReady();
+    const free = other.createMilestone({
+      date: '2026-12-18',
+      title: 'Code freeze',
+      colorId: 'red',
+      body: 'Nessun rilascio',
+      remind: true,
+    });
+    const ofProject = repository.createMilestone({
+      date: '2026-11-20',
+      title: 'Demo',
+      colorId: 'purple',
+      projectId: appMobile,
+    });
+    const created = await planWhere(
+      repository,
+      (plan) =>
+        plan.milestones.some((item) => item.id === free) &&
+        plan.milestones.some((item) => item.id === ofProject),
+    );
+    expect(created.milestones.find((item) => item.id === free)).toEqual({
+      id: free,
+      date: '2026-12-18',
+      title: 'Code freeze',
+      colorId: 'red',
+      body: 'Nessun rilascio',
+      remind: true,
+    });
+    expect(created.milestones.find((item) => item.id === ofProject)).toEqual({
+      id: ofProject,
+      date: '2026-11-20',
+      title: 'Demo',
+      colorId: 'purple',
+      projectId: appMobile,
+    });
+
+    repository.updateMilestone(free, { date: '2026-12-19', body: null, remind: null });
+    const moved = await planWhere(
+      other,
+      (plan) => plan.milestones.find((item) => item.id === free)?.date === '2026-12-19',
+    );
+    const changed = moved.milestones.find((item) => item.id === free);
+    expect(changed?.body).toBeUndefined();
+    expect(changed?.remind).toBeUndefined();
+
+    repository.deleteMilestone(free);
+    await planWhere(other, (plan) => !plan.milestones.some((item) => item.id === free));
+
+    repository.deleteProject(appMobile);
+    const after = await planWhere(
+      repository,
+      (plan) =>
+        !plan.projects.some((item) => item.id === appMobile) &&
+        !plan.milestones.some((item) => item.projectId === appMobile),
+    );
+    // The notes of no project stay.
+    expect(after.milestones.some((item) => item.projectId === undefined)).toBe(true);
+  });
+
   it('saves fields, teams and people, and loads a configuration in place of the current one', async () => {
     const budget = {
       id: 'budget',
@@ -918,6 +982,7 @@ describe('the notes, the assignments and the configuration of the roadmap', () =
       name: 'Design',
       tag: 'UX',
       colorId: 'red' as const,
+      phase: 'development' as const,
       position: 9,
     };
     repository.saveTeam(design);

@@ -189,33 +189,73 @@ export function endOfMonth(iso: string): string {
 }
 
 /**
- * Format date in standard Italian format: gg/mm/aaaa (dd/mm/yyyy)
+ * How a date is written in full: day, month and year in the order and with the separator the user
+ * chose in the settings. The month names ("nov 2026") and the day headers are not touched.
  */
-export function formatDateToIT(date: Date | string | null | undefined): string {
+export type DateFormat = 'dd-mm-yy' | 'dd-mm-yyyy' | 'dd/mm/yyyy' | 'yy-mm-dd' | 'yyyy-mm-dd';
+
+/** The formats offered, each with its Italian pattern, as the settings show them. */
+export const DATE_FORMATS: readonly { id: DateFormat; label: string }[] = [
+  { id: 'dd-mm-yy', label: 'gg-mm-aa' },
+  { id: 'dd-mm-yyyy', label: 'gg-mm-aaaa' },
+  { id: 'dd/mm/yyyy', label: 'gg/mm/aaaa' },
+  { id: 'yy-mm-dd', label: 'aa-mm-gg' },
+  { id: 'yyyy-mm-dd', label: 'aaaa-mm-gg' },
+];
+
+export const DATE_FORMAT_IDS: readonly DateFormat[] = DATE_FORMATS.map((format) => format.id);
+
+export const DEFAULT_DATE_FORMAT: DateFormat = 'dd-mm-yy';
+
+/** Year, month and day of a date in any of the forms the app meets; null when it is not a date. */
+function dateParts(date: Date | string): [number, number, number] | null {
+  if (typeof date !== 'string') return [date.getFullYear(), date.getMonth() + 1, date.getDate()];
+  const trimmed = date.trim();
+  const italian = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed);
+  if (italian) return [Number(italian[3]), Number(italian[2]), Number(italian[1])];
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (iso) return [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  // A moment with its time, or another form the browser reads.
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return [parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate()];
+}
+
+/**
+ * A date in full, in the chosen format: "05-10-26" by default. A text that is not a date is
+ * returned as it is; nothing for no date.
+ */
+export function formatDate(
+  date: Date | string | null | undefined,
+  format: DateFormat = DEFAULT_DATE_FORMAT,
+): string {
   if (!date) return '';
-  if (typeof date === 'string') {
-    const trimmed = date.trim();
-    // Already in dd/mm/yyyy
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) return trimmed;
-    // Standard ISO yyyy-mm-dd
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      const [y, m, d] = trimmed.split('-');
-      return `${d}/${m}/${y}`;
-    }
-    // Date with time or other format
-    const dObj = new Date(trimmed);
-    if (!isNaN(dObj.getTime())) {
-      const d = String(dObj.getDate()).padStart(2, '0');
-      const m = String(dObj.getMonth() + 1).padStart(2, '0');
-      const y = dObj.getFullYear();
-      return `${d}/${m}/${y}`;
-    }
-    return trimmed;
+  const parts = dateParts(date);
+  if (!parts) return typeof date === 'string' ? date.trim() : '';
+  const [year, month, day] = parts;
+  const dd = String(day).padStart(2, '0');
+  const mm = String(month).padStart(2, '0');
+  const yyyy = String(year).padStart(4, '0');
+  const yy = yyyy.slice(-2);
+  switch (format) {
+    case 'dd-mm-yy':
+      return `${dd}-${mm}-${yy}`;
+    case 'dd-mm-yyyy':
+      return `${dd}-${mm}-${yyyy}`;
+    case 'dd/mm/yyyy':
+      return `${dd}/${mm}/${yyyy}`;
+    case 'yy-mm-dd':
+      return `${yy}-${mm}-${dd}`;
+    case 'yyyy-mm-dd':
+      return `${yyyy}-${mm}-${dd}`;
   }
-  const d = String(date.getDate()).padStart(2, '0');
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
+}
+
+/** Day and month alone, in the order and with the separator of the format: "05-10" or "10-05". */
+export function formatDayMonth(iso: string, format: DateFormat = DEFAULT_DATE_FORMAT): string {
+  const [, mm = '', dd = ''] = iso.split('-');
+  const separator = format === 'dd/mm/yyyy' ? '/' : '-';
+  return format.startsWith('dd') ? `${dd}${separator}${mm}` : `${mm}${separator}${dd}`;
 }
 
 /** True for a real calendar date written as YYYY-MM-DD (so 2026-02-30 is rejected). */

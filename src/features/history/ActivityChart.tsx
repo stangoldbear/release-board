@@ -6,16 +6,22 @@ import { niceCeiling } from '../../domain/historyStats';
 import type { HistoryBucket, HistoryStats } from '../../domain/historyStats';
 import { Button } from '../../shared/ui/Button';
 import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
-import { formatDateToIT } from '../../utils/dateUtils';
+import { formatDate } from '../../utils/dateUtils';
+import type { DateFormat } from '../../utils/dateUtils';
 import { KindIcon, shortDay } from './historyUi';
+import { useDateFormat, useFormatDate } from '../..//shared/dateFormat';
 
 /** At most this many labels along the time axis. */
 const AXIS_LABELS = 8;
 
-function bucketName(bucket: HistoryBucket, unit: HistoryStats['unit']): string {
+function bucketName(
+  bucket: HistoryBucket,
+  unit: HistoryStats['unit'],
+  dateFormat: DateFormat,
+): string {
   return unit === 'day'
-    ? formatDateToIT(bucket.start)
-    : `Settimana dal ${formatDateToIT(bucket.start)} al ${formatDateToIT(bucket.end)}`;
+    ? formatDate(bucket.start, dateFormat)
+    : `Settimana dal ${formatDate(bucket.start, dateFormat)} al ${formatDate(bucket.end, dateFormat)}`;
 }
 
 function changes(count: number): string {
@@ -23,9 +29,10 @@ function changes(count: number): string {
 }
 
 function BucketDetails({ bucket, unit }: { bucket: HistoryBucket; unit: HistoryStats['unit'] }) {
+  const dateFormat = useDateFormat();
   return (
     <div>
-      <p className="text-xs text-fg-muted">{bucketName(bucket, unit)}</p>
+      <p className="text-xs text-fg-muted">{bucketName(bucket, unit, dateFormat)}</p>
       <p className="mt-0.5 text-base font-bold">{changes(bucket.count)}</p>
       {bucket.count > 0 && (
         <ul className="mt-2 space-y-1 border-t border-line pt-2 text-xs">
@@ -47,6 +54,8 @@ function BucketDetails({ bucket, unit }: { bucket: HistoryBucket; unit: HistoryS
  * or tapping it shows its count by kind; the same numbers are in the table view.
  */
 export function ActivityChart({ stats }: { stats: HistoryStats }) {
+  const dateFormat = useDateFormat();
+  const formatDate = useFormatDate();
   const [asTable, setAsTable] = useState(false);
   const { card, triggerProps, cardProps } = useHoverCard<HistoryBucket>();
   const { buckets, unit } = stats;
@@ -59,7 +68,7 @@ export function ActivityChart({ stats }: { stats: HistoryStats }) {
   );
   const title = unit === 'day' ? 'Modifiche per giorno' : 'Modifiche per settimana';
   const summary = `${title}: ${changes(stats.total)} in tutto${
-    busiest ? `, al massimo ${busiest.count} (${bucketName(busiest, unit)})` : ''
+    busiest ? `, al massimo ${busiest.count} (${bucketName(busiest, unit, dateFormat)})` : ''
   }.`;
 
   return (
@@ -105,8 +114,8 @@ export function ActivityChart({ stats }: { stats: HistoryStats }) {
                 <tr key={bucket.start}>
                   <th scope="row" className="px-2 py-1 font-normal whitespace-nowrap">
                     {unit === 'day'
-                      ? formatDateToIT(bucket.start)
-                      : `${formatDateToIT(bucket.start)} – ${formatDateToIT(bucket.end)}`}
+                      ? formatDate(bucket.start)
+                      : `${formatDate(bucket.start)} – ${formatDate(bucket.end)}`}
                   </th>
                   <td className="px-2 py-1 text-right font-semibold">{bucket.count}</td>
                   {HISTORY_KINDS.map((kind) => (

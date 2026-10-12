@@ -6,6 +6,7 @@ import {
   diffAssignment,
   isValidManDays,
   isWorkingDay,
+  manDaysEndingOn,
   moveAssignment,
   parseAssignment,
   scheduleAssignment,
@@ -139,5 +140,22 @@ describe('assignments', () => {
     expect(parseAssignment('a1', { ...data, manDays: 0 })).toBeNull();
     expect(parseAssignment('a1', { ...data, startDate: '15/12/2026' })).toBeNull();
     expect(parseAssignment('a1', { ...data, stakeholderId: '' })).toBeNull();
+  });
+});
+
+describe('manDaysEndingOn', () => {
+  it('counts the working days from the start to the day, skipping those away', () => {
+    // Monday the 2nd to Friday the 13th of November 2026: two weeks.
+    expect(manDaysEndingOn('2026-11-02', '2026-11-13', [])).toBe(10);
+    // The same with a day away in the middle, and the end on a Sunday.
+    expect(
+      manDaysEndingOn('2026-11-02', '2026-11-15', [{ start: '2026-11-04', end: '2026-11-04' }]),
+    ).toBe(9);
+  });
+
+  it('is at least a day and at most the limit', () => {
+    expect(manDaysEndingOn('2026-11-07', '2026-11-08', [])).toBe(1);
+    expect(manDaysEndingOn('2026-11-02', '2026-11-01', [])).toBe(1);
+    expect(manDaysEndingOn('2020-01-01', '2029-12-31', [])).toBe(500);
   });
 });

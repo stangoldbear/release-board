@@ -1,10 +1,13 @@
 import { History } from 'lucide-react';
+import { HAS_BETA_FEATURES } from '../../app/areas';
 import type { Instance } from '../../app/Instance';
 import type { PlanSnapshot } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import type { TextScale } from '../../shared/ui/textScale';
 import type { ThemePreference } from '../../themes';
+import type { DateFormat } from '../../utils/dateUtils';
+import type { PageLayout } from '../../app/layout';
 import { AboutSection } from './AboutSection';
 import { AccountSection } from './AccountSection';
 import { AppearanceSection } from './AppearanceSection';
@@ -13,6 +16,7 @@ import { BetaSection } from './BetaSection';
 import { InstanceSection } from './InstanceSection';
 import { MembersSection } from './MembersSection';
 import { RoadmapSettingsSection } from './RoadmapSettingsSection';
+import type { BarRendering } from '../roadmaps/barRendering';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 
 interface SettingsDialogProps {
@@ -20,6 +24,12 @@ interface SettingsDialogProps {
   instance: Instance;
   theme: ThemePreference;
   onChangeTheme: (theme: ThemePreference) => void;
+  /** How the dates are written in full, in this browser. */
+  dateFormat: DateFormat;
+  onChangeDateFormat: (format: DateFormat) => void;
+  /** Tabs at the bottom, or the buttons of the header, in this browser. */
+  layout: PageLayout;
+  onChangeLayout: (layout: PageLayout) => void;
   textScale: TextScale;
   onTextScaleChange: (scale: TextScale) => void;
   onReplacePlan: (plan: PlanSnapshot) => void;
@@ -29,6 +39,9 @@ interface SettingsDialogProps {
   /** The published rules do not know the configuration of the roadmap yet. */
   roadmapUnavailable: boolean;
   roadmapActions: RoadmapConfigActions;
+  /** How the roadmap draws the work of the team in the bar of a project, in this browser. */
+  barRendering: BarRendering;
+  onChangeBarRendering: (rendering: BarRendering) => void;
   /** Opens the page with every change to the plan. */
   onOpenHistory: () => void;
   onClose: () => void;
@@ -40,6 +53,10 @@ export function SettingsDialog({
   instance,
   theme,
   onChangeTheme,
+  dateFormat,
+  onChangeDateFormat,
+  layout,
+  onChangeLayout,
   textScale,
   onTextScaleChange,
   onReplacePlan,
@@ -47,6 +64,8 @@ export function SettingsDialog({
   onToggleBetaFeatures,
   roadmapUnavailable,
   roadmapActions,
+  barRendering,
+  onChangeBarRendering,
   onOpenHistory,
   onClose,
 }: SettingsDialogProps) {
@@ -56,6 +75,10 @@ export function SettingsDialog({
         <AppearanceSection
           theme={theme}
           onChangeTheme={onChangeTheme}
+          dateFormat={dateFormat}
+          onChangeDateFormat={onChangeDateFormat}
+          layout={layout}
+          onChangeLayout={onChangeLayout}
           textScale={textScale}
           onTextScaleChange={onTextScaleChange}
         />
@@ -88,14 +111,16 @@ export function SettingsDialog({
             </Button>
           </section>
         )}
-        <BetaSection enabled={betaFeatures} onChange={onToggleBetaFeatures} />
-        {betaFeatures && (
-          <RoadmapSettingsSection
-            config={plan.roadmap}
-            unavailable={roadmapUnavailable}
-            actions={roadmapActions}
-          />
+        {HAS_BETA_FEATURES && (
+          <BetaSection enabled={betaFeatures} onChange={onToggleBetaFeatures} />
         )}
+        <RoadmapSettingsSection
+          config={plan.roadmap}
+          unavailable={roadmapUnavailable}
+          actions={roadmapActions}
+          barRendering={barRendering}
+          onChangeBarRendering={onChangeBarRendering}
+        />
         <BackupSection
           plan={plan}
           onReplacePlan={(next) => {

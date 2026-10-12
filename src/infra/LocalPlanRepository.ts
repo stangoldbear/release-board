@@ -6,9 +6,11 @@ import { endPosition } from '../domain/memos';
 import type { MemoChanges, MemoContent } from '../domain/memos';
 import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
 import type { ProjectChanges, ProjectContent } from '../domain/projects';
+import type { RoadmapSettingsChanges } from '../domain/roadmapConfig';
 import {
   addAssignment,
   addMemo,
+  addMilestone,
   addProject,
   addProjectNote,
   addTask,
@@ -18,6 +20,7 @@ import {
   moveNote,
   removeAssignment,
   removeMemo,
+  removeMilestone,
   removeProject,
   removeProjectField,
   removeProjectNote,
@@ -32,11 +35,14 @@ import {
   setNote,
   updateAssignment,
   updateMemo,
+  updateMilestone,
   updateProject,
   updateProjectNote,
+  updateRoadmapSettings,
   updateTask,
 } from '../domain/plan';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
+import type { MilestoneChanges, MilestoneContent } from '../domain/milestones';
 import type {
   DailyMetric,
   Memo,
@@ -170,6 +176,20 @@ export class LocalPlanRepository implements PlanRepository {
   }
 
   // One browser, one person: the notes of the projects have no author.
+  createMilestone(content: MilestoneContent): string {
+    const id = this.createId();
+    this.change(addMilestone(this.plan, { ...content, id }));
+    return id;
+  }
+
+  updateMilestone(milestoneId: string, changes: MilestoneChanges): void {
+    this.change(updateMilestone(this.plan, milestoneId, changes));
+  }
+
+  deleteMilestone(milestoneId: string): void {
+    this.change(removeMilestone(this.plan, milestoneId));
+  }
+
   createProjectNote(content: ProjectNoteContent): string {
     const id = this.createId();
     const createdAt = this.now().toISOString();
@@ -225,6 +245,10 @@ export class LocalPlanRepository implements PlanRepository {
 
   replaceRoadmapConfig(config: RoadmapConfig): void {
     this.change(replaceRoadmapConfig(this.plan, config));
+  }
+
+  updateRoadmapSettings(changes: RoadmapSettingsChanges): void {
+    this.change(updateRoadmapSettings(this.plan, changes));
   }
 
   replacePlan(plan: PlanSnapshot): void {

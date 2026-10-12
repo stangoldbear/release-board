@@ -11,16 +11,19 @@ export interface Area {
 }
 
 export const AREAS: readonly Area[] = [
-  { id: 'notes', label: 'Note' },
+  { id: 'notes', label: 'Notes' },
   { id: 'releases', label: 'Next Releases' },
-  { id: 'roadmaps', label: 'Roadmap', beta: true },
+  { id: 'roadmaps', label: 'Roadmap' },
 ];
 
 /** The browser preference that shows the parts of the app still in development. */
 export const BETA_FEATURES_PREFERENCE = 'beta-features';
 
-/** The parts of the plan that only the beta features show: the roadmap and its details. */
-export const BETA_PARTS: readonly PlanPart[] = ['projects', 'roadmap'];
+/** The parts of the plan that only the beta features show; none since the roadmap came out of beta. */
+export const BETA_PARTS: readonly PlanPart[] = [];
+
+/** Whether anything is in beta: the settings offer the switch only then; the mechanism stays. */
+export const HAS_BETA_FEATURES = AREAS.some((area) => area.beta) || BETA_PARTS.length > 0;
 
 /** The areas this browser can show: without the beta features, only the finished ones. */
 export function availableAreas(betaFeatures: boolean): readonly Area[] {

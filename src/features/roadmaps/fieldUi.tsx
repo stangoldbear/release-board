@@ -5,6 +5,7 @@ import { fieldValuesOf, formatFieldValue } from '../../domain/roadmapConfig';
 import type { FieldValue, Project, ProjectField } from '../../domain/types';
 import { Highlight } from '../../shared/ui/Highlight';
 import { taskColorStyle } from '../../themes';
+import { useDateFormat } from '../..//shared/dateFormat';
 
 /**
  * A value as a tag: a rounded rectangle in the color of the value, readable in every theme, or a
@@ -36,6 +37,7 @@ export function linkLabel(url: string): string {
 
 /** One value of a field: a link opens in a new tab, the others are text. */
 export function FieldValueText({ field, value }: { field: ProjectField; value: FieldValue }) {
+  const dateFormat = useDateFormat();
   if (field.type === 'url' && typeof value === 'string') {
     return (
       <a
@@ -51,7 +53,7 @@ export function FieldValueText({ field, value }: { field: ProjectField; value: F
       </a>
     );
   }
-  return <Highlight text={formatFieldValue(field, value)} />;
+  return <Highlight text={formatFieldValue(field, value, dateFormat)} />;
 }
 
 /**
@@ -61,6 +63,7 @@ export function FieldValueText({ field, value }: { field: ProjectField; value: F
  * wrap as a block. Nothing when the project has no value.
  */
 export function FieldValues({ project, field }: { project: Project; field: ProjectField }) {
+  const dateFormat = useDateFormat();
   const values = fieldValuesOf(project, field);
   if (values.length === 0) return null;
   const tags = field.type === 'choice' || (field.type === 'text' && field.multiple);
@@ -74,7 +77,7 @@ export function FieldValues({ project, field }: { project: Project; field: Proje
     <>
       {tags ? (
         values.map((value, index) => {
-          const words = formatFieldValue(field, value);
+          const words = formatFieldValue(field, value, dateFormat);
           const option = field.options?.find((item) => item.id === value);
           return (
             <span key={index} title={words} className="flex min-w-0">
@@ -90,7 +93,9 @@ export function FieldValues({ project, field }: { project: Project; field: Proje
         values.map((value, index) => <FieldValueText key={index} field={field} value={value} />)
       ) : (
         <span className="min-w-0 wrap-break-word">
-          <Highlight text={values.map((value) => formatFieldValue(field, value)).join(', ')} />
+          <Highlight
+            text={values.map((value) => formatFieldValue(field, value, dateFormat)).join(', ')}
+          />
         </span>
       )}
     </>

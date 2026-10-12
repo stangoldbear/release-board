@@ -58,7 +58,7 @@ describe('parseRevenueForecast', () => {
       { line: 6, message: 'valore OV «tanto» non numerico' },
       { line: 7, message: 'semaforo «Yellow» non riconosciuto: usa Green, Orange o Red' },
       { line: 8, message: 'manca la data' },
-      { line: 10, message: 'il 13/10/2026 compare già alla riga 9' },
+      { line: 10, message: 'il 13-10-26 compare già alla riga 9' },
     ]);
   });
 

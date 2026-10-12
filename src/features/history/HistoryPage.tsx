@@ -13,10 +13,11 @@ import type { HistoryPeriod } from '../../domain/historyStats';
 import type { Lane } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { VersionStamp } from '../../shared/ui/VersionStamp';
-import { formatDateToIT, parseISODate, todayIso } from '../../utils/dateUtils';
+import { parseISODate, todayIso } from '../../utils/dateUtils';
 import { ActivityChart, Breakdown } from './ActivityChart';
 import { HistoryList } from './HistoryList';
 import { KindIcon, dayHeading, timeOf } from './historyUi';
+import { useFormatDate } from '../..//shared/dateFormat';
 
 /** Changes loaded at a time; "Mostra altre" loads as many more. */
 const PAGE_SIZE = 500;
@@ -46,6 +47,7 @@ function StatTile({ label, value, detail }: { label: string; value: string; deta
  * the most active people and kinds of change, and the list, all scoped by the filters on top.
  */
 export function HistoryPage({ history, lanes, onBack }: HistoryPageProps) {
+  const formatDate = useFormatDate();
   const [period, setPeriod] = useState<HistoryPeriod>('30');
   const [author, setAuthor] = useState('');
   const [kind, setKind] = useState<HistoryKind | ''>('');
@@ -187,9 +189,9 @@ export function HistoryPage({ history, lanes, onBack }: HistoryPageProps) {
                     value={stats.total.toLocaleString('it-IT')}
                     detail={
                       since
-                        ? `dal ${formatDateToIT(since)}`
+                        ? `dal ${formatDate(since)}`
                         : oldest
-                          ? `dal ${formatDateToIT(start)}`
+                          ? `dal ${formatDate(start)}`
                           : undefined
                     }
                   />
@@ -205,7 +207,7 @@ export function HistoryPage({ history, lanes, onBack }: HistoryPageProps) {
                       busiest
                         ? stats.unit === 'day'
                           ? dayHeading(busiest.start, today)
-                          : `dal ${formatDateToIT(busiest.start)}`
+                          : `dal ${formatDate(busiest.start)}`
                         : undefined
                     }
                   />

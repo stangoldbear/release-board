@@ -1,16 +1,22 @@
 import { BellRing, CalendarClock } from 'lucide-react';
 import { isNoteOverdue } from '../../domain/projectNotes';
 import type { ProjectNote } from '../../domain/types';
-import { formatDateToIT } from '../../utils/dateUtils';
+import { formatDate } from '../../utils/dateUtils';
+import type { DateFormat } from '../../utils/dateUtils';
+import { useDateFormat } from '../..//shared/dateFormat';
 
 /** When a note is due, in words: "scade oggi", "entro il 20/10/2026", "scaduta il 20/10/2026". */
-export function dueText(note: Pick<ProjectNote, 'dueOn' | 'status'>, today: string): string {
+export function dueText(
+  note: Pick<ProjectNote, 'dueOn' | 'status'>,
+  today: string,
+  dateFormat: DateFormat,
+): string {
   if (!note.dueOn) return '';
-  if (note.status === 'done') return `entro il ${formatDateToIT(note.dueOn)}`;
+  if (note.status === 'done') return `entro il ${formatDate(note.dueOn, dateFormat)}`;
   if (note.dueOn === today) return 'scade oggi';
   return isNoteOverdue(note, today)
-    ? `scaduta il ${formatDateToIT(note.dueOn)}`
-    : `entro il ${formatDateToIT(note.dueOn)}`;
+    ? `scaduta il ${formatDate(note.dueOn, dateFormat)}`
+    : `entro il ${formatDate(note.dueOn, dateFormat)}`;
 }
 
 /**
@@ -24,6 +30,7 @@ export function DueBadge({
   note: Pick<ProjectNote, 'dueOn' | 'status' | 'remind'>;
   today: string;
 }) {
+  const dateFormat = useDateFormat();
   if (!note.dueOn) return null;
   const overdue = isNoteOverdue(note, today) || (note.dueOn === today && note.status !== 'done');
   return (
@@ -33,7 +40,7 @@ export function DueBadge({
       }`}
     >
       <CalendarClock className="h-3 w-3 shrink-0" aria-hidden="true" />
-      <span className="first-letter:uppercase">{dueText(note, today)}</span>
+      <span className="first-letter:uppercase">{dueText(note, today, dateFormat)}</span>
       {note.remind && (
         <>
           <BellRing className="h-3 w-3 shrink-0" aria-hidden="true" />

@@ -186,6 +186,7 @@ describe('planContentSummary', () => {
       '0 progetti',
       '0 note dei progetti',
       '0 assegnazioni',
+      '0 note sulla timeline',
     ]);
     expect(planContentSummary(createEmptyPlan())).toEqual([
       '3 corsie',
@@ -196,6 +197,7 @@ describe('planContentSummary', () => {
       '0 progetti',
       '0 note dei progetti',
       '0 assegnazioni',
+      '0 note sulla timeline',
     ]);
   });
 });
@@ -312,7 +314,14 @@ describe('the notes, the assignments and the configuration of the roadmap', () =
       removeProjectField(plan, 'budget').roadmap.fields.some((item) => item.id === 'budget'),
     ).toBe(false);
 
-    const team = { id: 'design', name: 'Design', tag: 'UX', colorId: 'red' as const, position: 99 };
+    const team = {
+      id: 'design',
+      name: 'Design',
+      tag: 'UX',
+      colorId: 'red' as const,
+      phase: 'development' as const,
+      position: 99,
+    };
     plan = saveTeam(plan, team);
     expect(plan.roadmap.teams.at(-1)).toEqual(team);
     plan = saveStakeholder(plan, {

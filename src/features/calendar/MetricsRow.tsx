@@ -6,7 +6,8 @@ import { DAILY_METRIC } from '../../domain/plan';
 import { rangeDays } from '../../domain/schedule';
 import type { DailyMetric } from '../../domain/types';
 import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
-import { formatDateToIT, todayIso } from '../../utils/dateUtils';
+import { formatDate, todayIso } from '../../utils/dateUtils';
+import type { DateFormat } from '../../utils/dateUtils';
 import {
   APPROVAL_TONE,
   ApprovalIcon,
@@ -17,6 +18,7 @@ import {
 } from '../metrics/MetricDetails';
 import { LABEL_CELL, columnEdge } from './timelineLayout';
 import type { Column } from './timelineLayout';
+import { useDateFormat } from '../..//shared/dateFormat';
 
 interface MetricsRowProps {
   columns: Column[];
@@ -41,10 +43,10 @@ function cellId(date: string): string {
   return `metric-cell-${date}`;
 }
 
-function weekLabel({ column, days }: ColumnValues): string {
+function weekLabel({ column, days }: ColumnValues, dateFormat: DateFormat): string {
   const total = days.reduce((sum, day) => sum + day.value, 0);
   const light = strictestLight(days.map((day) => day.approval));
-  return `${DAILY_METRIC.label} della settimana dal ${formatDateToIT(column.start)} al ${formatDateToIT(column.end)}: ${preciseValue(total)}${
+  return `${DAILY_METRIC.label} della settimana dal ${formatDate(column.start, dateFormat)} al ${formatDate(column.end, dateFormat)}: ${preciseValue(total)}${
     light ? `; semaforo più restrittivo: ${APPROVAL_LABELS[light].name.toLowerCase()}` : ''
   }`;
 }
@@ -60,6 +62,7 @@ export const MetricsRow = memo(function MetricsRow({
   weekColumns,
   digitWidth,
 }: MetricsRowProps) {
+  const dateFormat = useDateFormat();
   const byDate = useMemo(() => new Map(metrics.map((metric) => [metric.date, metric])), [metrics]);
   const cells: ColumnValues[] = columns.map((column) => ({
     column,
@@ -151,7 +154,9 @@ export const MetricsRow = memo(function MetricsRow({
             id={cellId(column.start)}
             type="button"
             tabIndex={column.start === tabStop ? 0 : -1}
-            aria-label={weekColumns || !day ? weekLabel(cell) : describeDay(day)}
+            aria-label={
+              weekColumns || !day ? weekLabel(cell, dateFormat) : describeDay(day, dateFormat)
+            }
             onKeyDown={(event) => moveFocus(event, column.start)}
             {...triggerProps(cell)}
             style={{ width: column.width }}

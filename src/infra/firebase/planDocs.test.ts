@@ -13,14 +13,17 @@ import {
   readAssignment,
   readLane,
   readMemo,
+  readMilestone,
   readNote,
   readProject,
   readProjectField,
   readProjectNote,
+  readRoadmapSettings,
   readStakeholder,
   readTask,
   readTeam,
   readValue,
+  roadmapSettingsContent,
   stakeholderContent,
   taskContent,
   teamContent,
@@ -51,7 +54,7 @@ describe('task documents', () => {
   it('skips documents that do not describe a task and repairs unknown colors', () => {
     expect(readTask('t1', { title: 'x' })).toBeNull();
     expect(readTask('t1', { ...taskContent(plan.tasks[0]!), status: 'done' })).toBeNull();
-    expect(readTask('t1', { ...taskContent(plan.tasks[0]!), colorId: 'pink' })?.colorId).toBe(
+    expect(readTask('t1', { ...taskContent(plan.tasks[0]!), colorId: 'neon' })?.colorId).toBe(
       'yellow',
     );
   });
@@ -83,7 +86,8 @@ describe('project documents', () => {
     expect(readProject('p1', data)).toEqual({ id: 'p1', ...data });
     expect(readProject('p1', { ...data, endDate: '2026-01-01' })).toBeNull();
     expect(readProject('p1', { ...data, status: 'done' })).toBeNull();
-    expect(readProject('p1', { ...data, colorId: 'pink' })?.colorId).toBe('yellow');
+    // The default color of a project, not the yellow of the tasks.
+    expect(readProject('p1', { ...data, colorId: 'neon' })?.colorId).toBe('blue');
   });
 
   it('keeps the values of the custom fields, and only those that have the shape of values', () => {
@@ -186,8 +190,20 @@ describe('documents of the notes, assignments and configuration of the roadmap',
       }).options,
     ).toBeUndefined();
 
-    const team = teamContent({ name: 'QA', tag: 'QA', colorId: 'ice', position: 3 });
+    const team = teamContent({ name: 'QA', tag: 'QA', colorId: 'ice', phase: 'test', position: 3 });
     expect(readTeam('qa', team)).toEqual({ id: 'qa', ...team });
+    expect(readTeam('qa', { name: 'QA', tag: 'QA', colorId: 'ice', position: 3 })?.phase).toBe(
+      'development',
+    );
+    const ba = teamContent({
+      name: 'BA',
+      tag: 'BA',
+      colorId: 'purple',
+      phase: 'analysis',
+      formula: '0.12*(ServerSide+iOSDev)',
+      position: 4,
+    });
+    expect(readTeam('ba', ba)).toEqual({ id: 'ba', ...ba });
 
     const person = stakeholderContent({
       name: 'QA #1',
@@ -197,6 +213,19 @@ describe('documents of the notes, assignments and configuration of the roadmap',
     });
     expect(readStakeholder('qa-1', person)).toEqual({ id: 'qa-1', ...person });
     expect(readStakeholder('qa-1', { ...person, teamId: '' })).toBeNull();
+    const lead = stakeholderContent({
+      name: 'BA #1',
+      teamId: 'ba',
+      absences: [],
+      position: 0,
+      default: true,
+    });
+    expect(lead.default).toBe(true);
+    expect(readStakeholder('ba-1', lead)?.default).toBe(true);
+    expect(readRoadmapSettings(roadmapSettingsContent({ contingencyFormula: '0.1*QA' }))).toEqual({
+      contingencyFormula: '0.1*QA',
+    });
+    expect(readRoadmapSettings({ contingencyFormula: 10 })).toEqual({});
   });
 });
 
@@ -237,11 +266,18 @@ describe('plan documents', () => {
       stakeholders: writes
         .filter((write) => write.path.startsWith('stakeholders/'))
         .map((write) => readStakeholder(write.path.split('/')[1]!, write.data)!),
+      milestones: writes
+        .filter((write) => write.path.startsWith('milestones/'))
+        .map((write) => readMilestone(write.path.split('/')[1]!, write.data)!),
+      settings: readRoadmapSettings(
+        writes.find((write) => write.path === 'settings/roadmap')!.data,
+      ),
     };
     const rebuilt = buildPlan(parts);
     expect(rebuilt.projects).toEqual(plan.projects);
     expect(rebuilt.projectNotes).toEqual(plan.projectNotes);
     expect(rebuilt.assignments).toEqual(plan.assignments);
+    expect(rebuilt.milestones).toEqual(plan.milestones);
     expect(rebuilt.roadmap).toEqual(plan.roadmap);
     expect(rebuilt.lanes).toEqual(plan.lanes);
     expect(rebuilt.metrics).toEqual(plan.metrics);
@@ -265,9 +301,11 @@ describe('plan documents', () => {
       projects: [],
       projectNotes: [],
       assignments: [],
+      milestones: [],
       fields: [],
       teams: [],
       stakeholders: [],
+      settings: {},
     });
     expect(rebuilt.lanes.map((lane) => lane.name)).toEqual(['Prima', 'Terza']);
   });
@@ -275,7 +313,7 @@ describe('plan documents', () => {
   it('writes the metric definition along with the content', () => {
     expect(contentWrites(plan).some((write) => write.path === 'metrics/metric-1')).toBe(true);
     expect(importSummary(plan)).toBe(
-      '3 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere, 5 progetti, 4 note dei progetti, 4 assegnazioni',
+      '3 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere, 5 progetti, 4 note dei progetti, 4 assegnazioni, 2 note sulla timeline',
     );
   });
 

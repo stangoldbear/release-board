@@ -1,13 +1,22 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useRef } from 'react';
 import type { ReactNode } from 'react';
-import { CalendarRange, Milestone, NotebookPen, Search, Settings } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Search, Settings } from 'lucide-react';
 import { CompactToggle, TextSizeControls } from '../features/calendar/DisplayControls';
+import { useRootHeightVar } from '../shared/useRootHeightVar';
 import { AppLogo } from '../shared/ui/AppLogo';
 import { Button } from '../shared/ui/Button';
 import type { TextScale } from '../shared/ui/textScale';
 import { ToggleChip } from '../shared/ui/ToggleChip';
+import { AREA_ICONS } from './areaIcons';
 import type { Area, AreaId, AreaVisibility } from './areas';
+
+/** The buttons that show and hide the areas, in the layout with the buttons in the header. */
+export interface AreaToggles {
+  /** The areas this browser can show. */
+  areas: readonly Area[];
+  visibility: AreaVisibility;
+  onToggle: (area: AreaId) => void;
+}
 
 interface HeaderProps {
   /** Size of the text of the notes and the calendars. */
@@ -16,11 +25,8 @@ interface HeaderProps {
   /** Compact mode of the notes and the calendars. */
   compact: boolean;
   onToggleCompact: () => void;
-  /** The areas this browser can show: without the beta features, only the finished ones. */
-  availableAreas: readonly Area[];
-  /** Which areas of the page are shown. */
-  areas: AreaVisibility;
-  onToggleArea: (area: AreaId) => void;
+  /** The buttons of the areas; absent in the layout with the tabs at the bottom. */
+  areaToggles?: AreaToggles;
   /** The text searched in every area. */
   search: string;
   onSearchChange: (search: string) => void;
@@ -38,24 +44,19 @@ interface HeaderProps {
 /** The search field, where the focus goes when the search is cleared. */
 export const SEARCH_FIELD_ID = 'search-field';
 
-const AREA_ICONS: Record<AreaId, LucideIcon> = {
-  notes: NotebookPen,
-  releases: CalendarRange,
-  roadmaps: Milestone,
-};
+const SEARCH_LABEL = 'Cerca in note, attività e progetti';
 
 /**
- * The bar at the top: the app's name, the size of the text, the areas to show, the search, the
- * synchronization and the settings. The calendar's own controls are in its area.
+ * The bar at the top: the app's name, the size of the text, the areas to show when the layout
+ * has their buttons here, the search, the synchronization and the settings. The calendar's own
+ * controls are in its area.
  */
 export function Header({
   textScale,
   onTextScaleChange,
   compact,
   onToggleCompact,
-  availableAreas,
-  areas,
-  onToggleArea,
+  areaToggles,
   search,
   onSearchChange,
   onSearchKey,
@@ -65,10 +66,8 @@ export function Header({
   onOpenSettings,
 }: HeaderProps) {
   const headerRef = useRef<HTMLElement>(null);
-  useStickyHeight(headerRef);
-  const searchLabel = availableAreas.some(({ id }) => id === 'roadmaps')
-    ? 'Cerca in note, attività e progetti'
-    : 'Cerca in note e attività';
+  // The page scrolls a focused element out from under the fixed header (scroll-padding-top).
+  useRootHeightVar(headerRef, '--header-height');
 
   return (
     // On phones the header wraps to several lines: it scrolls away instead of covering the page.
@@ -95,27 +94,30 @@ export function Header({
           <CompactToggle compact={compact} onToggle={onToggleCompact} />
         </div>
 
-        <div
-          role="group"
-          aria-label="Aree da mostrare"
-          className="flex flex-wrap items-center gap-1.5"
-        >
-          {availableAreas.map(({ id, label }) => {
-            const Icon = AREA_ICONS[id];
-            return (
-              <ToggleChip
-                key={id}
-                pressed={areas[id]}
-                onClick={() => onToggleArea(id)}
-                label={`Area ${label}`}
-                title={areas[id] ? `Nascondi l'area ${label}` : `Mostra l'area ${label}`}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                {label}
-              </ToggleChip>
-            );
-          })}
-        </div>
+        {areaToggles && (
+          <div
+            role="group"
+            aria-label="Aree da mostrare"
+            className="flex flex-wrap items-center gap-1.5"
+          >
+            {areaToggles.areas.map(({ id, label }) => {
+              const Icon = AREA_ICONS[id];
+              const shown = areaToggles.visibility[id];
+              return (
+                <ToggleChip
+                  key={id}
+                  pressed={shown}
+                  onClick={() => areaToggles.onToggle(id)}
+                  label={`Area ${label}`}
+                  title={shown ? `Nascondi l'area ${label}` : `Mostra l'area ${label}`}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {label}
+                </ToggleChip>
+              );
+            })}
+          </div>
+        )}
 
         <div className="relative min-w-48 flex-1 sm:max-w-sm">
           <Search
@@ -125,9 +127,9 @@ export function Header({
           <input
             id={SEARCH_FIELD_ID}
             type="search"
-            aria-label={searchLabel}
+            aria-label={SEARCH_LABEL}
             aria-keyshortcuts="Enter Shift+Enter"
-            placeholder={`${searchLabel}…`}
+            placeholder={`${SEARCH_LABEL}…`}
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             onKeyDown={(event) => {
@@ -158,24 +160,4 @@ export function Header({
       </p>
     </header>
   );
-}
-
-/**
- * Keeps --header-height on the page equal to the height of the fixed header, so that the page
- * scrolls a focused element out from under it (scroll-padding-top in index.css).
- */
-function useStickyHeight(ref: { current: HTMLElement | null }): void {
-  useLayoutEffect(() => {
-    const header = ref.current;
-    if (!header) return;
-    const root = document.documentElement;
-    const observer = new ResizeObserver(() =>
-      root.style.setProperty('--header-height', `${header.offsetHeight}px`),
-    );
-    observer.observe(header);
-    return () => {
-      observer.disconnect();
-      root.style.removeProperty('--header-height');
-    };
-  }, [ref]);
 }

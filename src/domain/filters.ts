@@ -1,4 +1,5 @@
-import type { DailyNotes, Memo, Project, TaskItem, TaskStatus } from './types';
+import { formatDate } from '../utils/dateUtils';
+import type { DailyNotes, Memo, Milestone, Project, TaskItem, TaskStatus } from './types';
 
 /** A search finds the items with all its words, or with at least one of them. */
 export type SearchMode = 'all' | 'any';
@@ -161,7 +162,7 @@ export function highlightRanges(text: string, words: readonly string[]): [number
 }
 
 /** What a search can find, in the order of the areas on the page. */
-export type SearchResultKind = 'memo' | 'task' | 'note' | 'project';
+export type SearchResultKind = 'memo' | 'task' | 'note' | 'project' | 'milestone';
 
 /** One thing a search found, to bring into view. */
 export interface SearchResult {
@@ -185,6 +186,7 @@ export function searchResults(found: {
   tasks: readonly TaskItem[];
   notes: Readonly<Record<string, string>>;
   projects: readonly Project[];
+  milestones?: readonly Milestone[];
 }): SearchResult[] {
   const quoted = (text: string) => `«${text.replace(/\s+/g, ' ').trim()}»`;
   const dated: SearchResult[] = [
@@ -200,7 +202,7 @@ export function searchResults(found: {
       id: date,
       date,
       endDate: date,
-      label: `nota del giorno ${date.split('-').reverse().join('/')}`,
+      label: `nota del giorno ${formatDate(date)}`,
     })),
   ].sort((a, b) => a.date.localeCompare(b.date));
   return [
@@ -215,7 +217,26 @@ export function searchResults(found: {
       id: project.id,
       label: `progetto ${quoted(project.title)}`,
     })),
+    ...(found.milestones ?? []).map((milestone) => ({
+      kind: 'milestone' as const,
+      id: milestone.id,
+      date: milestone.date,
+      endDate: milestone.date,
+      label: `nota sulla timeline ${quoted(milestone.title)}`,
+    })),
   ];
+}
+
+/** The notes on the timeline with the searched words in title or text, or in `moreTexts`. */
+export function filterMilestones(
+  milestones: readonly Milestone[],
+  search: string,
+  mode: SearchMode = 'all',
+  moreTexts: (milestone: Milestone) => readonly (string | undefined)[] = () => [],
+): Milestone[] {
+  return milestones.filter((milestone) =>
+    matches([milestone.title, milestone.body, ...moreTexts(milestone)], search, mode),
+  );
 }
 
 /**

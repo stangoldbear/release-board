@@ -1,7 +1,9 @@
 import type { AssignmentChanges, AssignmentContent } from '../domain/assignments';
 import type { MemoChanges, MemoContent } from '../domain/memos';
+import type { MilestoneChanges, MilestoneContent } from '../domain/milestones';
 import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
 import type { ProjectChanges, ProjectContent } from '../domain/projects';
+import type { RoadmapSettingsChanges } from '../domain/roadmapConfig';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
 import type {
   DailyMetric,
@@ -121,6 +123,11 @@ export interface PlanRepository {
   /** Changes some fields of a note of a project, null removing an optional one. */
   updateProjectNote(noteId: string, changes: ProjectNoteChanges): void;
   deleteProjectNote(noteId: string): void;
+  /** Adds a note on a day of the roadmap, of a project or of none, and returns its id. */
+  createMilestone(content: MilestoneContent): string;
+  /** Changes some fields of a note on the timeline, null removing an optional one. */
+  updateMilestone(milestoneId: string, changes: MilestoneChanges): void;
+  deleteMilestone(milestoneId: string): void;
   /** Adds the work of a person on a project and returns its id. */
   createAssignment(content: AssignmentContent): string;
   updateAssignment(assignmentId: string, changes: AssignmentChanges): void;
@@ -138,6 +145,8 @@ export interface PlanRepository {
   deleteStakeholder(stakeholderId: string): void;
   /** Replaces the whole configuration of the roadmap, as when the defaults are loaded. */
   replaceRoadmapConfig(config: RoadmapConfig): void;
+  /** Changes the shared settings of the roadmap, such as the formula of the contingency. */
+  updateRoadmapSettings(changes: RoadmapSettingsChanges): void;
   /** Replaces everything, as when a backup is restored. */
   replacePlan(plan: PlanSnapshot): void;
 }

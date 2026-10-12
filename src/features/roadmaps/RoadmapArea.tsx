@@ -1,12 +1,19 @@
 import { useMemo, useState } from 'react';
-import { ArrowRightFromLine, Check, History, Plus } from 'lucide-react';
+import { ArrowRightFromLine, History, Plus } from 'lucide-react';
 import { assignmentsOfProject } from '../../domain/assignments';
 import { notesOfProject } from '../../domain/projectNotes';
 import { PROJECT_STATUSES } from '../../domain/projects';
-import { colorsProjects, isGroupable } from '../../domain/roadmapConfig';
+import type { ProjectWithEnd } from '../../domain/projects';
+import { projectSpan, withEffectiveEnd } from '../../domain/projectSpan';
+import type { ProjectSpan } from '../../domain/projectSpan';
+import { ROADMAP_SORTS, ROADMAP_SORT_LABELS, customOrder } from '../../domain/projectOrder';
+import type { RoadmapSort } from '../../domain/projectOrder';
+import { nextProjectColor } from '../../domain/projects';
+import { isGroupable, projectColorField } from '../../domain/roadmapConfig';
 import type {
   Assignment,
   MemoAuthor,
+  Milestone,
   PlanSnapshot,
   Project,
   ProjectField,
@@ -27,16 +34,20 @@ import { AssignmentDialog } from './AssignmentDialog';
 import { ProjectDialog } from './ProjectDialog';
 import type { ProjectTab } from './ProjectDialog';
 import { DETAIL_LEVELS, PROJECT_STATUS_ICONS, PROJECT_STATUS_PLURALS } from './projectUi';
+import type { DetailLevel } from './projectUi';
 import type {
   AssignmentActions,
+  MilestoneActions,
   NoteActions,
   ProjectActions,
   StakeholderActions,
 } from './roadmapActions';
-import { newProjectPeriod, roadmapRange } from './roadmapLayout';
+import { roadmapRange } from './roadmapLayout';
 import { RoadmapTimeline } from './RoadmapTimeline';
 import { StakeholderDialog } from './StakeholderDialog';
 import type { RoadmapDisplay, RoadmapDisplayControls } from './useRoadmapDisplay';
+import { DEFAULT_MILESTONE_COLOR_ID, diffMilestone } from '../../domain/milestones';
+import { MilestoneDialog } from './MilestoneDialog';
 
 /** The button that adds a project, where the focus goes when one is deleted. */
 export const NEW_PROJECT_ID = 'new-project';
@@ -45,8 +56,15 @@ interface RoadmapAreaProps {
   /** The element id of the area. */
   id: string;
   plan: PlanSnapshot;
-  /** The projects to show: all of them, or those the search finds. */
+  /** The projects to show, in the order of the roadmap: all of them, or those the search finds. */
   shown: Project[];
+  /** Where each project falls: the work of its team, its days, its gaps. */
+  spans: ReadonlyMap<string, ProjectSpan>;
+  /** The notes on the timeline to show: all of them, or those the search finds. */
+  milestones: Milestone[];
+  milestoneActions: MilestoneActions;
+  /** Something to open, asked from outside the area, such as by an alert; the nonce tells a new ask. */
+  openRequest?: { kind: 'project' | 'milestone'; id: string; nonce: number } | null;
   searching: boolean;
   /** The published security rules do not know projects yet: the area says so, and no more. */
   unavailable?: boolean;
@@ -71,7 +89,8 @@ interface RoadmapAreaProps {
 /** The window open on a project, or on a new one with its period. */
 interface OpenProject {
   project: Project | null;
-  period: { startDate: string; endDate: string };
+  /** The first day of a new project. */
+  defaultStart: string;
   tab?: ProjectTab;
 }
 
@@ -107,8 +126,8 @@ function ProjectSummary({ projects, found }: { projects: Project[]; found: numbe
 }
 
 /**
- * A field to group or to color by, among those that can. Without any, the menu stays, disabled,
- * and says so: the choice is there to be found, and its title says where to add a field.
+ * A field to group by, among those that can. Without any, the menu stays, disabled, and says so:
+ * the choice is there to be found, and its title says where to add a field.
  */
 function FieldChoice({
   label,
@@ -160,6 +179,10 @@ export function RoadmapArea({
   id,
   plan,
   shown,
+  spans,
+  milestones,
+  milestoneActions,
+  openRequest = null,
   searching,
   unavailable = false,
   detailsUnavailable,
@@ -183,34 +206,64 @@ export function RoadmapArea({
     project: Project;
   } | null>(null);
   const [stakeholderDialog, setStakeholderDialog] = useState<Stakeholder | null>(null);
+  const [milestoneDialog, setMilestoneDialog] = useState<{
+    milestone: Milestone | null;
+    date: string;
+    projectId?: string;
+  } | null>(null);
 
+  // The rows get the projects with their effective end.
+  const endOf = (project: Project) =>
+    spans.get(project.id) ?? projectSpan(project, plan.assignments, plan.roadmap.stakeholders);
+  const allPlaced = useMemo(
+    () => plan.projects.map((project) => withEffectiveEnd(project, endOf(project))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- endOf reads spans and the plan
+    [plan.projects, spans],
+  );
+  const placed: ProjectWithEnd[] = useMemo(
+    () => shown.map((project) => withEffectiveEnd(project, endOf(project))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- endOf reads spans and the plan
+    [shown, spans],
+  );
+  const sortField = projectColorField(plan.roadmap);
   // The days held: those of the view, widened to every project; without the past, from today or
   // from the Monday of this week in weekly columns.
-  const fullRange = useMemo(
-    () => roadmapRange(view.range, plan.projects),
-    [view.range, plan.projects],
-  );
+  const fullRange = useMemo(() => roadmapRange(view.range, allPlaced), [view.range, allPlaced]);
   const dayWidth = dayWidthOf(view);
   const firstShownDay = columnUnit(dayWidth) === 'week' ? startOfWeek(today) : today;
   const start =
     display.hidePastDays && firstShownDay > fullRange.start ? firstShownDay : fullRange.start;
   const range = useMemo(() => ({ start, end: fullRange.end }), [start, fullRange.end]);
 
-  const openNew = (from: string) => setOpen({ project: null, period: newProjectPeriod(from) });
+  const openNew = (from: string) => setOpen({ project: null, defaultStart: from });
   // From today while this month is in view, otherwise from the first day in view.
   const openNewFromView = () =>
     openNew(startOfMonth(view.anchor) === startOfMonth(today) ? today : view.anchor);
   const openProject = (project: Project, tab?: ProjectTab) =>
-    setOpen({ project, period: project, tab });
+    setOpen({ project, defaultStart: project.startDate, tab });
+  // A new ask from outside, told by its nonce, opens the project while rendering: the state
+  // follows the prop, as React has it done.
+  const [handledRequest, setHandledRequest] = useState<number | null>(null);
+  if (openRequest && openRequest.nonce !== handledRequest) {
+    setHandledRequest(openRequest.nonce);
+    if (openRequest.kind === 'project') {
+      const asked = plan.projects.find((item) => item.id === openRequest.id);
+      if (asked) setOpen({ project: asked, defaultStart: asked.startDate });
+    } else {
+      const asked = plan.milestones.find((item) => item.id === openRequest.id);
+      if (asked) setMilestoneDialog({ milestone: asked, date: asked.date });
+    }
+  }
   const current = open?.project ? plan.projects.find((item) => item.id === open.project?.id) : null;
+  // Each project shows what the roadmap shows, or what was chosen for it; the Team level needs
+  // the published rules to know the assignments.
+  const levelOf = (projectId: string): DetailLevel => {
+    const own = display.projectLevels[projectId] ?? display.level;
+    return detailsUnavailable && own === 'team' ? 'main' : own;
+  };
+  const exceptions = Object.keys(display.projectLevels).length;
   const groupable = plan.roadmap.fields.filter(isGroupable);
   const groupBy = groupable.find((field) => field.id === display.groupBy) ?? null;
-  // The first field that can color marks the projects until the user chooses another, or none.
-  const coloring = plan.roadmap.fields.filter(colorsProjects);
-  const colorBy =
-    display.colorBy === false
-      ? null
-      : (coloring.find((field) => field.id === display.colorBy) ?? coloring[0] ?? null);
 
   if (unavailable) {
     return (
@@ -246,9 +299,10 @@ export function RoadmapArea({
         <ProjectSummary projects={plan.projects} found={searching ? shown.length : null} />
         <p className="bg-surface-muted px-4 py-1.5 text-xs text-fg-muted">
           <span className="pointer-coarse:hidden">
-            Trascina un progetto per spostarlo, dai bordi per cambiarne inizio e fine; al livello
-            Team trascina una persona per spostare l&apos;inizio del suo lavoro. Maiusc + rotellina
-            scorre i giorni, Ctrl + rotellina cambia lo zoom.
+            Trascina un progetto per spostarlo con il suo team, dai bordi per cambiarne inizio e
+            fine pianificata; al livello Team trascina una persona per spostare l&apos;inizio del
+            suo lavoro, dal bordo destro per i giorni uomo, doppio clic per scriverli. Maiusc +
+            rotellina scorre i giorni, Ctrl + rotellina cambia lo zoom.
           </span>
           <span className="hidden pointer-coarse:inline">
             Tocca un progetto o una persona per modificarli. Scorri con un dito per vedere gli altri
@@ -256,7 +310,8 @@ export function RoadmapArea({
           </span>
         </p>
         <RoadmapTimeline
-          projects={shown}
+          projects={placed}
+          spans={spans}
           range={range}
           dayWidth={dayWidth}
           anchor={view.anchor}
@@ -268,6 +323,9 @@ export function RoadmapArea({
           today={today}
           highlightWeekends={display.highlightWeekends}
           level={detailsUnavailable && display.level === 'team' ? 'main' : display.level}
+          levelOf={levelOf}
+          teamLevelAvailable={!detailsUnavailable}
+          rendering={display.barRendering}
           config={plan.roadmap}
           assignments={plan.assignments}
           searching={searching}
@@ -275,13 +333,13 @@ export function RoadmapArea({
           compact={compact}
           oneLineTitles={display.oneLineTitles}
           groupBy={groupBy}
-          colorBy={colorBy}
           onZoom={(step) => onViewAction({ type: 'zoomBy', step })}
           onShowDays={(date) => onViewAction({ type: 'goTo', date, zoom: 'detail' })}
           onOpen={(project) => openProject(project)}
           onAdd={openNewFromView}
           onAddAt={openNew}
           onChange={projectActions.onUpdate}
+          onMove={projectActions.onMove}
           onOpenAssignment={(assignment) => {
             const project = plan.projects.find((item) => item.id === assignment.projectId);
             if (project) setAssignmentDialog({ assignment, project });
@@ -289,6 +347,16 @@ export function RoadmapArea({
           onAddAssignment={(project) => setAssignmentDialog({ assignment: null, project })}
           onChangeAssignment={assignmentActions.onUpdate}
           onOpenStakeholder={setStakeholderDialog}
+          onSetProjectLevel={displayControls.setProjectLevel}
+          onReorder={projectActions.onReorder}
+          milestones={milestones}
+          projectTitleOf={(projectId) => plan.projects.find((item) => item.id === projectId)?.title}
+          onOpenMilestone={(milestone) => setMilestoneDialog({ milestone, date: milestone.date })}
+          onAddMilestone={(date, projectId) => {
+            const target = projectId ? { projectId } : {};
+            setMilestoneDialog({ milestone: null, date, ...target });
+          }}
+          onChangeMilestone={milestoneActions.onUpdate}
         />
         <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 bg-surface px-4 py-2.5 select-none">
           <div
@@ -303,6 +371,7 @@ export function RoadmapArea({
               {DETAIL_LEVELS.map((level) => {
                 const disabled = detailsUnavailable && level.id === 'team';
                 const pressed = display.level === level.id;
+                const Icon = level.icon;
                 return (
                   <button
                     key={level.id}
@@ -310,7 +379,7 @@ export function RoadmapArea({
                     title={
                       disabled
                         ? 'Servono le regole di sicurezza aggiornate per il livello Team'
-                        : level.title
+                        : `${level.title}. I progetti con righe proprie tornano a seguire la roadmap`
                     }
                     aria-pressed={pressed}
                     aria-disabled={disabled || undefined}
@@ -321,13 +390,37 @@ export function RoadmapArea({
                       disabled ? 'cursor-not-allowed opacity-50' : ''
                     }`}
                   >
-                    {pressed && <Check className="h-3 w-3 shrink-0" aria-hidden="true" />}
+                    <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     {level.label}
                   </button>
                 );
               })}
             </div>
+            {exceptions > 0 && (
+              <span className="text-xs text-fg-muted">
+                {exceptions === 1
+                  ? '1 progetto con righe proprie'
+                  : `${exceptions} progetti con righe proprie`}
+              </span>
+            )}
           </div>
+          <label className="flex items-center gap-2">
+            <span className="text-xs font-bold tracking-wide uppercase">Ordina per</span>
+            <select
+              value={display.sort}
+              onChange={(event) => displayControls.setSort(event.target.value as RoadmapSort)}
+              title="L'ordine delle righe; trascinando una riga si torna a «Personalizzato» partendo dall'ordine che si vede"
+              className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-xs"
+            >
+              {ROADMAP_SORTS.map((sort) => (
+                <option key={sort} value={sort} disabled={sort === 'field' && !sortField}>
+                  {sort === 'field'
+                    ? (sortField?.label ?? 'Campo con i colori')
+                    : ROADMAP_SORT_LABELS[sort]}
+                </option>
+              ))}
+            </select>
+          </label>
           <FieldChoice
             label="Raggruppa per"
             none="Nessun gruppo"
@@ -335,14 +428,6 @@ export function RoadmapArea({
             fields={groupable}
             value={groupBy?.id ?? ''}
             onChange={(fieldId) => displayControls.setGroupBy(fieldId || null)}
-          />
-          <FieldChoice
-            label="Colora per"
-            none="Nessun colore"
-            hint="Serve una lista di valori esclusivi con un colore per valore"
-            fields={coloring}
-            value={colorBy?.id ?? ''}
-            onChange={(fieldId) => displayControls.setColorBy(fieldId || false)}
           />
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <ToggleChip
@@ -371,7 +456,8 @@ export function RoadmapArea({
       {open && (
         <ProjectDialog
           project={open.project}
-          period={open.period}
+          defaultStart={open.defaultStart}
+          defaultColorId={nextProjectColor(plan.projects)}
           gone={open.project !== null && !current}
           config={plan.roadmap}
           notes={open.project ? notesOfProject(plan.projectNotes, open.project.id) : []}
@@ -381,20 +467,24 @@ export function RoadmapArea({
           nameOf={nameOf}
           today={today}
           initialTab={open.tab}
-          onSave={(content) => {
-            if (open.project) projectActions.onSave(open.project, content);
-            else projectActions.onCreate(content);
+          onSubmit={(content) => {
+            if (open.project) {
+              projectActions.onSave(open.project, content);
+              return open.project.id;
+            }
+            return projectActions.onCreate(content);
           }}
           onDelete={() => {
             if (open.project) projectActions.onDelete(open.project);
           }}
           onClose={() => setOpen(null)}
           noteActions={noteActions}
+          onSaveTeam={projectActions.onSaveTeam}
+          order={customOrder(plan.projects)}
+          onReorder={projectActions.onReorder}
           onOpenAssignment={(assignment) => {
             if (current) setAssignmentDialog({ assignment, project: current });
           }}
-          onDeleteAssignment={(assignment) => assignmentActions.onDelete(assignment.id)}
-          onOpenStakeholder={setStakeholderDialog}
         />
       )}
 
@@ -425,6 +515,30 @@ export function RoadmapArea({
             }
           }}
           onClose={() => setAssignmentDialog(null)}
+        />
+      )}
+
+      {milestoneDialog && (
+        <MilestoneDialog
+          milestone={milestoneDialog.milestone}
+          date={milestoneDialog.date}
+          projectId={milestoneDialog.projectId}
+          projects={plan.projects}
+          defaultColorId={DEFAULT_MILESTONE_COLOR_ID}
+          onSubmit={(content) => {
+            if (milestoneDialog.milestone) {
+              milestoneActions.onUpdate(
+                milestoneDialog.milestone.id,
+                diffMilestone(milestoneDialog.milestone, content),
+              );
+            } else {
+              milestoneActions.onCreate(content);
+            }
+          }}
+          onDelete={() => {
+            if (milestoneDialog.milestone) milestoneActions.onDelete(milestoneDialog.milestone.id);
+          }}
+          onClose={() => setMilestoneDialog(null)}
         />
       )}
 

@@ -1,4 +1,13 @@
-import { CircleCheck, CircleDashed, CircleDot, CirclePause, Lightbulb } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
+  CirclePause,
+  Equal,
+  Lightbulb,
+  Menu,
+  Minus,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PROJECT_STATUS_LABELS } from '../../domain/projects';
 import type { ProjectStatus } from '../../domain/types';
@@ -44,16 +53,34 @@ export function ProjectStatusMark({
  */
 export type DetailLevel = 'titles' | 'main' | 'team';
 
-export const DETAIL_LEVELS: readonly { id: DetailLevel; label: string; title: string }[] = [
-  { id: 'titles', label: 'Solo titoli', title: 'Il titolo di ogni progetto, e nulla più' },
+export const DETAIL_LEVELS: readonly {
+  id: DetailLevel;
+  label: string;
+  title: string;
+  /** One, two or three lines: the icon of the level, on the roadmap and on each project. */
+  icon: LucideIcon;
+  rows: 1 | 2 | 3;
+}[] = [
+  {
+    id: 'titles',
+    label: 'Solo titoli',
+    title: 'Il titolo di ogni progetto, e nulla più',
+    icon: Minus,
+    rows: 1,
+  },
   {
     id: 'main',
     label: 'Info principali',
     title: 'Sotto il titolo: descrizione, stato, responsabile e i campi principali',
+    icon: Equal,
+    rows: 2,
   },
   {
     id: 'team',
     label: 'Team',
-    title: 'Le informazioni principali e una riga per ogni persona che lavora al progetto',
+    title:
+      'Le informazioni principali e una riga per ogni persona che lavora al progetto, e per la contingency',
+    icon: Menu,
+    rows: 3,
   },
 ];

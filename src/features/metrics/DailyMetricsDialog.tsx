@@ -4,16 +4,11 @@ import type { DailyMetric } from '../../domain/types';
 import { formatLocaleNumber, parseLocaleNumber } from '../../domain/numberFormat';
 import { DAILY_METRIC } from '../../domain/plan';
 import type { MetricValueChange } from '../../domain/plan';
-import {
-  ITALIAN_MONTHS,
-  formatDateToIT,
-  formatDateToISO,
-  getDaysInMonth,
-  isWeekend,
-} from '../../utils/dateUtils';
+import { ITALIAN_MONTHS, formatDateToISO, getDaysInMonth, isWeekend } from '../../utils/dateUtils';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import { FIELD_CLASS } from '../../shared/ui/field';
+import { useFormatDate } from '../..//shared/dateFormat';
 
 interface DailyMetricsDialogProps {
   year: number;
@@ -31,6 +26,7 @@ export function DailyMetricsDialog({
   onClose,
   onSave,
 }: DailyMetricsDialogProps) {
+  const formatDate = useFormatDate();
   const days = getDaysInMonth(year, month).map((date) => ({
     iso: formatDateToISO(date),
     weekend: isWeekend(date),
@@ -83,7 +79,8 @@ export function DailyMetricsDialog({
         <>
           {invalidDates.length > 0 && (
             <p role="alert" className="basis-full text-xs text-danger">
-              Correggi i valori non numerici del {invalidDates.map(formatDateToIT).join(', ')}.
+              Correggi i valori non numerici del{' '}
+              {invalidDates.map((date) => formatDate(date)).join(', ')}.
             </p>
           )}
           <Button onClick={onClose}>Annulla</Button>
@@ -106,7 +103,7 @@ export function DailyMetricsDialog({
             >
               <label htmlFor={`metric-${day.iso}`} className="flex items-center gap-2 text-xs">
                 <span className="w-24 rounded border border-line bg-surface-muted px-1.5 py-0.5 text-center font-mono font-bold">
-                  {formatDateToIT(day.iso)}
+                  {formatDate(day.iso)}
                 </span>
                 <span className="text-fg-muted">{day.weekend ? 'Weekend' : ''}</span>
               </label>

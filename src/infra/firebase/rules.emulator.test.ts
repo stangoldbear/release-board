@@ -246,7 +246,7 @@ describe('tasks', () => {
   it('validates the task fields', async () => {
     await assertFails(createTask(editor, EDITOR, 'bad-status', { ...TASK, status: 'done' }));
     await assertFails(createTask(editor, EDITOR, 'bad-dates', { ...TASK, endDate: '2026-09-01' }));
-    await assertFails(createTask(editor, EDITOR, 'bad-color', { ...TASK, colorId: 'pink' }));
+    await assertFails(createTask(editor, EDITOR, 'bad-color', { ...TASK, colorId: 'neon' }));
     await assertFails(createTask(editor, EDITOR, 'extra', { ...TASK, owner: 'x' }));
     await assertFails(createTask(editor, EDITOR, 'empty', { ...TASK, title: '' }));
   });
@@ -424,7 +424,7 @@ describe('free notes', () => {
     await assertFails(writeMemo(editor, EDITOR, { ...MEMO, title: '' }));
     await assertFails(writeMemo(editor, EDITOR, { ...MEMO, title: 'x'.repeat(201) }));
     await assertFails(writeMemo(editor, EDITOR, { ...MEMO, body: '' }));
-    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, colorId: 'pink' }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, colorId: 'neon' }));
     await assertFails(writeMemo(editor, EDITOR, { ...MEMO, remindOn: '17/07/2026' }));
     await assertFails(writeMemo(editor, EDITOR, { ...MEMO, position: '1' }));
     await assertFails(writeMemo(editor, EDITOR, { ...MEMO, pinned: true }));
@@ -543,6 +543,10 @@ describe('projects', () => {
       ),
     );
     await assertSucceeds(writeProject(editor, EDITOR, { endDate: '2027-01-31' }, 'p2', true));
+    await assertSucceeds(writeProject(editor, EDITOR, { position: 1.5 }, 'p2', true));
+    await assertSucceeds(
+      writeProject(editor, EDITOR, { deadline: '2027-01-15', remindDaysBefore: 7 }, 'p2', true),
+    );
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/projects`)));
     await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/projects/p2`)));
   });
@@ -552,14 +556,50 @@ describe('projects', () => {
       setDoc(doc(editor, `${PLAN}/projects/p1`), { ...PROJECT, ...audit(EDITOR, 'h9') }),
     );
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, title: '' }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, position: 'prima' }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, remindDaysBefore: 1.5 }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, remindDaysBefore: 400 }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, title: 'x'.repeat(201) }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, endDate: '2026-09-01' }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, startDate: '10/09/2026' }));
-    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, colorId: 'pink' }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, colorId: 'neon' }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, status: 'blocked' }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, owner: '' }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, description: 'x'.repeat(5001) }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, progress: 50 }));
+    // The effort, the deadline, the contingency and the arrangement of 0.11.
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, manDays: 0 }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, manDays: 501 }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, deadline: '01/12/2026' }));
+    await assertFails(
+      writeProject(editor, EDITOR, { ...PROJECT, contingency: { startDate: '2026-12-01' } }),
+    );
+    await assertFails(
+      writeProject(editor, EDITOR, {
+        ...PROJECT,
+        contingency: { startDate: '2026-12-01', manDays: 3, owner: 'x' },
+      }),
+    );
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, arrangement: 'free' }));
+  });
+
+  it('accepts a project without a planned end, with its effort, deadline, contingency and arrangement', async () => {
+    const { endDate: _endDate, ...withoutEnd } = PROJECT;
+    await assertSucceeds(writeProject(editor, EDITOR, withoutEnd, 'p3'));
+    await assertSucceeds(
+      writeProject(
+        editor,
+        EDITOR,
+        {
+          ...PROJECT,
+          manDays: 20,
+          deadline: '2026-12-01',
+          contingency: { startDate: '2026-11-20', manDays: 3 },
+          arrangement: 'manual',
+        },
+        'p4',
+      ),
+    );
   });
 
   it('keeps strangers and anonymous visitors out', async () => {
@@ -740,7 +780,13 @@ describe('configuration of the roadmap', () => {
     main: true,
     position: 2,
   };
-  const TEAM: Record<string, unknown> = { name: 'QA', tag: 'QA', colorId: 'ice', position: 3 };
+  const TEAM: Record<string, unknown> = {
+    name: 'QA',
+    tag: 'QA',
+    colorId: 'ice',
+    phase: 'test',
+    position: 3,
+  };
   const PERSON: Record<string, unknown> = {
     name: 'QA #1',
     teamId: 'qa',
@@ -751,14 +797,17 @@ describe('configuration of the roadmap', () => {
   function writeConfig(
     db: Firestore,
     identity: Identity,
-    path: 'projectFields' | 'teams' | 'stakeholders',
+    path: 'projectFields' | 'teams' | 'stakeholders' | 'settings',
     id: string,
     data: Record<string, unknown>,
     action = 'create',
   ) {
-    const entity = { projectFields: 'projectField', teams: 'team', stakeholders: 'stakeholder' }[
-      path
-    ];
+    const entity = {
+      projectFields: 'projectField',
+      teams: 'team',
+      stakeholders: 'stakeholder',
+      settings: 'roadmapSettings',
+    }[path];
     const historyId = `h-${id}-${Math.random().toString(36).slice(2)}`;
     const batch = writeBatch(db);
     batch.set(doc(db, `${PLAN}/${path}/${id}`), { ...data, ...audit(identity, historyId) });
@@ -797,8 +846,42 @@ describe('configuration of the roadmap', () => {
         ],
       }),
     );
+    await assertSucceeds(
+      writeConfig(editor, EDITOR, 'projectFields', 'quickOne', { ...FIELD, quick: true }),
+    );
+    await assertFails(
+      writeConfig(editor, EDITOR, 'projectFields', 'quickOne', { ...FIELD, quick: false }),
+    );
     await assertSucceeds(writeConfig(editor, EDITOR, 'teams', 'qa', TEAM));
+    await assertSucceeds(
+      writeConfig(editor, EDITOR, 'teams', 'ba', {
+        ...TEAM,
+        name: 'BA',
+        tag: 'BA',
+        phase: 'analysis',
+        formula: '0.12*(ServerSide+iOSDev+AndDev)',
+      }),
+    );
     await assertSucceeds(writeConfig(editor, EDITOR, 'stakeholders', 'qa-1', PERSON));
+    await assertSucceeds(
+      writeConfig(editor, EDITOR, 'stakeholders', 'qa-3', { ...PERSON, default: true }),
+    );
+    await assertSucceeds(
+      writeConfig(editor, EDITOR, 'settings', 'roadmap', {
+        contingencyFormula: '0.10*(ServerSide+iOSDev+AndDev)',
+      }),
+    );
+    await assertSucceeds(writeConfig(editor, EDITOR, 'settings', 'roadmap', {}, 'update'));
+    await assertSucceeds(
+      writeConfig(
+        editor,
+        EDITOR,
+        'settings',
+        'roadmap',
+        { projectColors: 'free', colorFieldId: 'size' },
+        'update',
+      ),
+    );
     await assertSucceeds(
       writeConfig(editor, EDITOR, 'stakeholders', 'qa-2', {
         ...PERSON,
@@ -853,9 +936,29 @@ describe('configuration of the roadmap', () => {
     await assertFails(
       writeConfig(editor, EDITOR, 'projectFields', 'x', { ...choice, group: 'yes' }),
     );
-    await assertFails(writeConfig(editor, EDITOR, 'teams', 'qa', { ...TEAM, colorId: 'pink' }));
+    await assertFails(writeConfig(editor, EDITOR, 'teams', 'qa', { ...TEAM, colorId: 'neon' }));
     await assertFails(writeConfig(editor, EDITOR, 'teams', 'qa', { ...TEAM, tag: '' }));
     await assertFails(writeConfig(editor, EDITOR, 'teams', 'bad id!', TEAM));
+    // A phase among the three is required; a formula is text within its limit.
+    const { phase: _phase, ...withoutPhase } = TEAM;
+    await assertFails(writeConfig(editor, EDITOR, 'teams', 'qa', withoutPhase));
+    await assertFails(writeConfig(editor, EDITOR, 'teams', 'qa', { ...TEAM, phase: 'buffer' }));
+    await assertFails(writeConfig(editor, EDITOR, 'teams', 'qa', { ...TEAM, formula: 12 }));
+    await assertFails(
+      writeConfig(editor, EDITOR, 'teams', 'qa', { ...TEAM, formula: 'x'.repeat(201) }),
+    );
+    // The default flag is written only when true; the settings have one document and few keys.
+    await assertFails(
+      writeConfig(editor, EDITOR, 'stakeholders', 'qa-1', { ...PERSON, default: false }),
+    );
+    await assertFails(writeConfig(editor, EDITOR, 'settings', 'other', {}));
+    await assertFails(
+      writeConfig(editor, EDITOR, 'settings', 'roadmap', { contingencyFormula: 10 }),
+    );
+    await assertFails(writeConfig(editor, EDITOR, 'settings', 'roadmap', { colors: 'free' }));
+    await assertFails(
+      writeConfig(editor, EDITOR, 'settings', 'roadmap', { projectColors: 'rainbow' }),
+    );
     await assertFails(
       writeConfig(editor, EDITOR, 'stakeholders', 'qa-1', { ...PERSON, teamId: '' }),
     );
@@ -873,5 +976,69 @@ describe('configuration of the roadmap', () => {
     await assertFails(getDocs(collection(stranger, `${PLAN}/teams`)));
     await assertFails(getDoc(doc(nobody, `${PLAN}/teams/qa`)));
     await assertFails(deleteDoc(doc(stranger, `${PLAN}/teams/qa`)));
+  });
+});
+
+describe('milestones', () => {
+  beforeEach(seedPlan);
+
+  const MILESTONE: Record<string, unknown> = {
+    date: '2026-11-20',
+    title: 'Demo al cliente',
+    colorId: 'purple',
+    projectId: 'p1',
+  };
+
+  function writeMilestone(
+    db: Firestore,
+    identity: Identity,
+    data: Record<string, unknown>,
+    id = 'm1',
+    update = false,
+  ) {
+    const historyId = `h-${id}-${Math.random().toString(36).slice(2)}`;
+    const batch = writeBatch(db);
+    const ref = doc(db, `${PLAN}/milestones/${id}`);
+    if (update) batch.update(ref, { ...data, ...audit(identity, historyId) });
+    else batch.set(ref, { ...data, ...audit(identity, historyId) });
+    batch.set(
+      doc(db, `${PLAN}/history/${historyId}`),
+      historyEntry(identity, 'milestone', id, update ? 'update' : 'create'),
+    );
+    return batch.commit();
+  }
+
+  it('accepts a note of a project or of none, with text and alert, and its history entry', async () => {
+    await assertSucceeds(writeMilestone(editor, EDITOR, MILESTONE));
+    await assertSucceeds(
+      writeMilestone(
+        owner,
+        OWNER,
+        { date: '2026-12-18', title: 'Code freeze', colorId: 'red', body: 'Fermi', remind: true },
+        'm2',
+      ),
+    );
+    await assertSucceeds(writeMilestone(editor, EDITOR, { date: '2026-12-19' }, 'm2', true));
+    await assertSucceeds(getDocs(collection(editor, `${PLAN}/milestones`)));
+    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/milestones/m2`)));
+  });
+
+  it('refuses a note without its history entry, or that is not one', async () => {
+    await assertFails(
+      setDoc(doc(editor, `${PLAN}/milestones/m3`), { ...MILESTONE, ...audit(EDITOR, 'h9') }),
+    );
+    await assertFails(writeMilestone(editor, EDITOR, { ...MILESTONE, title: '' }));
+    await assertFails(writeMilestone(editor, EDITOR, { ...MILESTONE, date: '20/11/2026' }));
+    await assertFails(writeMilestone(editor, EDITOR, { ...MILESTONE, colorId: 'rainbow' }));
+    await assertFails(writeMilestone(editor, EDITOR, { ...MILESTONE, remind: false }));
+    await assertFails(writeMilestone(editor, EDITOR, { ...MILESTONE, status: 'done' }));
+  });
+
+  it('keeps strangers and anonymous visitors out', async () => {
+    await assertSucceeds(writeMilestone(editor, EDITOR, MILESTONE));
+    await assertFails(writeMilestone(stranger, STRANGER, MILESTONE, 'm2'));
+    await assertFails(getDocs(collection(stranger, `${PLAN}/milestones`)));
+    await assertFails(getDoc(doc(nobody, `${PLAN}/milestones/m1`)));
+    await assertFails(deleteDoc(doc(stranger, `${PLAN}/milestones/m1`)));
   });
 });

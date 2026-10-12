@@ -4,10 +4,20 @@ import { CUSTOM_THEME_IDS, SYSTEM_THEMES, getTheme, isDarkTheme } from '../../th
 import type { CustomThemeId, Theme, ThemePreference } from '../../themes';
 import { TextSizeControls } from '../calendar/DisplayControls';
 import type { TextScale } from '../../shared/ui/textScale';
+import { DATE_FORMATS, formatDate, todayIso } from '../../utils/dateUtils';
+import type { DateFormat } from '../../utils/dateUtils';
+import { PAGE_LAYOUTS } from '../../app/layout';
+import type { PageLayout } from '../../app/layout';
 
 interface AppearanceSectionProps {
   theme: ThemePreference;
   onChangeTheme: (theme: ThemePreference) => void;
+  /** How the dates are written in full, in this browser. */
+  dateFormat: DateFormat;
+  onChangeDateFormat: (format: DateFormat) => void;
+  /** Tabs at the bottom, or the buttons of the header, in this browser. */
+  layout: PageLayout;
+  onChangeLayout: (layout: PageLayout) => void;
   /** The size of the text of notes and calendars: on phones the header has no room for it. */
   textScale: TextScale;
   onTextScaleChange: (scale: TextScale) => void;
@@ -54,9 +64,14 @@ function isCustom(theme: ThemePreference): theme is CustomThemeId {
 export function AppearanceSection({
   theme,
   onChangeTheme,
+  dateFormat,
+  onChangeDateFormat,
+  layout,
+  onChangeLayout,
   textScale,
   onTextScaleChange,
 }: AppearanceSectionProps) {
+  const today = todayIso();
   const systemDescriptionId = useId();
   // Open from the start when a custom theme is in use, so that its choice is in view.
   const [customOpen, setCustomOpen] = useState(() => isCustom(theme));
@@ -149,6 +164,54 @@ export function AppearanceSection({
               </div>
             )}
           </details>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend className="mb-2 text-xs text-fg-muted">
+          Layout della pagina: dove stanno le aree Notes, Next Releases e Roadmap, in questo
+          browser.
+        </legend>
+        <div className="grid gap-1.5">
+          {PAGE_LAYOUTS.map((option) => (
+            <label key={option.id} className={OPTION}>
+              <input
+                type="radio"
+                name="layout"
+                value={option.id}
+                checked={layout === option.id}
+                onChange={() => onChangeLayout(option.id)}
+              />
+              <span className="min-w-0">
+                <span className="block font-semibold">{option.label}</span>
+                <span className="block text-xs text-fg-muted">{option.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend className="mb-2 text-xs text-fg-muted">
+          Formato delle date scritte per esteso, in questo browser. I mesi abbreviati e i campi data
+          del browser non cambiano.
+        </legend>
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {DATE_FORMATS.map((option) => (
+            <label key={option.id} className={OPTION}>
+              <input
+                type="radio"
+                name="date-format"
+                value={option.id}
+                checked={dateFormat === option.id}
+                onChange={() => onChangeDateFormat(option.id)}
+              />
+              <span className="min-w-0">
+                <span className="block font-semibold">{option.label}</span>
+                <span className="block text-xs text-fg-muted tabular-nums">
+                  oggi: {formatDate(today, option.id)}
+                </span>
+              </span>
+            </label>
+          ))}
         </div>
       </fieldset>
       <div className="flex flex-wrap items-center justify-between gap-2 sm:hidden">

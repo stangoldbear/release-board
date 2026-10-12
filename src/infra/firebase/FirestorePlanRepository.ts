@@ -30,6 +30,8 @@ import { endPosition, memoMoves } from '../../domain/memos';
 import type { MemoChanges, MemoContent } from '../../domain/memos';
 import type { ProjectNoteChanges, ProjectNoteContent } from '../../domain/projectNotes';
 import type { ProjectChanges, ProjectContent } from '../../domain/projects';
+import { applyRoadmapSettings } from '../../domain/roadmapConfig';
+import type { RoadmapSettingsChanges } from '../../domain/roadmapConfig';
 import type { MetricValueChange, TaskChanges } from '../../domain/plan';
 import type {
   Assignment,
@@ -37,6 +39,7 @@ import type {
   Lane,
   Memo,
   MemoAuthor,
+  Milestone,
   PlanSnapshot,
   Project,
   ProjectField,
@@ -46,9 +49,10 @@ import type {
   TaskItem,
   Team,
 } from '../../domain/types';
-import { formatDateToIT } from '../../utils/dateUtils';
+import { formatDate } from '../../utils/dateUtils';
 import {
   METRIC_ID,
+  ROADMAP_SETTINGS_ID,
   assignmentContent,
   buildPlan,
   chunk,
@@ -58,26 +62,32 @@ import {
   importSummary,
   memoContent,
   metricContent,
+  milestoneContent,
   projectContent,
   projectFieldContent,
   projectNoteContent,
-  valueContent,
   readAssignment,
   readLane,
   readMemo,
+  readMilestone,
   readNote,
   readPrivateMemo,
   readProject,
   readProjectField,
   readProjectNote,
+  readRoadmapSettings,
   readStakeholder,
   readTask,
   readTeam,
   readValue,
+  roadmapSettingsContent,
   stakeholderContent,
   taskContent,
   teamContent,
+  valueContent,
 } from './planDocs';
+import type { RoadmapSettings } from './planDocs';
+import type { MilestoneChanges, MilestoneContent } from '../../domain/milestones';
 
 /** The signed-in member, as recorded in every change. */
 export interface Actor {
@@ -105,7 +115,15 @@ const OPTIONAL_TASK_FIELDS = new Set(['assignee', 'description', 'deliverables']
 const PART_PATHS: Record<PlanPart, readonly string[]> = {
   memos: ['memos/'],
   projects: ['projects/'],
-  roadmap: ['projectNotes/', 'assignments/', 'projectFields/', 'teams/', 'stakeholders/'],
+  roadmap: [
+    'projectNotes/',
+    'assignments/',
+    'milestones/',
+    'projectFields/',
+    'teams/',
+    'stakeholders/',
+    'settings/',
+  ],
 };
 
 /** A write of an import: a document to set, or to delete when its data is null. */
@@ -125,9 +143,11 @@ type Parts = {
   projects?: Project[];
   projectNotes?: ProjectNote[];
   assignments?: Assignment[];
+  milestones?: Milestone[];
   fields?: ProjectField[];
   teams?: Team[];
   stakeholders?: Stakeholder[];
+  settings?: RoadmapSettings;
 };
 
 function mapDocs<T>(
@@ -230,6 +250,11 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       roadmap(() => (this.parts.assignments = [])),
     );
     this.listen(
+      'milestones',
+      (snapshot) => (this.parts.milestones = mapDocs(snapshot, readMilestone)),
+      roadmap(() => (this.parts.milestones = [])),
+    );
+    this.listen(
       'projectFields',
       (snapshot) => (this.parts.fields = mapDocs(snapshot, readProjectField)),
       roadmap(() => (this.parts.fields = [])),
@@ -243,6 +268,14 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       'stakeholders',
       (snapshot) => (this.parts.stakeholders = mapDocs(snapshot, readStakeholder)),
       roadmap(() => (this.parts.stakeholders = [])),
+    );
+    this.listen(
+      'settings',
+      (snapshot) => {
+        const document = snapshot.docs.find((item) => item.id === ROADMAP_SETTINGS_ID);
+        this.parts.settings = document ? readRoadmapSettings(document.data()) : {};
+      },
+      roadmap(() => (this.parts.settings = {})),
     );
     if (typeof window !== 'undefined') {
       const refresh = () => this.updateSync();
@@ -394,7 +427,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const first = sorted[0];
     const last = sorted.at(-1);
     if (!first || !last) return;
-    const what = `${sorted.length} ${sorted.length === 1 ? 'giorno' : 'giorni'} di fatturato previsto, dal ${formatDateToIT(first.date)} al ${formatDateToIT(last.date)}`;
+    const what = `${sorted.length} ${sorted.length === 1 ? 'giorno' : 'giorni'} di fatturato previsto, dal ${formatDate(first.date)} al ${formatDate(last.date)}`;
     const groups = chunk(sorted, CHUNK_SIZE - 1);
     groups.forEach((group, index) => {
       const batch = writeBatch(this.db);
@@ -574,8 +607,33 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
           batch.delete(this.ref(`assignments/${assignment.id}`));
         }
       }
+      for (const milestone of this.plan?.milestones ?? []) {
+        if (milestone.projectId === projectId) {
+          batch.delete(this.ref(`milestones/${milestone.id}`));
+        }
+      }
     }
     this.commit(batch);
+  }
+
+  createMilestone(content: MilestoneContent): string {
+    const id = this.createId();
+    if (this.refusedParts.has('roadmap')) return id;
+    this.createDocument('milestones', 'milestone', id, milestoneContent(content));
+    return id;
+  }
+
+  updateMilestone(milestoneId: string, changes: MilestoneChanges): void {
+    const current = this.plan?.milestones.find((item) => item.id === milestoneId);
+    if (!current || this.refusedParts.has('roadmap')) return;
+    this.updateEntity('milestones', 'milestone', current, changes, { title: current.title });
+  }
+
+  deleteMilestone(milestoneId: string): void {
+    const before = this.plan?.milestones.find((item) => item.id === milestoneId);
+    if (!before || this.refusedParts.has('roadmap')) return;
+    const { id, ...content } = before;
+    this.deleteDocument('milestones', 'milestone', id, milestoneContent(content));
   }
 
   createProjectNote(content: ProjectNoteContent): string {
@@ -698,6 +756,20 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       }
     }
     this.commit(batch);
+  }
+
+  updateRoadmapSettings(changes: RoadmapSettingsChanges): void {
+    if (!this.plan || this.refusedParts.has('roadmap')) return;
+    const before = roadmapSettingsContent(this.plan.roadmap);
+    const after = roadmapSettingsContent(applyRoadmapSettings(this.plan.roadmap, changes));
+    if (JSON.stringify(before) === JSON.stringify(after)) return;
+    this.saveDocument(
+      'settings',
+      'roadmapSettings',
+      ROADMAP_SETTINGS_ID,
+      after,
+      Object.keys(before).length > 0 ? before : undefined,
+    );
   }
 
   replaceRoadmapConfig(config: RoadmapConfig): void {
@@ -984,10 +1056,12 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
 
   private emitIfComplete(): void {
     const { lanes, tasks, metricIds, values, notes, memos, privateMemos, projects } = this.parts;
-    const { projectNotes, assignments, fields, teams, stakeholders } = this.parts;
+    const { projectNotes, assignments, milestones, fields, teams, stakeholders, settings } =
+      this.parts;
     if (!lanes || !tasks || !metricIds || !values || !notes || !memos || !privateMemos || !projects)
       return;
-    if (!projectNotes || !assignments || !fields || !teams || !stakeholders) return;
+    if (!projectNotes || !assignments || !milestones || !fields || !teams || !stakeholders) return;
+    if (!settings) return;
     // Should a shared note ever have the id of a private one, the private note wins: what the
     // author writes there never reaches the shared one.
     const privateIds = new Set(privateMemos.map((memo) => memo.id));
@@ -1001,9 +1075,11 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       projects,
       projectNotes,
       assignments,
+      milestones,
       fields,
       teams,
       stakeholders,
+      settings,
     });
     this.markReady();
     for (const listener of this.planListeners) listener(this.plan);

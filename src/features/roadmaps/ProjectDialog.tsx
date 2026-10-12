@@ -1,49 +1,75 @@
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { Milestone, Trash, UserRound } from 'lucide-react';
 import { TASK_COLORS } from '../../domain/colors';
 import type { TaskColorId } from '../../domain/colors';
+import { formatLocaleNumber } from '../../domain/numberFormat';
+import { projectSpan } from '../../domain/projectSpan';
 import {
-  DEFAULT_PROJECT_COLOR_ID,
+  PROJECT_ARRANGEMENTS,
+  PROJECT_ARRANGEMENT_INFO,
   PROJECT_DESCRIPTION_MAX,
   PROJECT_OWNER_MAX,
   PROJECT_STATUSES,
   PROJECT_STATUS_LABELS,
   PROJECT_TITLE_MAX,
+  arrangementOf,
 } from '../../domain/projects';
 import type { ProjectContent } from '../../domain/projects';
-import { sortByPosition } from '../../domain/roadmapConfig';
+import {
+  DEFAULT_PROJECT_COLORS,
+  projectColorField,
+  projectColorOf,
+  sortByPosition,
+} from '../../domain/roadmapConfig';
+import { REMIND_DAYS_OPTIONS } from '../../domain/projectReminders';
+import { planTeam } from '../../domain/teamPlan';
+import type { TeamPlan } from '../../domain/teamPlan';
 import type {
   Assignment,
   MemoAuthor,
   Project,
+  ProjectArrangement,
   ProjectNote,
   ProjectStatus,
   RoadmapConfig,
-  Stakeholder,
 } from '../../domain/types';
+import { oneOf, usePreference } from '../../infra/preferences';
+import { useFormatDate } from '../../shared/dateFormat';
 import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { Dialog } from '../../shared/ui/Dialog';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
+import { SEGMENT, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from '../../shared/ui/segmented';
 import { taskColorStyle } from '../../themes';
 import { isIsoDate } from '../../utils/dateUtils';
 import { draftsFrom, valuesFrom } from './fieldDrafts';
 import type { FieldDrafts } from './fieldDrafts';
 import { ProjectFieldsEditor } from './ProjectFieldsEditor';
 import { ProjectNotesPanel } from './ProjectNotesPanel';
-import { ProjectTeamPanel } from './ProjectTeamPanel';
 import { ProjectStatusMark } from './projectUi';
 import type { NoteActions } from './roadmapActions';
 import { projectPeriod } from './roadmapLayout';
+import { initialRows, parseDays, toTeamRows } from './teamEffort';
+import type { EffortRow } from './teamEffort';
+import { TeamEffortTable } from './TeamEffortTable';
 
-/** The three parts of the window: the project itself, its notes, who works on it. */
-export type ProjectTab = 'project' | 'notes' | 'team';
+/** The two parts of the window: the project itself, and its notes. */
+export type ProjectTab = 'project' | 'notes';
+
+/** The standard view has the few fields that matter at once; the advanced one everything. */
+type DialogView = 'standard' | 'advanced';
+const VIEWS: readonly { id: DialogView; label: string }[] = [
+  { id: 'standard', label: 'Standard' },
+  { id: 'advanced', label: 'Avanzata' },
+];
 
 interface ProjectDialogProps {
-  /** The project to edit; null for a new one, which starts from `period`. */
+  /** The project to edit; null for a new one, which starts from `defaultStart`. */
   project: Project | null;
-  period: { startDate: string; endDate: string };
+  defaultStart: string;
+  /** The color of a new project when the colors are free: the one after the last project's. */
+  defaultColorId: TaskColorId;
   /** The project is no longer in the plan: nothing can be saved. */
   gone: boolean;
   config: RoadmapConfig;
@@ -56,30 +82,35 @@ interface ProjectDialogProps {
   nameOf: (author: MemoAuthor) => string;
   today: string;
   initialTab?: ProjectTab;
-  onSave: (content: ProjectContent) => void;
+  /** Saves the project, new or edited, and returns its id. */
+  onSubmit: (content: ProjectContent) => string;
   onDelete: () => void;
   onClose: () => void;
   noteActions: NoteActions;
-  /** Opens the window of an assignment, or of a new one when null. */
-  onOpenAssignment: (assignment: Assignment | null) => void;
-  onDeleteAssignment: (assignment: Assignment) => void;
-  onOpenStakeholder: (stakeholder: Stakeholder) => void;
+  /** Brings the work of the team to the rows of the table, once the project is saved. */
+  onSaveTeam: (projectId: string, plan: TeamPlan) => void;
+  /** Every project in the order of the members, for the choice of the position. */
+  order: readonly Pick<Project, 'id' | 'title'>[];
+  onReorder: (projectId: string, beforeId: string | null) => void;
+  /** Opens the window of an assignment: its start and its note. */
+  onOpenAssignment: (assignment: Assignment) => void;
 }
 
 const TABS: readonly { id: ProjectTab; label: string }[] = [
   { id: 'project', label: 'Progetto' },
   { id: 'notes', label: 'Note' },
-  { id: 'team', label: 'Team' },
 ];
 
 /**
- * A project of the roadmap, in three tabs: the project (title, period, state, color, owner,
- * description and the custom fields, saved with «Salva»), its notes and the people who work on
- * it (both saved as they change). A new project has the last two tabs once it is created.
+ * A project of the roadmap: the project itself, in a standard view with the title, the start, the
+ * days of the team, the arrangement, the main fields and the deadline, or in an advanced view with
+ * everything, both over the same draft; and its notes, saved as they change. Saving the project
+ * also brings the work of the team to the rows of its table.
  */
 export function ProjectDialog({
   project,
-  period,
+  defaultStart,
+  defaultColorId,
   gone,
   config,
   notes,
@@ -89,60 +120,167 @@ export function ProjectDialog({
   nameOf,
   today,
   initialTab = 'project',
-  onSave,
+  onSubmit,
   onDelete,
   onClose,
   noteActions,
+  onSaveTeam,
+  order,
+  onReorder,
   onOpenAssignment,
-  onDeleteAssignment,
-  onOpenStakeholder,
 }: ProjectDialogProps) {
+  const formatDate = useFormatDate();
   const fields = sortByPosition(config.fields);
+  const quickFields = fields.filter((field) => field.quick);
+  const [view, setView] = usePreference<DialogView>(
+    'project-dialog-view',
+    oneOf(VIEWS.map((item) => item.id)),
+    'standard',
+  );
   const [tab, setTab] = useState<ProjectTab>(project ? initialTab : 'project');
   const [title, setTitle] = useState(project?.title ?? '');
-  const [startDate, setStartDate] = useState(project?.startDate ?? period.startDate);
-  const [endDate, setEndDate] = useState(project?.endDate ?? period.endDate);
+  const [startDate, setStartDate] = useState(project?.startDate ?? defaultStart);
+  const [endDate, setEndDate] = useState(project?.endDate ?? '');
+  const [projectDays, setProjectDays] = useState(
+    project?.manDays
+      ? formatLocaleNumber(project.manDays, Number.isInteger(project.manDays) ? 0 : 1)
+      : '',
+  );
+  const [deadline, setDeadline] = useState(project?.deadline ?? '');
+  const [remind, setRemind] = useState<number | null>(project?.remindDaysBefore ?? null);
+  const remindId = useId();
+  const [arrangement, setArrangement] = useState<ProjectArrangement>(
+    project ? arrangementOf(project) : 'standard',
+  );
   const [status, setStatus] = useState<ProjectStatus>(project?.status ?? 'planned');
-  const [colorId, setColorId] = useState<TaskColorId>(project?.colorId ?? DEFAULT_PROJECT_COLOR_ID);
+  const [colorId, setColorId] = useState<TaskColorId>(project?.colorId ?? defaultColorId);
   const [owner, setOwner] = useState(project?.owner ?? '');
   const [description, setDescription] = useState(project?.description ?? '');
   const [drafts, setDrafts] = useState<FieldDrafts>(() =>
     draftsFrom(fields, project?.fields ?? {}),
   );
+  // The field that colors the projects, when the colors come from a field: the window shows the
+  // color it gives rather than asking for one.
+  const colorField =
+    (config.projectColors ?? DEFAULT_PROJECT_COLORS) === 'field' ? projectColorField(config) : null;
+  const shownColorId = colorField
+    ? projectColorOf({ colorId, fields: valuesFrom(fields, drafts).values }, config)
+    : colorId;
+  const [rows, setRows] = useState<EffortRow[]>(() => initialRows(project, assignments, config));
   const [problems, setProblems] = useState<Record<string, string>>({});
+  // The project that comes before this one; "start" for the first place.
+  const others = order.filter((item) => item.id !== project?.id);
+  const currentAt = project ? order.findIndex((item) => item.id === project.id) : -1;
+  const initialAfter = currentAt > 0 ? (order[currentAt - 1]?.id ?? 'start') : 'start';
+  const [after, setAfter] = useState(initialAfter);
+  const positionId = useId();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const formId = useId();
   const titleId = useId();
   const startId = useId();
   const endId = useId();
+  const daysId = useId();
+  const deadlineId = useId();
+  const arrangementId = useId();
   const statusId = useId();
   const ownerId = useId();
   const descriptionId = useId();
   const tabsId = useId();
-  const datesValid = isIsoDate(startDate) && isIsoDate(endDate);
-  const canSave = title.trim() !== '' && datesValid && !gone;
+  const viewsId = useId();
+
+  const startValid = isIsoDate(startDate);
+  const endValid = endDate === '' || (isIsoDate(endDate) && endDate >= startDate);
+  const deadlineValid = deadline === '' || isIsoDate(deadline);
+  const ownDays = parseDays(projectDays);
+  const ownDaysValid = projectDays.trim() === '' || ownDays !== null;
+  const teamRows = useMemo(() => toTeamRows(rows, config), [rows, config]);
+  const teamDays = teamRows.team.length > 0 || teamRows.contingency !== null;
+  const hasLength = teamDays || isIsoDate(endDate) || ownDays !== null;
+
+  // Where the project would fall once saved: the bars placed by the arrangement, the span after them.
+  const preview = useMemo(() => {
+    if (!startValid) return null;
+    const base = {
+      id: project?.id ?? 'new',
+      startDate,
+      arrangement,
+      contingency: project?.contingency,
+    };
+    const plan = planTeam(base, assignments, teamRows.team, teamRows.contingency, config);
+    const kept = assignments
+      .filter((item) => !plan.remove.includes(item.id))
+      .map((item) => {
+        const update = plan.update.find((change) => change.id === item.id);
+        return update ? { ...item, ...update.changes, note: item.note } : item;
+      });
+    const created = plan.create.map((content, index) => ({ ...content, id: `new-${index}` }));
+    const draft: Project = {
+      id: base.id,
+      title: title || 'Progetto',
+      startDate,
+      colorId,
+      status,
+    };
+    if (isIsoDate(endDate)) draft.endDate = endDate;
+    if (ownDays) draft.manDays = ownDays;
+    if (deadline && isIsoDate(deadline)) draft.deadline = deadline;
+    if (plan.contingency) draft.contingency = plan.contingency;
+    return {
+      plan,
+      span: projectSpan(draft, [...kept, ...created] as Assignment[], config.stakeholders),
+    };
+  }, [
+    startValid,
+    startDate,
+    arrangement,
+    project,
+    assignments,
+    teamRows,
+    config,
+    title,
+    colorId,
+    status,
+    endDate,
+    ownDays,
+    deadline,
+  ]);
+
+  const canSave =
+    title.trim() !== '' &&
+    startValid &&
+    endValid &&
+    deadlineValid &&
+    ownDaysValid &&
+    hasLength &&
+    !gone;
 
   const save = (event: FormEvent) => {
     event.preventDefault();
-    if (!canSave) return;
+    if (!canSave || !preview) return;
     const { values, problems: found } = valuesFrom(fields, drafts);
     if (Object.keys(found).length > 0) {
       setProblems(found);
       setTab('project');
+      // The field with the problem may be in the advanced view only.
+      if (!quickFields.some((field) => field.id in found)) setView('advanced');
       return;
     }
-    const content: ProjectContent = {
-      title: title.trim(),
-      // Swapped dates are put in order rather than refused.
-      startDate: startDate <= endDate ? startDate : endDate,
-      endDate: startDate <= endDate ? endDate : startDate,
-      colorId,
-      status,
-    };
+    const content: ProjectContent = { title: title.trim(), startDate, colorId, status };
+    if (isIsoDate(endDate)) content.endDate = endDate;
+    if (ownDays) content.manDays = ownDays;
+    if (deadline && isIsoDate(deadline)) content.deadline = deadline;
+    if (remind !== null) content.remindDaysBefore = remind;
+    if (preview.plan.contingency) content.contingency = preview.plan.contingency;
+    if (arrangement !== 'standard') content.arrangement = arrangement;
     if (owner.trim()) content.owner = owner.trim();
     if (description.trim()) content.description = description.trim();
     if (Object.keys(values).length > 0) content.fields = values;
-    onSave(content);
+    const id = onSubmit(content);
+    onSaveTeam(id, preview.plan);
+    if (project && after !== initialAfter) {
+      const at = after === 'start' ? 0 : others.findIndex((item) => item.id === after) + 1;
+      onReorder(id, others[at]?.id ?? null);
+    }
     onClose();
   };
 
@@ -166,17 +304,61 @@ export function ProjectDialog({
     document.getElementById(`${tabsId}-${next.id}`)?.focus();
   };
 
-  const counts: Record<ProjectTab, number | null> = {
-    project: null,
-    notes: notes.length,
-    team: assignments.length,
-  };
+  const advanced = view === 'advanced';
+  const span = preview?.span ?? null;
+  const summary = span ? (
+    <>
+      <span className="tabular-nums">
+        {formatLocaleNumber(span.totalManDays, Number.isInteger(span.totalManDays) ? 0 : 1)}
+      </span>{' '}
+      {span.totalManDays === 1 ? 'giorno uomo' : 'giorni uomo'}
+      {span.work && (
+        <span className="font-normal text-fg-muted">
+          {' '}
+          · lavoro dal {formatDate(span.work.start)} al {formatDate(span.work.end)}
+        </span>
+      )}
+      {span.late && <span className="font-semibold text-danger"> · oltre la hard deadline</span>}
+    </>
+  ) : (
+    '—'
+  );
+
+  const dateField = (
+    id: string,
+    label: string,
+    value: string,
+    onChange: (value: string) => void,
+    options: { required?: boolean; min?: string; hint?: string } = {},
+  ) => (
+    <div>
+      <label htmlFor={id} className={LABEL_CLASS}>
+        {label}
+        {options.required && ' *'}
+      </label>
+      <input
+        id={id}
+        type="date"
+        required={options.required}
+        max={DATE_MAX}
+        min={options.min}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={FIELD_CLASS}
+      />
+      {options.hint && <p className="mt-1 text-xs text-fg-muted">{options.hint}</p>}
+    </div>
+  );
 
   return (
     <>
       <Dialog
         title={project ? 'Progetto' : 'Nuovo progetto'}
-        description={datesValid ? `Roadmap · ${projectPeriod({ startDate, endDate })}` : 'Roadmap'}
+        description={
+          span
+            ? `Roadmap · ${projectPeriod({ startDate: span.start, endDate: span.end })}`
+            : 'Roadmap'
+        }
         icon={
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-strong text-fg">
             <Milestone className="h-4 w-4" aria-hidden="true" />
@@ -214,44 +396,70 @@ export function ProjectDialog({
           </p>
         )}
 
-        <div
-          role="tablist"
-          aria-label="Parti del progetto"
-          onKeyDown={handleTabKey}
-          className="mb-4 flex items-center gap-1 border-b border-line"
-        >
-          {TABS.map((item) => {
-            const disabled = !project && item.id !== 'project';
-            const selected = tab === item.id;
-            return (
-              <button
-                key={item.id}
-                id={`${tabsId}-${item.id}`}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                aria-controls={`${tabsId}-panel-${item.id}`}
-                aria-disabled={disabled || undefined}
-                tabIndex={selected ? 0 : -1}
-                title={disabled ? 'Crea il progetto per aggiungere note e persone' : undefined}
-                onClick={() => {
-                  if (!disabled) setTab(item.id);
-                }}
-                className={`-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
-                  selected
-                    ? 'border-link text-fg'
-                    : 'border-transparent text-fg-muted hover:text-fg'
-                } ${disabled ? 'cursor-not-allowed opacity-50 hover:text-fg-muted' : ''}`}
-              >
-                {item.label}
-                {counts[item.id] !== null && (
-                  <span className="rounded-full bg-surface-strong px-1.5 text-xs tabular-nums">
-                    {counts[item.id]}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <div className="mb-4 flex flex-wrap items-center gap-3 border-b border-line">
+          <div
+            role="tablist"
+            aria-label="Parti del progetto"
+            onKeyDown={handleTabKey}
+            className="flex items-center gap-1"
+          >
+            {TABS.map((item) => {
+              const disabled = !project && item.id !== 'project';
+              const selected = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  id={`${tabsId}-${item.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  aria-controls={`${tabsId}-panel-${item.id}`}
+                  aria-disabled={disabled || undefined}
+                  tabIndex={selected ? 0 : -1}
+                  title={disabled ? 'Crea il progetto per aggiungere le note' : undefined}
+                  onClick={() => {
+                    if (!disabled) setTab(item.id);
+                  }}
+                  className={`-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
+                    selected
+                      ? 'border-link text-fg'
+                      : 'border-transparent text-fg-muted hover:text-fg'
+                  } ${disabled ? 'cursor-not-allowed opacity-50 hover:text-fg-muted' : ''}`}
+                >
+                  {item.label}
+                  {item.id === 'notes' && (
+                    <span className="rounded-full bg-surface-strong px-1.5 text-xs tabular-nums">
+                      {notes.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {tab === 'project' && (
+            <div
+              role="group"
+              aria-labelledby={viewsId}
+              className="mb-1.5 ml-auto flex items-center gap-2"
+            >
+              <span id={viewsId} className="text-xs font-bold tracking-wide uppercase">
+                Vista
+              </span>
+              <div className={SEGMENTED}>
+                {VIEWS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-pressed={view === item.id}
+                    onClick={() => setView(item.id)}
+                    className={`${SEGMENT} ${view === item.id ? SEGMENT_ON : SEGMENT_OFF}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div
@@ -279,60 +487,133 @@ export function ProjectDialog({
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {dateField(startId, 'Data inizio lavori del team', startDate, setStartDate, {
+                required: true,
+              })}
+              {dateField(deadlineId, 'Hard deadline', deadline, setDeadline, {
+                min: startDate || undefined,
+                hint: 'Oltre questo giorno il progetto non può andare online: la roadmap segna dove il lavoro la supera.',
+              })}
+            </div>
+
+            {advanced && (
               <div>
-                <label htmlFor={startId} className={LABEL_CLASS}>
-                  Inizio *
+                <label htmlFor={remindId} className={LABEL_CLASS}>
+                  Avviso di scadenza
                 </label>
-                <input
-                  id={startId}
-                  type="date"
-                  required
-                  max={DATE_MAX}
-                  value={startDate}
-                  onChange={(event) => {
-                    setStartDate(event.target.value);
-                    if (event.target.value > endDate) setEndDate(event.target.value);
-                  }}
+                <select
+                  id={remindId}
+                  value={remind === null ? '' : String(remind)}
+                  onChange={(event) =>
+                    setRemind(event.target.value === '' ? null : Number(event.target.value))
+                  }
                   className={FIELD_CLASS}
-                />
+                >
+                  {REMIND_DAYS_OPTIONS.map((option) => (
+                    <option key={option.days ?? 'none'} value={option.days ?? ''}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-fg-muted">
+                  Una finestra all&apos;apertura della bacheca, una volta per browser: sulla hard
+                  deadline, o senza di essa sulla fine del lavoro del progetto.
+                </p>
               </div>
-              <div>
-                <label htmlFor={endId} className={LABEL_CLASS}>
-                  Fine (inclusa) *
-                </label>
-                <input
-                  id={endId}
-                  type="date"
-                  required
-                  max={DATE_MAX}
-                  value={endDate}
-                  onChange={(event) => {
-                    setEndDate(event.target.value);
-                    if (event.target.value < startDate) setStartDate(event.target.value);
-                  }}
-                  className={FIELD_CLASS}
-                />
+            )}
+
+            {advanced && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {dateField(endId, 'Fine pianificata', endDate, setEndDate, {
+                  min: startDate || undefined,
+                  hint: 'Facoltativa: i giorni oltre il lavoro del team restano nella barra, sbiaditi.',
+                })}
+                <div>
+                  <label htmlFor={daysId} className={LABEL_CLASS}>
+                    Giorni uomo del progetto
+                  </label>
+                  <input
+                    id={daysId}
+                    type="text"
+                    inputMode="decimal"
+                    value={projectDays}
+                    onChange={(event) => setProjectDays(event.target.value)}
+                    aria-invalid={!ownDaysValid || undefined}
+                    placeholder="es. 20"
+                    className={`${FIELD_CLASS} tabular-nums`}
+                  />
+                  <p className="mt-1 text-xs text-fg-muted">
+                    {teamDays
+                      ? 'Contano i giorni del team: questi restano da parte.'
+                      : 'Senza lo spaccato del team: la barra dura questi giorni lavorativi.'}
+                  </p>
+                </div>
               </div>
+            )}
+
+            <div>
+              <span className={LABEL_CLASS}>Giorni uomo del team</span>
+              <TeamEffortTable
+                rows={rows}
+                onRowsChange={setRows}
+                config={config}
+                summary={summary}
+                onOpenAssignment={(assignmentId) => {
+                  const assignment = assignments.find((item) => item.id === assignmentId);
+                  if (assignment) onOpenAssignment(assignment);
+                }}
+              />
+              {!hasLength && (
+                <p className="mt-1.5 text-xs text-warning">
+                  Serve una durata: i giorni del team qui sopra, oppure nella vista avanzata una
+                  fine pianificata o i giorni uomo del progetto.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label htmlFor={statusId} className={LABEL_CLASS}>
-                  Stato
+                <label htmlFor={arrangementId} className={LABEL_CLASS}>
+                  Disposizione nel Gantt
                 </label>
                 <select
-                  id={statusId}
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value as ProjectStatus)}
+                  id={arrangementId}
+                  value={arrangement}
+                  onChange={(event) => setArrangement(event.target.value as ProjectArrangement)}
                   className={FIELD_CLASS}
                 >
-                  {PROJECT_STATUSES.map((option) => (
+                  {PROJECT_ARRANGEMENTS.map((option) => (
                     <option key={option} value={option}>
-                      {PROJECT_STATUS_LABELS[option]}
+                      {PROJECT_ARRANGEMENT_INFO[option].label}
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-xs text-fg-muted">
+                  {PROJECT_ARRANGEMENT_INFO[arrangement].description}
+                </p>
               </div>
+              {advanced && (
+                <div>
+                  <label htmlFor={statusId} className={LABEL_CLASS}>
+                    Stato
+                  </label>
+                  <select
+                    id={statusId}
+                    value={status}
+                    onChange={(event) => setStatus(event.target.value as ProjectStatus)}
+                    className={FIELD_CLASS}
+                  >
+                    {PROJECT_STATUSES.map((option) => (
+                      <option key={option} value={option}>
+                        {PROJECT_STATUS_LABELS[option]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {advanced && (
               <div>
                 <label htmlFor={ownerId} className={`${LABEL_CLASS} flex items-center gap-1.5`}>
                   <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
@@ -348,59 +629,105 @@ export function ProjectDialog({
                   className={FIELD_CLASS}
                 />
               </div>
-            </div>
+            )}
 
-            <fieldset>
-              <legend className={LABEL_CLASS}>Colore</legend>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {TASK_COLORS.map((color) => (
-                  <button
-                    key={color.id}
-                    type="button"
-                    onClick={() => setColorId(color.id)}
-                    aria-pressed={colorId === color.id}
-                    style={taskColorStyle(color.id)}
-                    className={`flex items-center gap-2 rounded-lg border-2 p-2 text-left text-xs font-medium transition-shadow ${
-                      colorId === color.id ? 'ring-2 ring-fg ring-offset-1 ring-offset-surface' : ''
-                    }`}
-                  >
-                    <span className="h-3 w-3 shrink-0 rounded-full border-2 border-current" />
-                    <span className="truncate">{color.name}</span>
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+            {colorField ? (
+              <p className="text-xs text-fg-muted">
+                Il colore della barra viene dal campo «{colorField.label}»
+                {advanced ? '' : ', qui sotto o nella vista avanzata'}: lo cambia Impostazioni →
+                Roadmap → «Colori dei progetti».
+              </p>
+            ) : (
+              <fieldset>
+                <legend className={LABEL_CLASS}>Colore</legend>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {TASK_COLORS.map((color) => (
+                    <button
+                      key={color.id}
+                      type="button"
+                      onClick={() => setColorId(color.id)}
+                      aria-pressed={colorId === color.id}
+                      style={taskColorStyle(color.id)}
+                      className={`flex items-center gap-2 rounded-lg border-2 p-2 text-left text-xs font-medium transition-shadow ${
+                        colorId === color.id
+                          ? 'ring-2 ring-fg ring-offset-1 ring-offset-surface'
+                          : ''
+                      }`}
+                    >
+                      <span className="h-3 w-3 shrink-0 rounded-full border-2 border-current" />
+                      <span className="truncate">{color.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            )}
 
             <div className="rounded-lg border border-line bg-surface-muted p-3">
               <span className="mb-1.5 block text-xs font-semibold tracking-wide text-fg-muted uppercase">
                 Anteprima
               </span>
               <div
-                style={taskColorStyle(colorId)}
+                style={taskColorStyle(shownColorId)}
                 className="flex items-center gap-1.5 rounded-xs border-2 px-2 py-1.5 text-xs font-semibold shadow-xs"
               >
                 <ProjectStatusMark status={status} iconOnly />
                 <span className="truncate">{title.trim() || 'Titolo del progetto'}</span>
+                {span && span.totalManDays > 0 && (
+                  <span className="ml-auto shrink-0 font-normal tabular-nums">
+                    {formatLocaleNumber(
+                      span.totalManDays,
+                      Number.isInteger(span.totalManDays) ? 0 : 1,
+                    )}{' '}
+                    gg
+                  </span>
+                )}
               </div>
             </div>
 
-            <div>
-              <label htmlFor={descriptionId} className={LABEL_CLASS}>
-                Descrizione
-              </label>
-              <textarea
-                id={descriptionId}
-                rows={4}
-                maxLength={PROJECT_DESCRIPTION_MAX}
-                placeholder="Obiettivi, tappe, link…"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                className={FIELD_CLASS}
-              />
-            </div>
+            {advanced && project && others.length > 0 && (
+              <div>
+                <label htmlFor={positionId} className={LABEL_CLASS}>
+                  Posizione nella roadmap
+                </label>
+                <select
+                  id={positionId}
+                  value={after}
+                  onChange={(event) => setAfter(event.target.value)}
+                  className={FIELD_CLASS}
+                >
+                  <option value="start">All&apos;inizio</option>
+                  {others.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      Dopo «{item.title}»
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-fg-muted">
+                  L&apos;ordine «Personalizzato» delle righe, uguale per tutti; dalla roadmap si
+                  trascina la riga, o Alt + frecce su e giù sulla barra.
+                </p>
+              </div>
+            )}
+
+            {advanced && (
+              <div>
+                <label htmlFor={descriptionId} className={LABEL_CLASS}>
+                  Descrizione
+                </label>
+                <textarea
+                  id={descriptionId}
+                  rows={4}
+                  maxLength={PROJECT_DESCRIPTION_MAX}
+                  placeholder="Obiettivi, tappe, link…"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  className={FIELD_CLASS}
+                />
+              </div>
+            )}
 
             <ProjectFieldsEditor
-              fields={fields}
+              fields={advanced ? fields : quickFields}
               drafts={drafts}
               problems={problems}
               onChange={(fieldId, draft) => {
@@ -412,48 +739,34 @@ export function ProjectDialog({
                 });
               }}
             />
+            {!advanced && fields.length > quickFields.length && (
+              <p className="text-xs text-fg-muted">
+                Stato, responsabile, descrizione, fine pianificata e gli altri campi sono nella
+                vista avanzata.
+              </p>
+            )}
           </form>
         </div>
 
         {project && (
-          <>
-            <div
-              id={`${tabsId}-panel-notes`}
-              role="tabpanel"
-              aria-labelledby={`${tabsId}-notes`}
-              hidden={tab !== 'notes'}
-            >
-              {tab === 'notes' && (
-                <ProjectNotesPanel
-                  projectId={project.id}
-                  notes={notes}
-                  unavailable={detailsUnavailable}
-                  me={me}
-                  nameOf={nameOf}
-                  today={today}
-                  actions={noteActions}
-                />
-              )}
-            </div>
-            <div
-              id={`${tabsId}-panel-team`}
-              role="tabpanel"
-              aria-labelledby={`${tabsId}-team`}
-              hidden={tab !== 'team'}
-            >
-              {tab === 'team' && (
-                <ProjectTeamPanel
-                  assignments={assignments}
-                  config={config}
-                  unavailable={detailsUnavailable}
-                  onAdd={() => onOpenAssignment(null)}
-                  onEdit={onOpenAssignment}
-                  onDelete={onDeleteAssignment}
-                  onOpenStakeholder={onOpenStakeholder}
-                />
-              )}
-            </div>
-          </>
+          <div
+            id={`${tabsId}-panel-notes`}
+            role="tabpanel"
+            aria-labelledby={`${tabsId}-notes`}
+            hidden={tab !== 'notes'}
+          >
+            {tab === 'notes' && (
+              <ProjectNotesPanel
+                projectId={project.id}
+                notes={notes}
+                unavailable={detailsUnavailable}
+                me={me}
+                nameOf={nameOf}
+                today={today}
+                actions={noteActions}
+              />
+            )}
+          </div>
         )}
       </Dialog>
 

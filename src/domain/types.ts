@@ -98,6 +98,8 @@ export interface ProjectField {
    * groups: each project then belongs to one group. Kept only when true.
    */
   group?: true;
+  /** In the standard view of the window of a project, among the few fields it shows. Kept only when true. */
+  quick?: true;
   /** Choice fields: the values to choose from, in order. */
   options?: FieldOption[];
   /** Order among the fields. */
@@ -119,14 +121,44 @@ export type FieldValue = string | number | Price;
 /** The values of the custom fields of a project, by field id: a list even when the value is one. */
 export type ProjectFieldValues = Record<string, FieldValue[]>;
 
-/** A project of the roadmap, past, current or future: one row, with a bar from start to end. */
+/**
+ * How the bars of the work of a project are laid out: the analysis from the start, then the
+ * developments in parallel, then the tests, then the contingency; all from the start; one after
+ * another; or where they were moved by hand.
+ */
+export type ProjectArrangement = 'standard' | 'parallel' | 'sequence' | 'manual';
+
+/** The reserve at the end of a project: a bar of the project itself, with no person. */
+export interface ProjectContingency {
+  /** YYYY-MM-DD: the first day; the reserve starts on the first working day from there. */
+  startDate: string;
+  /** Working days of reserve. */
+  manDays: number;
+}
+
+/**
+ * A project of the roadmap, past, current or future: one row, with a bar from its start to the
+ * furthest of its planned end, its own days of effort and the work of its team.
+ */
 export interface Project {
   id: string;
   title: string;
-  /** YYYY-MM-DD */
+  /** YYYY-MM-DD: the day the work of the team starts. */
   startDate: string;
-  /** YYYY-MM-DD, inclusive */
-  endDate: string;
+  /**
+   * YYYY-MM-DD, inclusive: the planned end, when one was given. The work of the team may end
+   * before it, and the bar shows the days without work faded.
+   */
+  endDate?: string;
+  /** The effort of the whole project in working days, when its team is not broken down. */
+  manDays?: number;
+  /** YYYY-MM-DD: the project must be online by this day; the roadmap warns where the work goes past it. */
+  deadline?: string;
+  /** An alert so many days before the hard deadline, or the end of the work: 0 is the day itself. */
+  remindDaysBefore?: number;
+  contingency?: ProjectContingency;
+  /** Absent: standard. */
+  arrangement?: ProjectArrangement;
   colorId: TaskColorId;
   status: ProjectStatus;
   /** Who leads it. */
@@ -134,6 +166,11 @@ export interface Project {
   description?: string;
   /** The values of the custom fields; absent when none is set. */
   fields?: ProjectFieldValues;
+  /**
+   * Where the project stands in the order the members gave, a fraction so that a move changes one
+   * project; absent for a project never moved, which comes after the others.
+   */
+  position?: number;
 }
 
 /** Whether a note of a project can be ticked off, and whether it has been. Absent: no state. */
@@ -161,13 +198,25 @@ export interface ProjectNote {
   tags?: string[];
 }
 
+/**
+ * Where the work of a team falls in the standard arrangement of a project: the analysis first,
+ * the developments in parallel after it, the tests after the last development.
+ */
+export type TeamPhase = 'analysis' | 'development' | 'test';
+
 /** A team of the people who work on the projects, with its color and its short tag. */
 export interface Team {
   id: string;
   name: string;
-  /** Short name on bars and chips, such as "iOSDev". */
+  /** Short name on bars and chips, such as "iOSDev"; the formulas name the teams by it. */
   tag: string;
   colorId: TaskColorId;
+  phase: TeamPhase;
+  /**
+   * How many days the team takes on a project, from the days of the other teams, as
+   * "0.12*(ServerSide+iOSDev+AndDev)"; the window of a new project fills them in from it.
+   */
+  formula?: string;
   /** Order among the teams. */
   position: number;
 }
@@ -191,6 +240,8 @@ export interface Stakeholder {
   teamId: string;
   info?: string;
   absences: Absence[];
+  /** In the table of the days of every new project from the start. Kept only when true. */
+  default?: true;
   /** Order within the team. */
   position: number;
 }
@@ -207,11 +258,46 @@ export interface Assignment {
   note?: string;
 }
 
-/** How the projects are described: the custom fields, the teams and the people who work on them. */
+/**
+ * How the projects are described: the custom fields, the teams and the people who work on them,
+ * and the shared settings of the roadmap.
+ */
+/** Where the color of a project comes from: a field with colored values, or the project itself. */
+export type ProjectColorsMode = 'field' | 'free';
+
 export interface RoadmapConfig {
   fields: ProjectField[];
   teams: Team[];
   stakeholders: Stakeholder[];
+  /**
+   * The colors of the projects on the roadmap: from the values of a field with colors, the one in
+   * `colorFieldId` or the first that has them, or chosen project by project. Absent means from
+   * the field.
+   */
+  projectColors?: ProjectColorsMode;
+  colorFieldId?: string;
+  /**
+   * The days of contingency of a project, from the days of the teams, as a formula on their tags:
+   * the contingency is a bar of the project, not of a person.
+   */
+  contingencyFormula?: string;
+}
+
+/**
+ * A note on a day of the roadmap: a diamond on the row of its project, or on the row of the notes
+ * at the top when it belongs to no project.
+ */
+export interface Milestone {
+  id: string;
+  /** YYYY-MM-DD. */
+  date: string;
+  title: string;
+  body?: string;
+  colorId: TaskColorId;
+  /** The project it belongs to; absent for a note of no project. */
+  projectId?: string;
+  /** An alert the day of the note, once per browser. */
+  remind?: true;
 }
 
 /** Everything that makes up a plan: what is saved, exported and restored. */
@@ -228,6 +314,7 @@ export interface PlanSnapshot {
   projectNotes: ProjectNote[];
   /** Who works on which project, by start. */
   assignments: Assignment[];
+  milestones: Milestone[];
   roadmap: RoadmapConfig;
 }
 

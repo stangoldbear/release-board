@@ -190,7 +190,7 @@ describe('searchResults', () => {
       'project:p',
     ]);
     expect(results[1]).toMatchObject({ date: '2026-10-02', label: 'attività «Collaudo 2»' });
-    expect(results[2]?.label).toBe('nota del giorno 05/10/2026');
+    expect(results[2]?.label).toBe('nota del giorno 05-10-26');
     expect(results[3]?.endDate).toBe('2026-10-10');
   });
 });

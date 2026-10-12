@@ -14,8 +14,9 @@ import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { Dialog } from '../../shared/ui/Dialog';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
-import { formatDateToIT, isIsoDate } from '../../utils/dateUtils';
-import { ABSENCE_STRIPES } from './AssignmentBar';
+import { isIsoDate } from '../../utils/dateUtils';
+import { ABSENCE_STRIPES } from './WorkBar';
+import { useFormatDate } from '../..//shared/dateFormat';
 
 interface StakeholderDialogProps {
   /** The person to edit; null for a new one. */
@@ -41,11 +42,13 @@ export function StakeholderDialog({
   onDelete,
   onClose,
 }: StakeholderDialogProps) {
+  const formatDate = useFormatDate();
   const [name, setName] = useState(stakeholder?.name ?? '');
   const [teamId, setTeamId] = useState(
     stakeholder?.teamId ?? defaultTeamId ?? config.teams[0]?.id ?? '',
   );
   const [info, setInfo] = useState(stakeholder?.info ?? '');
+  const [isDefault, setIsDefault] = useState(stakeholder?.default === true);
   const [absences, setAbsences] = useState<Absence[]>(stakeholder?.absences ?? []);
   const [draft, setDraft] = useState({ start: '', end: '', reason: '' });
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -56,6 +59,7 @@ export function StakeholderDialog({
   const fromId = useId();
   const toId = useId();
   const reasonId = useId();
+  const defaultId = useId();
   const valid = name.trim() !== '' && config.teams.some((team) => team.id === teamId);
   const draftValid = isIsoDate(draft.start) && isIsoDate(draft.end) && draft.start <= draft.end;
 
@@ -78,6 +82,7 @@ export function StakeholderDialog({
       position: stakeholder?.position ?? nextPosition(config.stakeholders),
     };
     if (info.trim()) saved.info = info.trim();
+    if (isDefault) saved.default = true;
     onSave(saved);
     onClose();
   };
@@ -165,6 +170,24 @@ export function StakeholderDialog({
             />
           </div>
 
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line p-2 text-sm hover:bg-surface-strong has-checked:border-accent has-checked:bg-accent-soft">
+            <input
+              type="checkbox"
+              checked={isDefault}
+              onChange={(event) => setIsDefault(event.target.checked)}
+              aria-label="Membro di default"
+              aria-describedby={defaultId}
+              className="mt-1"
+            />
+            <span>
+              <span className="block font-semibold">Membro di default</span>
+              <span id={defaultId} className="block text-xs text-fg-muted">
+                Compare nella tabella dei giorni uomo di ogni progetto nuovo, come prima persona del
+                suo team.
+              </span>
+            </span>
+          </label>
+
           <fieldset className="space-y-2 border-t border-line pt-4">
             <legend className={LABEL_CLASS}>Assenze</legend>
             <p className="text-xs text-fg-muted">
@@ -184,7 +207,7 @@ export function StakeholderDialog({
                       style={ABSENCE_STRIPES}
                     />
                     <span className="flex-1">
-                      {formatDateToIT(absence.start)} – {formatDateToIT(absence.end)}
+                      {formatDate(absence.start)} – {formatDate(absence.end)}
                       {absence.reason && <span className="text-fg-muted"> · {absence.reason}</span>}
                     </span>
                     <Button
@@ -192,7 +215,7 @@ export function StakeholderDialog({
                       size="icon"
                       className="p-1"
                       onClick={() => setAbsences(absences.filter((item) => item !== absence))}
-                      aria-label={`Rimuovi l'assenza dal ${formatDateToIT(absence.start)}`}
+                      aria-label={`Rimuovi l'assenza dal ${formatDate(absence.start)}`}
                     >
                       <X className="h-4 w-4" aria-hidden="true" />
                     </Button>

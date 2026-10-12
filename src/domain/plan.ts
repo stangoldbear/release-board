@@ -7,13 +7,17 @@ import { sortProjectNotes } from './projectNotes';
 import type { ProjectNoteChanges } from './projectNotes';
 import { sortProjects } from './projects';
 import type { ProjectChanges } from './projects';
-import { defaultRoadmapConfig, sortByPosition } from './roadmapConfig';
+import { applyRoadmapSettings, defaultRoadmapConfig, sortByPosition } from './roadmapConfig';
+import type { RoadmapSettingsChanges } from './roadmapConfig';
+import { sortMilestones } from './milestones';
+import type { MilestoneChanges } from './milestones';
 import type {
   Assignment,
   BorderStyle,
   DailyMetric,
   Lane,
   Memo,
+  Milestone,
   PlanSnapshot,
   Project,
   ProjectField,
@@ -57,6 +61,7 @@ export function createEmptyPlan(): PlanSnapshot {
     projects: [],
     projectNotes: [],
     assignments: [],
+    milestones: [],
     roadmap: defaultRoadmapConfig(),
   };
 }
@@ -72,6 +77,7 @@ export function planContentSummary(plan: PlanSnapshot): string[] {
   const memos = plan.memos.filter((memo) => !memo.private).length;
   const projectNotes = plan.projectNotes.length;
   const assignments = plan.assignments.length;
+  const milestones = plan.milestones.length;
   return [
     `${plan.lanes.length} ${plan.lanes.length === 1 ? 'corsia' : 'corsie'}`,
     `${plan.tasks.length} attività`,
@@ -81,6 +87,7 @@ export function planContentSummary(plan: PlanSnapshot): string[] {
     `${plan.projects.length} ${plan.projects.length === 1 ? 'progetto' : 'progetti'}`,
     `${projectNotes} ${projectNotes === 1 ? 'nota dei progetti' : 'note dei progetti'}`,
     `${assignments} ${assignments === 1 ? 'assegnazione' : 'assegnazioni'}`,
+    `${milestones} ${milestones === 1 ? 'nota sulla timeline' : 'note sulla timeline'}`,
   ];
 }
 
@@ -93,7 +100,8 @@ export function isPlanEmpty(plan: PlanSnapshot): boolean {
     plan.memos.length === 0 &&
     plan.projects.length === 0 &&
     plan.projectNotes.length === 0 &&
-    plan.assignments.length === 0
+    plan.assignments.length === 0 &&
+    plan.milestones.length === 0
   );
 }
 
@@ -248,14 +256,39 @@ export function updateProject(
   };
 }
 
-/** Removes a project with its notes and assignments. */
+/** Removes a project with its notes, its assignments and its notes on the timeline. */
 export function removeProject(plan: PlanSnapshot, projectId: string): PlanSnapshot {
   return {
     ...plan,
     projects: plan.projects.filter((project) => project.id !== projectId),
     projectNotes: plan.projectNotes.filter((note) => note.projectId !== projectId),
     assignments: plan.assignments.filter((item) => item.projectId !== projectId),
+    milestones: plan.milestones.filter((item) => item.projectId !== projectId),
   };
+}
+
+export function addMilestone(plan: PlanSnapshot, milestone: Milestone): PlanSnapshot {
+  return { ...plan, milestones: sortMilestones([...plan.milestones, milestone]) };
+}
+
+/** Applies the changes to the note on the timeline; one that no longer exists stays deleted. */
+export function updateMilestone(
+  plan: PlanSnapshot,
+  milestoneId: string,
+  changes: MilestoneChanges,
+): PlanSnapshot {
+  return {
+    ...plan,
+    milestones: sortMilestones(
+      plan.milestones.map((item) =>
+        item.id === milestoneId ? applyChanges<Milestone>(item, changes) : item,
+      ),
+    ),
+  };
+}
+
+export function removeMilestone(plan: PlanSnapshot, milestoneId: string): PlanSnapshot {
+  return { ...plan, milestones: plan.milestones.filter((item) => item.id !== milestoneId) };
 }
 
 export function addProjectNote(plan: PlanSnapshot, note: ProjectNote): PlanSnapshot {
@@ -364,4 +397,12 @@ export function removeStakeholder(plan: PlanSnapshot, stakeholderId: string): Pl
 /** Replaces the whole configuration of the roadmap, as when the defaults are loaded. */
 export function replaceRoadmapConfig(plan: PlanSnapshot, roadmap: RoadmapConfig): PlanSnapshot {
   return { ...plan, roadmap };
+}
+
+/** Changes the shared settings of the roadmap, null clearing one. */
+export function updateRoadmapSettings(
+  plan: PlanSnapshot,
+  changes: RoadmapSettingsChanges,
+): PlanSnapshot {
+  return { ...plan, roadmap: applyRoadmapSettings(plan.roadmap, changes) };
 }

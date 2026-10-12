@@ -15,12 +15,13 @@ import type { TextScale } from '../../shared/ui/textScale';
 import { taskColorStyle } from '../../themes';
 import {
   ITALIAN_DAYS_SHORT,
-  formatDateToIT,
+  formatDayMonth,
   isRedDay,
   parseISODate,
   todayIso,
 } from '../../utils/dateUtils';
 import { APPROVAL_TONE, ApprovalIcon, DayDetails, describeDay } from '../metrics/MetricDetails';
+import { useFormatDate, useDateFormat } from '../..//shared/dateFormat';
 
 interface WeekBoardProps {
   week: DateRange;
@@ -67,6 +68,8 @@ export function WeekBoard({
   onAddTaskAt,
   onMoveNote,
 }: WeekBoardProps) {
+  const dateFormat = useDateFormat();
+  const formatDate = useFormatDate();
   const today = todayIso();
   const { card, triggerProps, cardProps } = useHoverCard<DailyMetric>();
   const visibleTasks = tasks.filter((task) => !visibility.hiddenLaneIds.includes(task.laneId));
@@ -117,7 +120,7 @@ export function WeekBoard({
           return (
             <section
               key={date}
-              aria-label={`${ITALIAN_DAYS_SHORT[parseISODate(date).getDay()]} ${formatDateToIT(date)}`}
+              aria-label={`${ITALIAN_DAYS_SHORT[parseISODate(date).getDay()]} ${formatDate(date)}`}
               onDragOver={(event) => handleDragOver(event, date)}
               onDrop={(event) => handleDrop(event, date)}
               className={`flex min-h-72 min-w-0 flex-col rounded-xl border bg-surface md:min-h-[460px] in-data-compact:min-h-40 md:in-data-compact:min-h-80 ${
@@ -134,7 +137,7 @@ export function WeekBoard({
                     {ITALIAN_DAYS_SHORT[parseISODate(date).getDay()]}
                     {isToday && <span className="ml-1 font-normal normal-case">(oggi)</span>}
                   </span>
-                  <span className="font-mono font-bold">{formatDateToIT(date)}</span>
+                  <span className="font-mono font-bold">{formatDate(date)}</span>
                 </div>
                 {red.holidayName && (
                   <p className="truncate text-xs font-bold text-holiday-fg" title={red.holidayName}>
@@ -144,7 +147,7 @@ export function WeekBoard({
                 {metric && (
                   <button
                     type="button"
-                    aria-label={describeDay(metric)}
+                    aria-label={describeDay(metric, dateFormat)}
                     {...triggerProps(metric)}
                     className={`-mx-1.5 flex w-[calc(100%+0.75rem)] cursor-pointer flex-wrap items-center justify-between gap-x-2 rounded-md px-1.5 py-0.5 text-xs hover:brightness-95 ${
                       metric.approval ? APPROVAL_TONE[metric.approval] : ''
@@ -200,8 +203,8 @@ export function WeekBoard({
                     </button>
                     {task.startDate !== task.endDate && (
                       <p className="mt-1 font-mono text-xs in-data-compact:mt-0.5">
-                        {formatDateToIT(task.startDate).slice(0, 5)} →{' '}
-                        {formatDateToIT(task.endDate).slice(0, 5)}
+                        {formatDayMonth(task.startDate, dateFormat)} →{' '}
+                        {formatDayMonth(task.endDate, dateFormat)}
                       </p>
                     )}
                     <div className="mt-2 flex items-center justify-between border-t border-current/15 pt-1.5 text-xs in-data-compact:mt-1 in-data-compact:pt-1">

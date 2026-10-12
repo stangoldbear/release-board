@@ -1,14 +1,21 @@
 import { useState } from 'react';
 import { RotateCcw, SlidersHorizontal, Users } from 'lucide-react';
 import {
+  DEFAULT_PROJECT_COLORS,
+  PROJECT_COLORS_INFO,
+  PROJECT_COLORS_MODES,
+  colorsProjects,
   defaultRoadmapConfig,
   isGroupable,
   isRoadmapConfigEmpty,
+  projectColorField,
 } from '../../domain/roadmapConfig';
 import type { RoadmapConfig } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { RulesNotice } from '../../shared/ui/RulesNotice';
+import { BAR_RENDERINGS } from '../roadmaps/barRendering';
+import type { BarRendering } from '../roadmaps/barRendering';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 import { ProjectFieldsDialog } from './ProjectFieldsDialog';
 import { TeamDialog } from './TeamDialog';
@@ -18,6 +25,9 @@ interface RoadmapSettingsSectionProps {
   /** The published rules do not know the configuration yet: the section says so, and no more. */
   unavailable: boolean;
   actions: RoadmapConfigActions;
+  /** How the work of the team is drawn in the bar of a project, in this browser. */
+  barRendering: BarRendering;
+  onChangeBarRendering: (rendering: BarRendering) => void;
 }
 
 /**
@@ -28,12 +38,17 @@ export function RoadmapSettingsSection({
   config,
   unavailable,
   actions,
+  barRendering,
+  onChangeBarRendering,
 }: RoadmapSettingsSectionProps) {
   const [open, setOpen] = useState<'fields' | 'team' | null>(null);
   const [confirmDefaults, setConfirmDefaults] = useState(false);
   const empty = isRoadmapConfigEmpty(config);
   const mainFields = config.fields.filter((field) => field.main).length;
   const groupFields = config.fields.filter(isGroupable).length;
+  const coloring = config.fields.filter(colorsProjects);
+  const colorField = projectColorField(config);
+  const projectColors = config.projectColors ?? DEFAULT_PROJECT_COLORS;
 
   return (
     <section aria-labelledby="settings-roadmap" className="space-y-3">
@@ -77,6 +92,64 @@ export function RoadmapSettingsSection({
               </Button>
             </div>
           </div>
+          <fieldset className="rounded-lg border border-line p-3">
+            <legend className="px-1 text-sm font-semibold">Colori dei progetti</legend>
+            <p className="mb-2 text-xs text-fg-muted">
+              Da dove viene il colore della barra di un progetto. Vale per tutti i membri.
+            </p>
+            <div className="space-y-2">
+              {PROJECT_COLORS_MODES.map((mode) => {
+                const disabled = mode === 'field' && coloring.length === 0;
+                return (
+                  <label
+                    key={mode}
+                    className={`flex items-start gap-2 text-sm ${
+                      disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                    }`}
+                    title={
+                      disabled
+                        ? 'Serve una lista di valori esclusivi con un colore per valore: «Modifica i campi…»'
+                        : undefined
+                    }
+                  >
+                    <input
+                      type="radio"
+                      name="project-colors"
+                      value={mode}
+                      checked={projectColors === mode}
+                      disabled={disabled}
+                      onChange={() => actions.onSaveSettings({ projectColors: mode })}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="font-medium">{PROJECT_COLORS_INFO[mode].label}</span>
+                      <span className="block text-xs text-fg-muted">
+                        {PROJECT_COLORS_INFO[mode].description}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+              {projectColors === 'field' && coloring.length > 1 && (
+                <label className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-semibold">Campo</span>
+                  <select
+                    value={colorField?.id ?? ''}
+                    onChange={(event) =>
+                      actions.onSaveSettings({ colorFieldId: event.target.value || null })
+                    }
+                    className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-xs"
+                  >
+                    {coloring.map((field) => (
+                      <option key={field.id} value={field.id}>
+                        {field.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+          </fieldset>
           {empty ? (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning bg-warning-soft p-3 text-xs">
               <span>
@@ -104,6 +177,32 @@ export function RoadmapSettingsSection({
           )}
         </>
       )}
+
+      <fieldset className="rounded-lg border border-line p-3">
+        <legend className="px-1 text-sm font-semibold">Resa delle barre</legend>
+        <p className="mb-2 text-xs text-fg-muted">
+          Come la roadmap disegna il lavoro del team nella barra di un progetto. Solo in questo
+          browser.
+        </p>
+        <div className="space-y-2">
+          {BAR_RENDERINGS.map((option) => (
+            <label key={option.id} className="flex cursor-pointer items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="roadmap-bars"
+                value={option.id}
+                checked={barRendering === option.id}
+                onChange={() => onChangeBarRendering(option.id)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium">{option.label}</span>
+                <span className="block text-xs text-fg-muted">{option.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       {open === 'fields' && (
         <ProjectFieldsDialog config={config} actions={actions} onClose={() => setOpen(null)} />

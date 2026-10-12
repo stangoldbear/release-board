@@ -4,8 +4,10 @@ import { splitMemoTitle } from '../../domain/memos';
 import { Highlight } from '../../shared/ui/Highlight';
 import type { Memo } from '../../domain/types';
 import { taskColorStyle } from '../../themes';
-import { formatDateToIT } from '../../utils/dateUtils';
+import { formatDate } from '../../utils/dateUtils';
+import type { DateFormat } from '../../utils/dateUtils';
 import { dayName } from '../calendar/timelineLayout';
+import { useDateFormat } from '../..//shared/dateFormat';
 
 /** The colors of a note: those of a task color, or the plain surface with its border. */
 export function memoSurface(memo: Pick<Memo, 'colorId'>): {
@@ -18,11 +20,11 @@ export function memoSurface(memo: Pick<Memo, 'colorId'>): {
 }
 
 /** When the reminder of a note comes, in words, for its label and for screen readers. */
-export function reminderText(remindOn: string, today: string): string {
+export function reminderText(remindOn: string, today: string, dateFormat: DateFormat): string {
   if (remindOn === today) return 'promemoria oggi';
   return remindOn < today
-    ? `promemoria dal ${formatDateToIT(remindOn)}`
-    : `promemoria il ${formatDateToIT(remindOn)}`;
+    ? `promemoria dal ${formatDate(remindOn, dateFormat)}`
+    : `promemoria il ${formatDate(remindOn, dateFormat)}`;
 }
 
 /**
@@ -30,6 +32,7 @@ export function reminderText(remindOn: string, today: string): string {
  * change, not only the color ("oggi", "dal lun 5 ott" once past).
  */
 export function ReminderBadge({ remindOn, today }: { remindOn: string; today: string }) {
+  const dateFormat = useDateFormat();
   const due = remindOn <= today;
   const Icon = due ? BellRing : Bell;
   return (
@@ -42,7 +45,7 @@ export function ReminderBadge({ remindOn, today }: { remindOn: string; today: st
       <span aria-hidden="true">
         {remindOn === today ? 'oggi' : due ? `dal ${dayName(remindOn)}` : dayName(remindOn)}
       </span>
-      <span className="sr-only">{reminderText(remindOn, today)}</span>
+      <span className="sr-only">{reminderText(remindOn, today, dateFormat)}</span>
     </span>
   );
 }

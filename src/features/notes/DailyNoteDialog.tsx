@@ -3,7 +3,8 @@ import { StickyNote, Trash } from 'lucide-react';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
-import { formatDateToIT, isIsoDate } from '../../utils/dateUtils';
+import { isIsoDate } from '../../utils/dateUtils';
+import { useFormatDate } from '../..//shared/dateFormat';
 
 const SUGGESTED_NOTES = [
   'Kickoff Deploy',
@@ -38,6 +39,7 @@ export function DailyNoteDialog({
   onMove,
   onClose,
 }: DailyNoteDialogProps) {
+  const formatDate = useFormatDate();
   const [draft, setDraft] = useState(note);
   const [day, setDay] = useState(date);
   const textareaId = useId();
@@ -56,7 +58,7 @@ export function DailyNoteDialog({
 
   return (
     <Dialog
-      title={`Nota per il ${formatDateToIT(date)}`}
+      title={`Nota per il ${formatDate(date)}`}
       icon={
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning-soft text-warning">
           <StickyNote className="h-4 w-4" aria-hidden="true" />
@@ -131,7 +133,7 @@ export function DailyNoteDialog({
             {dayInvalid
               ? 'Data non valida: scegli un giorno entro il 9999.'
               : dayTaken
-                ? `Il ${formatDateToIT(day)} ha già una nota: scegli un altro giorno.`
+                ? `Il ${formatDate(day)} ha già una nota: scegli un altro giorno.`
                 : note
                   ? 'Cambia il giorno per spostare la nota, anche fuori dal periodo visibile.'
                   : 'La nota va su questo giorno; puoi sceglierne un altro.'}

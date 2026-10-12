@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { DateFormatProvider } from './app/DateFormatProvider';
 import { Root } from './app/Root';
 import { ThemeProvider } from './app/ThemeProvider';
 import { readFirebaseConfig } from './infra/firebase/config';
@@ -13,9 +14,11 @@ const emulators = import.meta.env.DEV && import.meta.env.VITE_FIREBASE_EMULATORS
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
-      <ToastProvider>
-        <Root firebaseConfig={firebaseConfig} emulators={emulators} />
-      </ToastProvider>
+      <DateFormatProvider>
+        <ToastProvider>
+          <Root firebaseConfig={firebaseConfig} emulators={emulators} />
+        </ToastProvider>
+      </DateFormatProvider>
     </ThemeProvider>
   </StrictMode>,
 );

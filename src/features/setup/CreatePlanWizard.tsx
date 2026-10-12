@@ -8,6 +8,7 @@ import { isValidGitHubLogin } from '../../infra/github/users';
 import { Button } from '../../shared/ui/Button';
 import { FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { Screen } from '../../shared/ui/Screen';
+import { useDateFormat } from '../..//shared/dateFormat';
 
 interface CreatePlanWizardProps {
   /** The GitHub username, when the sign-in told it; otherwise the person types it. */
@@ -27,6 +28,7 @@ function summary(plan: PlanSnapshot): string {
 
 /** First access to a new instance: the person names the plan, picks its content and becomes owner. */
 export function CreatePlanWizard({ login, localPlan, onCreate, onSignOut }: CreatePlanWizardProps) {
+  const dateFormat = useDateFormat();
   const hasLocal = localPlan !== null && !isPlanEmpty(localPlan);
   const [name, setName] = useState('Piano rilasci');
   const [username, setUsername] = useState(login ?? '');
@@ -53,7 +55,7 @@ export function CreatePlanWizard({ login, localPlan, onCreate, onSignOut }: Crea
       setFileErrors(['Il file è troppo grande per essere un backup.']);
       return;
     }
-    const result = parseBackupText(await chosen.text());
+    const result = parseBackupText(await chosen.text(), dateFormat);
     if (result.ok) {
       setFile({ name: chosen.name, plan: result.plan });
       setFileErrors([]);

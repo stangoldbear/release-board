@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffProject, sortProjects } from './projects';
+import { diffProject, parseProjectData, sortProjects } from './projects';
 import type { Project } from './types';
 
 const project: Project = {
@@ -40,5 +40,94 @@ describe('projects', () => {
       owner: null,
       description: 'Nuovo carrello',
     });
+  });
+
+  it('save the planned end, the effort, the deadline, the contingency and the arrangement', () => {
+    const content = {
+      title: 'App mobile 3.0',
+      startDate: '2026-09-10',
+      colorId: 'purple' as const,
+      status: 'in_progress' as const,
+      owner: 'Giulia',
+      manDays: 20,
+      deadline: '2026-12-01',
+      contingency: { startDate: '2026-11-20', manDays: 3 },
+      arrangement: 'parallel' as const,
+    };
+    expect(diffProject(project, content)).toEqual({
+      endDate: null,
+      manDays: 20,
+      deadline: '2026-12-01',
+      contingency: { startDate: '2026-11-20', manDays: 3 },
+      arrangement: 'parallel',
+    });
+    expect(
+      diffProject({ ...project, ...content }, { ...project, arrangement: 'standard' }),
+    ).toEqual({
+      manDays: null,
+      deadline: null,
+      contingency: null,
+      arrangement: 'standard',
+    });
+  });
+
+  it('are read from their data, with the problems in words', () => {
+    const data = {
+      title: 'App mobile 3.0',
+      startDate: '2026-09-10',
+      colorId: 'purple',
+      status: 'planned',
+      deadline: '2026-12-01',
+      contingency: { startDate: '2026-11-20', manDays: 3 },
+      arrangement: 'sequence',
+      owner: '  ',
+    };
+    expect(parseProjectData(data)).toEqual({
+      content: {
+        title: 'App mobile 3.0',
+        startDate: '2026-09-10',
+        colorId: 'purple',
+        status: 'planned',
+        deadline: '2026-12-01',
+        contingency: { startDate: '2026-11-20', manDays: 3 },
+        arrangement: 'sequence',
+      },
+    });
+    expect(
+      parseProjectData({ ...data, arrangement: 'standard', endDate: '2026-12-20' }),
+    ).toMatchObject({ content: { endDate: '2026-12-20' } });
+    expect(parseProjectData({ ...data, colorId: 'neon' }, true)).toMatchObject({
+      content: { colorId: 'blue' },
+    });
+    expect(
+      parseProjectData({
+        ...data,
+        endDate: '2026-09-01',
+        manDays: 0,
+        deadline: 'domani',
+        contingency: { startDate: '2026-11-20' },
+        arrangement: 'free',
+        colorId: 'neon',
+        status: 'done',
+        owner: 'x'.repeat(101),
+        fields: 'none',
+      }),
+    ).toEqual({
+      problems: [
+        "la fine precede l'inizio",
+        'giorni uomo non validi',
+        'hard deadline non valida',
+        'contingency non valida',
+        'disposizione non valida',
+        'colore non riconosciuto',
+        'stato non valido',
+        'responsabile non valido',
+        'campi non validi',
+      ],
+    });
+    expect(parseProjectData({ startDate: '2026-09-10', colorId: 'blue', status: 'idea' })).toEqual({
+      problems: ['manca il titolo'],
+    });
+    expect(parseProjectData('nope')).toEqual({ problems: ['formato non valido'] });
   });
 });

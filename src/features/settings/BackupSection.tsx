@@ -8,6 +8,7 @@ import type { PlanSnapshot } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { formatDateTimeIT } from '../../utils/dateUtils';
 import { downloadBackup } from './downloadBackup';
+import { useDateFormat } from '../..//shared/dateFormat';
 
 interface BackupSectionProps {
   plan: PlanSnapshot;
@@ -37,6 +38,7 @@ function countSummary(plan: PlanSnapshot): string {
 
 /** Export to a JSON file, and import one after validation, preview and confirmation. */
 export function BackupSection({ plan, onReplacePlan }: BackupSectionProps) {
+  const dateFormat = useDateFormat();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importState, setImportState] = useState<ImportState>({ step: 'idle' });
 
@@ -52,7 +54,7 @@ export function BackupSection({ plan, onReplacePlan }: BackupSectionProps) {
       });
       return;
     }
-    const result = parseBackupText(await file.text());
+    const result = parseBackupText(await file.text(), dateFormat);
     setImportState(
       result.ok
         ? {

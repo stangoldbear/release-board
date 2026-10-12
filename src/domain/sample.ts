@@ -4,6 +4,7 @@ import type {
   BorderStyle,
   DailyMetric,
   Memo,
+  Milestone,
   PlanSnapshot,
   Project,
   ProjectFieldValues,
@@ -18,6 +19,7 @@ import { sortAssignments } from './assignments';
 import { DEFAULT_LANES } from './plan';
 import { sortProjectNotes } from './projectNotes';
 import { defaultRoadmapConfig } from './roadmapConfig';
+import { sortMilestones } from './milestones';
 
 interface SampleTask {
   title: string;
@@ -305,6 +307,31 @@ function lastDay(year: number, month: number): number {
  * An invented plan for the given month, used to try the app. The result depends only on
  * year and month, so it is stable across runs and in tests.
  */
+/** The notes on the timeline: one of a project, one free with an alert. */
+const SAMPLE_MILESTONES: {
+  title: string;
+  at: [number, number];
+  project?: number;
+  colorId: TaskColorId;
+  body?: string;
+  remind?: true;
+}[] = [
+  {
+    title: 'Demo al cliente',
+    at: [1, 20],
+    project: 2,
+    colorId: 'purple',
+    body: 'Flusso di pagamento completo, su dispositivi reali.',
+  },
+  {
+    title: 'Code freeze di Natale',
+    at: [2, 18],
+    colorId: 'red',
+    body: 'Nessun rilascio fino al 7 gennaio.',
+    remind: true,
+  },
+];
+
 export function buildSamplePlan(year: number, month: number): PlanSnapshot {
   const lanes = DEFAULT_LANES.map((lane) => ({ ...lane }));
   const dateOf = (day: number) => formatDateToISO(new Date(year, month, day));
@@ -392,6 +419,19 @@ export function buildSamplePlan(year: number, month: number): PlanSnapshot {
     return note;
   });
 
+  const milestones: Milestone[] = SAMPLE_MILESTONES.map((sample, index) => {
+    const milestone: Milestone = {
+      id: `sample-milestone-${index + 1}`,
+      date: dayIn(sample.at),
+      title: sample.title,
+      colorId: sample.colorId,
+    };
+    if (sample.project) milestone.projectId = `sample-project-${sample.project}`;
+    if (sample.body) milestone.body = sample.body;
+    if (sample.remind) milestone.remind = true;
+    return milestone;
+  });
+
   const assignments: Assignment[] = SAMPLE_ASSIGNMENTS.map((sample, index) => ({
     id: `sample-assignment-${index + 1}`,
     projectId: `sample-project-${sample.project}`,
@@ -425,6 +465,7 @@ export function buildSamplePlan(year: number, month: number): PlanSnapshot {
     projects,
     projectNotes: sortProjectNotes(projectNotes),
     assignments: sortAssignments(assignments),
+    milestones: sortMilestones(milestones),
     roadmap,
   };
 }

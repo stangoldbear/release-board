@@ -6,6 +6,124 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-12
+
+La 0.11.0 non è stata pubblicata: le sue modifiche escono con questa versione.
+
+### Aggiunto
+
+- Due layout della pagina, scelti in Impostazioni → Aspetto e ricordati dal browser. Di serie
+  «Schede in basso»: una barra fissa in fondo alla finestra, come le schede di un foglio di
+  calcolo, con «All», «Notes», «Next Releases» e «Roadmap»; «All» mette le aree una sotto l'altra,
+  le altre ne mostrano una sola, e il browser ricorda la scheda aperta. Da 640 px versione e
+  commit stanno nella barra. «Pulsanti in alto» è il layout di prima, con i pulsanti
+  nell'intestazione che mostrano e nascondono le aree. Portare in vista un risultato della ricerca
+  apre la scheda della sua area.
+- Impostazioni → Roadmap → «Modifica team e persone…»: ogni team ha una fase, Analisi, Sviluppo
+  o Test, che dice dove sta il suo lavoro nella disposizione standard di un progetto, e può avere
+  una formula sui tag dei team senza formula, come `0.12*(ServerSide+iOSDev+AndDev)`, che
+  riempie i suoi giorni uomo in un progetto nuovo; ogni persona può essere «membro di default»,
+  cioè stare nella tabella dei giorni di ogni progetto nuovo; in fondo alla finestra la formula
+  della contingency, una barra del progetto senza persona. Nei predefiniti BA e QA hanno il 12%
+  dei giorni di ServerSide, iOSDev e AndDev, la contingency il 10%, e la prima persona di ogni
+  team è di default. Le regole di sicurezza cambiano (`phase`, `formula`, `default` e il
+  documento `settings/roadmap`); i backup passano allo schema 7, e quelli dalla 3 alla 6 si
+  leggono ancora.
+- La finestra del progetto ha due viste, «Standard» e «Avanzata», ricordate dal browser e sullo
+  stesso modulo: la standard ha titolo, «Data inizio lavori del team», «Hard deadline», la tabella
+  «Fase / Ruolo | Man Days», la disposizione nel Gantt, il colore e i campi «In primo piano»;
+  l'avanzata aggiunge «Fine pianificata», i giorni uomo del progetto, stato, responsabile,
+  descrizione e tutti i campi. La tabella parte dai membri di default; le righe dei team con una
+  formula, e la contingency, si calcolano dai giorni scritti per gli altri team, arrotondati alla
+  mezza giornata, e si possono scrivere a mano e riportare alla formula; un pulsante aggiunge la
+  persona successiva di un team («Server #2»), una lista chiunque altro, la matita apre inizio e
+  nota del lavoro. La scheda Team non c'è più. Un progetto si salva con una durata: i giorni del
+  team, una fine pianificata o i giorni uomo del progetto.
+- Salvando, il lavoro del team si dispone nel Gantt secondo la «Disposizione nel Gantt»:
+  «Standard» (Analisi, poi Sviluppo in parallelo, poi Test, poi la contingency), «Parallelo»,
+  «In sequenza» o «Manuale», che lascia le barre dove sono; le barre partono sempre da un giorno
+  lavorativo. La contingency è una barra del progetto senza persona. La fine del progetto è
+  calcolata: l'ultimo giorno tra fine pianificata, giorni uomo del progetto e lavoro del team con
+  la contingency; la barra mostra i giorni uomo totali e, trascinata o mossa con le frecce (una
+  settimana), porta con sé il lavoro del team, sui giorni lavorativi; il bordo destro cambia la
+  fine pianificata (anche Maiusc+frecce), il sinistro l'inizio solo senza barre del team. La hard
+  deadline resta ferma, e la tabella avvisa quando il lavoro la supera.
+- Tre rese della barra di un progetto, scelte in Impostazioni → Roadmap → «Resa delle barre» e
+  ricordate dal browser: «Lane dentro la barra», di serie, con una striscia sottile per persona nel
+  colore del team e una grigia per la contingency sotto il titolo; «Fasi su una barra», con una
+  striscia divisa in Analisi, Sviluppo, Test e contingency e i giorni uomo di ogni fase; «Righe
+  sotto il progetto», la barra sola. In tutte la barra è piena dove il team lavora e sbiadita, con
+  un tratteggio, nei giorni senza lavoro: prima della prima barra, nei buchi e oltre l'ultima
+  barra fino alla fine pianificata; dentro c'è il totale dei giorni uomo. Al livello «Team» ogni
+  resa mette sotto il progetto una riga per persona, con «Nome · gg», e una per la contingency.
+- Ogni progetto può avere le sue righe: tre pulsanti nella colonna del nome, una, due o tre righe
+  come «Informazioni visibili» in basso, che ora ha le stesse icone e, premuto, riporta tutti i
+  progetti al suo livello. La scelta resta nel browser.
+- La hard deadline è una linea rossa tratteggiata nella riga del progetto; dove il lavoro la
+  supera compare un triangolo, sulla linea, sulla barra del progetto e su ogni barra oltre.
+- Le barre delle persone, e quella della contingency, si allungano dal bordo destro, che cambia i
+  giorni uomo contando i giorni lavorativi, e con un doppio clic si scrivono i giorni in un campo
+  sulla barra; lo stesso doppio clic sulla barra di un progetto senza team scrive i giorni uomo
+  del progetto. Spostare una persona o la contingency a mano rende «Manuale» la disposizione del
+  progetto, finché la sua finestra non la riapplica.
+- Impostazioni → Roadmap → «Colori dei progetti», condivisa da tutti i membri: di serie «Dal
+  campo», la barra di ogni progetto ha il colore del suo valore nella prima lista di valori
+  esclusivi con i colori, come «Dimensione», o in quella scelta quando ce n'è più d'una, ed è grigia
+  senza valore; la finestra del progetto non chiede il colore e lo dice. Con «Liberi» ogni progetto
+  ha il colore scelto nella sua finestra, e uno nuovo prende il colore dopo quello dell'ultimo. Le
+  regole di sicurezza ammettono `projectColors` e `colorFieldId` nel documento `settings/roadmap`.
+- L'ordine dei progetti: «Ordina per» sotto la roadmap, ricordato dal browser, con
+  «Personalizzato» di serie, poi Inizio, Fine, Deadline più vicina (le deadline future dalla più
+  vicina, poi i progetti senza deadline, poi quelle passate), il campo con i colori come
+  «Dimensione», Stato e Titolo; a parità resta l'ordine personalizzato, e dentro i gruppi vale lo
+  stesso ordine. L'ordine personalizzato è condiviso nel piano: si cambia trascinando una riga
+  dalla colonna dei nomi, con Alt + frecce su e giù sulla barra, o con «Posizione nella roadmap»
+  nella vista avanzata della finestra; uno spostamento cambia un solo progetto (`position`,
+  frazionaria come le note libere), e trascinando con un altro criterio attivo si torna a
+  «Personalizzato» dall'ordine che si vede. Le regole di sicurezza ammettono `position`.
+- Avviso di scadenza di un progetto, nella vista avanzata della sua finestra: nessuno, il giorno
+  stesso o da 1 giorno a 1 mese prima della hard deadline, o senza di essa della fine del lavoro
+  del progetto. All'apertura della bacheca una finestra elenca i progetti in scadenza, con «Apri il
+  progetto»; compare una volta per browser per ogni giorno di scadenza, aspetta che si chiudano le
+  finestre aperte, e tace per i progetti completati. Le regole di sicurezza ammettono
+  `remindDaysBefore`.
+- Note sulla timeline: un rombo su un giorno della roadmap, nella riga del suo progetto o nella
+  riga «Note sulla timeline» in cima quando non ha un progetto, con titolo accanto, colore, testo
+  nella scheda al passaggio del mouse o al focus, e un avviso facoltativo il giorno della nota,
+  nella stessa finestra delle scadenze dei progetti. Si crea con un clic su un giorno vuoto di una
+  riga di progetto o della riga in cima, si trascina per cambiare giorno, le frecce la spostano di
+  un giorno (una settimana con Maiusc), e la ricerca la trova per titolo, testo e progetto. È una
+  raccolta nuova, `milestones`, nella parte «Dettagli dei progetti»: le regole di sicurezza la
+  ammettono, i backup la portano, la cronologia la registra; l'esempio ne ha due.
+- I campi della roadmap hanno il contrassegno «In primo piano», che li mostra nella vista standard
+  del progetto; nei predefiniti ce l'ha «Dimensione». Le regole di sicurezza cambiano (`quick` nei
+  campi; `endDate` facoltativo, `manDays`, `deadline`, `contingency` e `arrangement` nei progetti)
+  e i backup allo schema 7 li portano.
+- Sedici colori per attività, note libere, progetti, team e valori delle liste, otto in più:
+  arancione, corallo, rosa, magenta, verde acqua, lime, oliva e marrone, in tutti i temi e con il
+  contrasto del testo controllato come per gli altri. Le regole di sicurezza li ammettono.
+- Il formato delle date scritte per esteso si sceglie in Impostazioni → Aspetto e resta nel
+  browser: `gg-mm-aa` di serie, oppure `gg-mm-aaaa`, `gg/mm/aaaa`, `aa-mm-gg` o `aaaa-mm-gg`. Vale
+  per etichette, schede, finestre, avvisi, cronologia e messaggi; i mesi abbreviati come «nov
+  2026», le intestazioni dei giorni e i campi data del browser non cambiano.
+
+### Modificato
+
+- La Roadmap non è più una funzione beta: l'area, la sua sezione nelle Impostazioni, la ricerca
+  nei progetti e gli avvisi delle note dei progetti ci sono per tutti. L'interruttore «Funzioni
+  beta» resta nel codice per le prossime funzioni in prova e non compare finché non ce ne sono.
+- Le date per esteso sono scritte `gg-mm-aa` invece di `gg/mm/aaaa`, salvo scegliere altrimenti.
+- L'area «Note» si chiama «Notes», come le altre due aree.
+- La fine di un progetto non è più obbligatoria: quella dei progetti esistenti resta come «Fine
+  pianificata», facoltativa, nella vista avanzata e nella cronologia; i giorni tra il lavoro del
+  team e la fine pianificata restano nella barra.
+- «Colora per» non c'è più sotto la roadmap, e con lui la barra di 4 px accanto al nome: il colore
+  del valore è ora quello della barra del progetto, per tutti, con l'impostazione «Colori dei
+  progetti».
+- «Team impattati» non è più tra i campi predefiniti: i team di un progetto sono quelli con dei
+  giorni uomo. In un'istanza esistente il campo resta finché non lo si elimina da Impostazioni →
+  Roadmap.
+
 ## [0.10.3] - 2026-10-12
 
 ### Aggiunto
@@ -569,7 +687,12 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/stangoldbear/release-board/compare/v0.10.3...v0.11.1
+[0.10.3]: https://github.com/stangoldbear/release-board/compare/v0.10.2...v0.10.3
+[0.10.2]: https://github.com/stangoldbear/release-board/compare/v0.10.1...v0.10.2
+[0.10.1]: https://github.com/stangoldbear/release-board/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/stangoldbear/release-board/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/stangoldbear/release-board/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/stangoldbear/release-board/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/stangoldbear/release-board/compare/v0.6.0...v0.7.0

@@ -108,6 +108,14 @@ export function deriveTheme(seed: ThemeSeed): Theme {
     ['indigo', mix(seed.blue, seed.purple, 0.5)],
     ['red', seed.red],
     ['purple', seed.purple],
+    ['orange', seed.orange],
+    ['coral', mix(seed.red, seed.orange, 0.5)],
+    ['pink', mix(seed.red, seed.purple, 0.3)],
+    ['magenta', mix(seed.purple, seed.red, 0.35)],
+    ['teal', mix(seed.cyan, seed.green, 0.5)],
+    ['lime', mix(seed.yellow, seed.green, 0.5)],
+    ['olive', mix(seed.yellow, seed.fgMuted, 0.5)],
+    ['brown', mix(seed.orange, seed.fgMuted, 0.5)],
   ];
   for (const [id, hue] of hues) {
     // Ice is the palest of all, close to the surface.

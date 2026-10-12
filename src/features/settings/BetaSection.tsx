@@ -33,9 +33,8 @@ export function BetaSection({ enabled, onChange }: BetaSectionProps) {
         <span>
           <span className="block font-semibold">Attiva le funzioni beta</span>
           <span id={descriptionId} className="block text-xs text-fg-muted">
-            Mostra le parti ancora in sviluppo: per ora l'area Roadmap, con le sue impostazioni e la
-            ricerca nei progetti. La scelta vale per questo browser; i dati del piano restano gli
-            stessi per tutti.
+            Mostra le parti ancora in sviluppo. La scelta vale per questo browser; i dati del piano
+            restano gli stessi per tutti.
           </span>
         </span>
       </label>

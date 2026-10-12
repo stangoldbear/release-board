@@ -94,7 +94,8 @@ service cloud.firestore {
       return isText(data.title, 200)
         && (!('body' in data) || isText(data.body, 2000))
         && (!('colorId' in data)
-          || data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple'])
+          || data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
+              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown'])
         && (!('remindOn' in data) || isIsoDate(data.remindOn))
         && data.position is number;
     }
@@ -181,7 +182,8 @@ service cloud.firestore {
             && isIsoDate(data.startDate)
             && isIsoDate(data.endDate)
             && data.startDate <= data.endDate
-            && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple']
+            && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
+              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown']
             && data.borderStyle in ['dashed', 'solid']
             && data.status in ['planned', 'in_progress', 'review', 'completed', 'blocked']
             && (!('assignee' in data) || (data.assignee is string && data.assignee.size() <= 100))
@@ -276,13 +278,28 @@ service cloud.firestore {
         allow read: if isMember(planId);
         function validProject() {
           let data = request.resource.data;
-          return data.keys().hasOnly(['title', 'startDate', 'endDate', 'colorId', 'status',
+          return data.keys().hasOnly(['title', 'startDate', 'endDate', 'manDays', 'deadline',
+              'remindDaysBefore', 'contingency', 'arrangement', 'position', 'colorId', 'status',
               'owner', 'description', 'fields', 'updatedAt', 'updatedBy', 'lastHistoryId'])
             && isText(data.title, 200)
             && isIsoDate(data.startDate)
-            && isIsoDate(data.endDate)
-            && data.startDate <= data.endDate
-            && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple']
+            && (!('endDate' in data) || (isIsoDate(data.endDate) && data.startDate <= data.endDate))
+            && (!('manDays' in data)
+              || (data.manDays is number && data.manDays > 0 && data.manDays <= 500))
+            && (!('deadline' in data) || isIsoDate(data.deadline))
+            && (!('remindDaysBefore' in data) || (data.remindDaysBefore is int
+              && data.remindDaysBefore >= 0 && data.remindDaysBefore <= 365))
+            && (!('contingency' in data) || (data.contingency is map
+              && data.contingency.keys().hasOnly(['startDate', 'manDays'])
+              && isIsoDate(data.contingency.startDate)
+              && data.contingency.manDays is number
+              && data.contingency.manDays > 0
+              && data.contingency.manDays <= 500))
+            && (!('arrangement' in data)
+              || data.arrangement in ['standard', 'parallel', 'sequence', 'manual'])
+            && (!('position' in data) || data.position is number)
+            && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
+              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown']
             && data.status in ['idea', 'planned', 'in_progress', 'completed', 'on_hold']
             && (!('owner' in data) || isText(data.owner, 100))
             && (!('description' in data) || isText(data.description, 5000))
@@ -324,6 +341,27 @@ service cloud.firestore {
         allow delete: if isMember(planId);
       }
 
+      // A note on a day of the roadmap: of a project, or of none on the row at the top.
+      match /milestones/{milestoneId} {
+        allow read: if isMember(planId);
+        function validMilestone() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['date', 'title', 'body', 'colorId', 'projectId', 'remind',
+              'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isIsoDate(data.date)
+            && isText(data.title, 200)
+            && (!('body' in data) || isText(data.body, 2000))
+            && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
+              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown']
+            && (!('projectId' in data) || isText(data.projectId, 100))
+            && (!('remind' in data) || data.remind == true);
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validMilestone();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validMilestone();
+        allow delete: if isMember(planId);
+      }
+
       // The work of a person on a project: from a day on, for some days of effort.
       match /assignments/{assignmentId} {
         allow read: if isMember(planId);
@@ -352,7 +390,7 @@ service cloud.firestore {
         function validProjectField() {
           let data = request.resource.data;
           return isRoadmapId(fieldId)
-            && data.keys().hasOnly(['label', 'description', 'type', 'multiple', 'required',
+            && data.keys().hasOnly(['label', 'description', 'type', 'multiple', 'required', 'quick',
               'main', 'group', 'options', 'position', 'updatedAt', 'updatedBy', 'lastHistoryId'])
             && isText(data.label, 60)
             && (!('description' in data) || isText(data.description, 300))
@@ -366,7 +404,8 @@ service cloud.firestore {
             && data.position is number
             && (data.type == 'choice'
               ? (data.options is list && data.options.size() > 0 && data.options.size() <= 50)
-              : !('options' in data));
+              : !('options' in data))
+            && (!('quick' in data) || data.quick == true);
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validProjectField();
@@ -380,11 +419,14 @@ service cloud.firestore {
         function validTeam() {
           let data = request.resource.data;
           return isRoadmapId(teamId)
-            && data.keys().hasOnly(['name', 'tag', 'colorId', 'position', 'updatedAt',
-              'updatedBy', 'lastHistoryId'])
+            && data.keys().hasOnly(['name', 'tag', 'colorId', 'phase', 'formula', 'position',
+              'updatedAt', 'updatedBy', 'lastHistoryId'])
             && isText(data.name, 60)
             && isText(data.tag, 20)
-            && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple']
+            && data.phase in ['analysis', 'development', 'test']
+            && (!('formula' in data) || isText(data.formula, 200))
+            && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
+              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown']
             && data.position is number;
         }
 
@@ -399,11 +441,12 @@ service cloud.firestore {
         function validStakeholder() {
           let data = request.resource.data;
           return isRoadmapId(stakeholderId)
-            && data.keys().hasOnly(['name', 'teamId', 'info', 'absences', 'position',
+            && data.keys().hasOnly(['name', 'teamId', 'info', 'absences', 'default', 'position',
               'updatedAt', 'updatedBy', 'lastHistoryId'])
             && isText(data.name, 60)
             && isRoadmapId(data.teamId)
             && (!('info' in data) || isText(data.info, 500))
+            && (!('default' in data) || data.default == true)
             && data.absences is list
             && data.absences.size() <= 100
             && data.position is number;
@@ -411,6 +454,26 @@ service cloud.firestore {
 
         allow create: if isMemberAfter(planId) && audited(planId) && validStakeholder();
         allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validStakeholder();
+        allow delete: if isMember(planId);
+      }
+
+      // The shared settings of the roadmap: one document, "roadmap", with the formula of the
+      // contingency and the colors of the projects. An empty document is fine: an import always
+      // writes it.
+      match /settings/{settingId} {
+        allow read: if isMember(planId);
+        function validSettings() {
+          let data = request.resource.data;
+          return settingId == 'roadmap'
+            && data.keys().hasOnly(['contingencyFormula', 'projectColors', 'colorFieldId',
+              'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && (!('contingencyFormula' in data) || isText(data.contingencyFormula, 200))
+            && (!('projectColors' in data) || data.projectColors in ['field', 'free'])
+            && (!('colorFieldId' in data) || isText(data.colorFieldId, 100));
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validSettings();
+        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validSettings();
         allow delete: if isMember(planId);
       }
 
@@ -423,7 +486,8 @@ service cloud.firestore {
             ['entity', 'entityId', 'action', 'actor', 'at', 'before', 'after', 'summary'])
           && request.resource.data.entity
             in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'memo', 'project',
-              'projectNote', 'assignment', 'projectField', 'team', 'stakeholder', 'member']
+              'projectNote', 'assignment', 'projectField', 'team', 'stakeholder',
+              'roadmapSettings', 'milestone', 'member']
           && request.resource.data.action in ['create', 'update', 'delete', 'import', 'setup']
           && request.resource.data.actor.uid == request.auth.uid
           && request.resource.data.actor.githubId == githubId()

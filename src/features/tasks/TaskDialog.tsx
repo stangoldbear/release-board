@@ -10,13 +10,8 @@ import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { Dialog } from '../../shared/ui/Dialog';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { taskColorStyle } from '../../themes';
-import {
-  addDaysIso,
-  daysBetween,
-  formatDateToISO,
-  formatDateToIT,
-  isIsoDate,
-} from '../../utils/dateUtils';
+import { addDaysIso, daysBetween, formatDateToISO, isIsoDate } from '../../utils/dateUtils';
+import { useFormatDate } from '../..//shared/dateFormat';
 
 interface TaskDialogProps {
   onClose: () => void;
@@ -47,6 +42,7 @@ export function TaskDialog({
   defaultDate,
   defaultLaneId,
 }: TaskDialogProps) {
+  const formatDate = useFormatDate();
   const initialDate = defaultDate ?? formatDateToISO(new Date());
   const [title, setTitle] = useState(initialTask?.title ?? '');
   const [laneId, setLaneId] = useState(initialTask?.laneId ?? defaultLaneId ?? lanes[0]?.id ?? '');
@@ -202,7 +198,7 @@ export function TaskDialog({
             <span>
               Periodo:{' '}
               <strong className="font-mono font-semibold text-fg">
-                {formatDateToIT(startDate)} → {formatDateToIT(endDate)}
+                {formatDate(startDate)} → {formatDate(endDate)}
               </strong>{' '}
               ({durationDays} {durationDays === 1 ? 'giorno' : 'giorni'})
             </span>

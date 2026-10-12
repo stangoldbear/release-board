@@ -11,6 +11,7 @@ import {
   memoSurface,
   reminderText,
 } from './memoUi';
+import { useDateFormat } from '../..//shared/dateFormat';
 
 /** The element of a note, to give it the focus. */
 export function memoElementId(memoId: string): string {
@@ -56,6 +57,7 @@ export function MemoCard({
   onDragStart,
   onDragEnd,
 }: MemoCardProps) {
+  const dateFormat = useDateFormat();
   const surface = memoSurface(memo);
   const current = useIsCurrentResult('memo', memo.id);
   return (
@@ -75,7 +77,7 @@ export function MemoCard({
       aria-label={[
         memo.title,
         expanded && memo.body ? memo.body : null,
-        memo.remindOn ? reminderText(memo.remindOn, today) : null,
+        memo.remindOn ? reminderText(memo.remindOn, today, dateFormat) : null,
         memoOwnership(memo, meId, authorName),
       ]
         .filter(Boolean)

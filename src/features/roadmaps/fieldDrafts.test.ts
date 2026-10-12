@@ -4,7 +4,20 @@ import type { ProjectField } from '../../domain/types';
 import { REQUIRED_PROBLEM, draftsFrom, valuesFrom } from './fieldDrafts';
 
 const defaults = defaultRoadmapConfig();
-const impactedTeams = defaults.fields.find((field) => field.id === 'impactedTeams')!;
+// A list of additive values, as «Team impattati» was in the defaults up to 0.10.
+const impactedTeams: ProjectField = {
+  id: 'impactedTeams',
+  label: 'Team impattati',
+  type: 'choice',
+  multiple: true,
+  required: false,
+  main: true,
+  options: [
+    { id: 'qa', label: 'QA' },
+    { id: 'ba', label: 'BA' },
+  ],
+  position: 1,
+};
 const jiraEpics = defaults.fields.find((field) => field.id === 'jiraEpics')!;
 const estimate = defaults.fields.find((field) => field.id === 'rawEstimationTotal')!;
 const budget: ProjectField = {

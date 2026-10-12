@@ -4,7 +4,9 @@ import { formatLocaleNumber } from '../../domain/numberFormat';
 import { DAILY_METRIC } from '../../domain/plan';
 import type { DateRange } from '../../domain/schedule';
 import type { ApprovalLight, DailyMetric } from '../../domain/types';
-import { formatDateToIT, parseISODate } from '../../utils/dateUtils';
+import { formatDate, parseISODate } from '../../utils/dateUtils';
+import type { DateFormat } from '../../utils/dateUtils';
+import { useFormatDate } from '../..//shared/dateFormat';
 
 /** Text and background of a value, by the approval light of its day. */
 export const APPROVAL_TONE: Record<ApprovalLight, string> = {
@@ -37,9 +39,9 @@ function longDate(iso: string): string {
 }
 
 /** Everything the card shows about a day, as one sentence for screen readers. */
-export function describeDay(metric: DailyMetric): string {
+export function describeDay(metric: DailyMetric, dateFormat: DateFormat): string {
   const parts = [
-    `${DAILY_METRIC.label} del ${formatDateToIT(metric.date)}: ${preciseValue(metric.value)}`,
+    `${DAILY_METRIC.label} del ${formatDate(metric.date, dateFormat)}: ${preciseValue(metric.value)}`,
   ];
   if (metric.approval) {
     const { name, meaning } = APPROVAL_LABELS[metric.approval];
@@ -99,11 +101,12 @@ export function DayDetails({ metric }: { metric: DailyMetric }) {
 
 /** The days of a week column, in the quarter view: total, then each day in short. */
 export function WeekDetails({ week, days }: { week: DateRange; days: DailyMetric[] }) {
+  const formatDate = useFormatDate();
   const total = days.reduce((sum, day) => sum + day.value, 0);
   return (
     <div>
       <p className="text-xs text-fg-muted">
-        Dal {formatDateToIT(week.start)} al {formatDateToIT(week.end)}
+        Dal {formatDate(week.start)} al {formatDate(week.end)}
       </p>
       <p className="mt-0.5 text-base font-bold tabular-nums">{preciseValue(total)}</p>
       <p className="text-xs text-fg-muted">{DAILY_METRIC.label} della settimana</p>

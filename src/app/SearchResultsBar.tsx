@@ -141,7 +141,8 @@ export function SearchResultsBar({
       {total > 0 && current !== null && (
         <nav
           aria-label="Risultati della ricerca, in basso"
-          className="fixed right-4 bottom-4 z-40 flex items-center gap-1 rounded-full border border-line bg-surface p-1 text-xs shadow-2xl sm:hidden"
+          className="fixed right-4 z-40 flex items-center gap-1 rounded-full border border-line bg-surface p-1 text-xs shadow-2xl sm:hidden"
+          style={{ bottom: 'calc(1rem + var(--tab-bar-height, 0px))' }}
         >
           <Button
             variant="ghost"

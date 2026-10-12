@@ -4,7 +4,6 @@ import { formatLocaleNumber } from '../../domain/numberFormat';
 import { DAILY_METRIC } from '../../domain/plan';
 import type { DateRange } from '../../domain/schedule';
 import type { DailyMetric } from '../../domain/types';
-import { formatDateToIT } from '../../utils/dateUtils';
 import { monthLabel } from './calendarView';
 import {
   LABEL_CELL,
@@ -15,6 +14,7 @@ import {
   monthSpans,
 } from './timelineLayout';
 import type { Column } from './timelineLayout';
+import { useFormatDate } from '../..//shared/dateFormat';
 
 interface MonthBandProps {
   range: DateRange;
@@ -70,6 +70,7 @@ export const DayHeaderRow = memo(function DayHeaderRow({
   showMonth,
   onShowDays,
 }: DayHeaderRowProps) {
+  const formatDate = useFormatDate();
   return (
     <div className="flex border-b border-line-strong">
       <div className={`${LABEL_CELL} flex items-center bg-surface text-xs font-bold uppercase`}>
@@ -87,7 +88,7 @@ export const DayHeaderRow = memo(function DayHeaderRow({
               type="button"
               onClick={() => onShowDays(column.start)}
               style={{ width: column.width }}
-              title={`Mostra i giorni dal ${formatDateToIT(column.start)} al ${formatDateToIT(column.end)}${column.isToday ? ' · Settimana di oggi' : ''}${holidayText ? ` · ${holidayText}` : ''}`}
+              title={`Mostra i giorni dal ${formatDate(column.start)} al ${formatDate(column.end)}${column.isToday ? ' · Settimana di oggi' : ''}${holidayText ? ` · ${holidayText}` : ''}`}
               className={`shrink-0 cursor-pointer py-1 text-center text-xs hover:bg-surface-strong in-data-compact:py-0.5 ${columnEdge(column)} ${columnTone(column)}`}
             >
               <span className={`block font-bold ${todayMark}`}>
@@ -113,7 +114,7 @@ export const DayHeaderRow = memo(function DayHeaderRow({
           <div
             key={column.start}
             style={{ width: column.width }}
-            title={`${formatDateToIT(column.start)}${column.isToday ? ' · Oggi' : ''}${holidayText ? ` · Festività: ${holidayText}` : ''}`}
+            title={`${formatDate(column.start)}${column.isToday ? ' · Oggi' : ''}${holidayText ? ` · Festività: ${holidayText}` : ''}`}
             className={`shrink-0 py-1 text-center in-data-compact:py-0.5 ${columnEdge(column)} ${columnTone(column)} ${column.isToday ? 'font-bold' : ''}`}
           >
             <span className="block text-xs uppercase">

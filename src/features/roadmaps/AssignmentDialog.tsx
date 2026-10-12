@@ -16,7 +16,8 @@ import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { Dialog } from '../../shared/ui/Dialog';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
-import { formatDateToIT, isIsoDate } from '../../utils/dateUtils';
+import { isIsoDate } from '../../utils/dateUtils';
+import { useFormatDate } from '../..//shared/dateFormat';
 
 interface AssignmentDialogProps {
   /** The assignment to edit; null for a new one on the project. */
@@ -47,6 +48,7 @@ export function AssignmentDialog({
   onDelete,
   onClose,
 }: AssignmentDialogProps) {
+  const formatDate = useFormatDate();
   const groups = stakeholdersByTeam(config);
   const [stakeholderId, setStakeholderId] = useState(
     assignment?.stakeholderId ?? config.stakeholders[0]?.id ?? '',
@@ -201,18 +203,15 @@ export function AssignmentDialog({
             {schedule ? (
               <>
                 <span className="font-semibold text-fg">{describeEffort(manDays)}</span> di lavoro,{' '}
-                dal <strong className="text-fg">{formatDateToIT(schedule.start)}</strong> al{' '}
-                <strong className="text-fg">{formatDateToIT(schedule.end)}</strong>, saltando
-                weekend e festivi
+                dal <strong className="text-fg">{formatDate(schedule.start)}</strong> al{' '}
+                <strong className="text-fg">{formatDate(schedule.end)}</strong>, saltando weekend e
+                festivi
                 {schedule.absences.length > 0 && (
                   <>
                     {' '}
                     e le assenze:{' '}
                     {schedule.absences
-                      .map(
-                        (absence) =>
-                          `${formatDateToIT(absence.start)} – ${formatDateToIT(absence.end)}`,
-                      )
+                      .map((absence) => `${formatDate(absence.start)} – ${formatDate(absence.end)}`)
                       .join(', ')}
                   </>
                 )}

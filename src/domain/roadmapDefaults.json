@@ -1,30 +1,139 @@
 {
-  "$comment": "How the projects of the roadmap are described when a plan starts: the custom fields, the teams and the people who work on the projects. Order matters: it is the order of the lists. Colors are the task colors (yellow, gray, blue, ice, green, indigo, red, purple), checked for contrast in every theme: a team has one, and each value of a list can have one, for its tag. A list of exclusive values marked 'group' lets the roadmap group the projects by it. Settings → Roadmap edits a copy of this in the plan; 'Carica i predefiniti' brings it back.",
+  "$comment": "How the projects of the roadmap are described when a plan starts: the custom fields, the teams and the people who work on the projects, and the formula of the contingency. Order matters: it is the order of the lists. Colors are the task colors, checked for contrast in every theme: a team has one, and each value of a list can have one, for its tag. A team has a phase (analysis, development, test), which places its work in the standard arrangement of a project, and may have a formula on the tags of the teams without one, which fills in its days in a new project. A person marked default is in the table of the days of every new project. A list of exclusive values marked 'group' lets the roadmap group the projects by it. Settings → Roadmap edits a copy of this in the plan; 'Carica i predefiniti' brings it back.",
+  "contingencyFormula": "0.10*(ServerSide+iOSDev+AndDev)",
   "teams": [
-    { "id": "server", "name": "Server side", "tag": "ServerSide", "colorId": "yellow" },
-    { "id": "ios", "name": "iOS", "tag": "iOSDev", "colorId": "blue" },
-    { "id": "android", "name": "Android", "tag": "AndDev", "colorId": "green" },
-    { "id": "qa", "name": "QA", "tag": "QA", "colorId": "ice" },
-    { "id": "ba", "name": "Business analysis", "tag": "BA", "colorId": "purple" },
-    { "id": "content", "name": "Content", "tag": "CONTENT", "colorId": "indigo" }
+    {
+      "id": "server",
+      "name": "Server side",
+      "tag": "ServerSide",
+      "colorId": "yellow",
+      "phase": "development"
+    },
+    {
+      "id": "ios",
+      "name": "iOS",
+      "tag": "iOSDev",
+      "colorId": "blue",
+      "phase": "development"
+    },
+    {
+      "id": "android",
+      "name": "Android",
+      "tag": "AndDev",
+      "colorId": "green",
+      "phase": "development"
+    },
+    {
+      "id": "qa",
+      "name": "QA",
+      "tag": "QA",
+      "colorId": "ice",
+      "phase": "test",
+      "formula": "0.12*(ServerSide+iOSDev+AndDev)"
+    },
+    {
+      "id": "ba",
+      "name": "Business analysis",
+      "tag": "BA",
+      "colorId": "purple",
+      "phase": "analysis",
+      "formula": "0.12*(ServerSide+iOSDev+AndDev)"
+    },
+    {
+      "id": "content",
+      "name": "Content",
+      "tag": "CONTENT",
+      "colorId": "indigo",
+      "phase": "development"
+    }
   ],
   "stakeholders": [
-    { "id": "server-1", "name": "Server #1", "teamId": "server" },
-    { "id": "server-2", "name": "Server #2", "teamId": "server" },
-    { "id": "server-3", "name": "Server #3", "teamId": "server" },
-    { "id": "ios-1", "name": "iOS Dev #1", "teamId": "ios" },
-    { "id": "ios-2", "name": "iOS Dev #2", "teamId": "ios" },
-    { "id": "ios-3", "name": "iOS Dev #3", "teamId": "ios" },
-    { "id": "android-1", "name": "Android Dev #1", "teamId": "android" },
-    { "id": "android-2", "name": "Android Dev #2", "teamId": "android" },
-    { "id": "android-3", "name": "Android Dev #3", "teamId": "android" },
-    { "id": "qa-1", "name": "QA #1", "teamId": "qa" },
-    { "id": "qa-2", "name": "QA #2", "teamId": "qa" },
-    { "id": "qa-3", "name": "QA #3", "teamId": "qa" },
-    { "id": "ba-1", "name": "BA #1", "teamId": "ba" },
-    { "id": "ba-2", "name": "BA #2", "teamId": "ba" },
-    { "id": "content-1", "name": "CONTENT #1", "teamId": "content" },
-    { "id": "content-2", "name": "CONTENT #2", "teamId": "content" }
+    {
+      "id": "server-1",
+      "name": "Server #1",
+      "teamId": "server",
+      "default": true
+    },
+    {
+      "id": "server-2",
+      "name": "Server #2",
+      "teamId": "server"
+    },
+    {
+      "id": "server-3",
+      "name": "Server #3",
+      "teamId": "server"
+    },
+    {
+      "id": "ios-1",
+      "name": "iOS Dev #1",
+      "teamId": "ios",
+      "default": true
+    },
+    {
+      "id": "ios-2",
+      "name": "iOS Dev #2",
+      "teamId": "ios"
+    },
+    {
+      "id": "ios-3",
+      "name": "iOS Dev #3",
+      "teamId": "ios"
+    },
+    {
+      "id": "android-1",
+      "name": "Android Dev #1",
+      "teamId": "android",
+      "default": true
+    },
+    {
+      "id": "android-2",
+      "name": "Android Dev #2",
+      "teamId": "android"
+    },
+    {
+      "id": "android-3",
+      "name": "Android Dev #3",
+      "teamId": "android"
+    },
+    {
+      "id": "qa-1",
+      "name": "QA #1",
+      "teamId": "qa",
+      "default": true
+    },
+    {
+      "id": "qa-2",
+      "name": "QA #2",
+      "teamId": "qa"
+    },
+    {
+      "id": "qa-3",
+      "name": "QA #3",
+      "teamId": "qa"
+    },
+    {
+      "id": "ba-1",
+      "name": "BA #1",
+      "teamId": "ba",
+      "default": true
+    },
+    {
+      "id": "ba-2",
+      "name": "BA #2",
+      "teamId": "ba"
+    },
+    {
+      "id": "content-1",
+      "name": "CONTENT #1",
+      "teamId": "content",
+      "default": true
+    },
+    {
+      "id": "content-2",
+      "name": "CONTENT #2",
+      "teamId": "content"
+    }
   ],
   "fields": [
     {
@@ -36,28 +145,23 @@
       "required": false,
       "main": true,
       "group": true,
+      "quick": true,
       "options": [
-        { "id": "big", "label": "Big project", "colorId": "purple" },
-        { "id": "medium", "label": "Medium project", "colorId": "blue" },
-        { "id": "small", "label": "Small project", "colorId": "green" }
-      ]
-    },
-    {
-      "id": "impactedTeams",
-      "label": "Team impattati",
-      "description": "I team il cui lavoro serve per il progetto.",
-      "type": "choice",
-      "multiple": true,
-      "required": false,
-      "main": true,
-      "options": [
-        { "id": "ios-dev", "label": "iOS Dev", "colorId": "blue" },
-        { "id": "android-dev", "label": "Android Dev", "colorId": "green" },
-        { "id": "backend-dev", "label": "Backend Dev", "colorId": "yellow" },
-        { "id": "backend-config", "label": "Backend Config", "colorId": "gray" },
-        { "id": "content", "label": "Content", "colorId": "indigo" },
-        { "id": "qa", "label": "QA", "colorId": "ice" },
-        { "id": "ba", "label": "BA", "colorId": "purple" }
+        {
+          "id": "big",
+          "label": "Big project",
+          "colorId": "purple"
+        },
+        {
+          "id": "medium",
+          "label": "Medium project",
+          "colorId": "blue"
+        },
+        {
+          "id": "small",
+          "label": "Small project",
+          "colorId": "green"
+        }
       ]
     },
     {

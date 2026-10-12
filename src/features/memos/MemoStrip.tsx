@@ -432,7 +432,7 @@ export function MemoStrip({
 
   if (unavailable) {
     return (
-      <Area id={id} title="Note">
+      <Area id={id} title="Notes">
         <RulesNotice what="Le note libere" />
       </Area>
     );
@@ -441,7 +441,7 @@ export function MemoStrip({
   return (
     <Area
       id={id}
-      title="Note"
+      title="Notes"
       actions={
         <>
           {searching && (

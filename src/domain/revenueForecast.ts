@@ -1,4 +1,5 @@
-import { formatDateToIT, isIsoDate } from '../utils/dateUtils';
+import { DEFAULT_DATE_FORMAT, formatDate, isIsoDate } from '../utils/dateUtils';
+import type { DateFormat } from '../utils/dateUtils';
 import { parseLocaleNumber } from './numberFormat';
 import type { ApprovalLight, DailyMetric } from './types';
 
@@ -248,7 +249,10 @@ function readRow(
  * when present), and every following row is a day. Rows that cannot be read are left out, each
  * with its reason; empty rows are skipped.
  */
-export function parseRevenueForecast(text: string): ForecastParseResult {
+export function parseRevenueForecast(
+  text: string,
+  dateFormat: DateFormat = DEFAULT_DATE_FORMAT,
+): ForecastParseResult {
   const content = text.replace(/^\uFEFF/, '');
   if (!content.trim()) return { ok: false, error: 'Il file è vuoto.' };
 
@@ -270,7 +274,7 @@ export function parseRevenueForecast(text: string): ForecastParseResult {
       } else if (lineOf.has(result.date)) {
         problems.push({
           line,
-          message: `il ${formatDateToIT(result.date)} compare già alla riga ${lineOf.get(result.date)}`,
+          message: `il ${formatDate(result.date, dateFormat)} compare già alla riga ${lineOf.get(result.date)}`,
         });
       } else {
         lineOf.set(result.date, line);

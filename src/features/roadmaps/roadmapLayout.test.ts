@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newProjectPeriod, projectPeriod, roadmapMetrics, roadmapRange } from './roadmapLayout';
+import { projectPeriod, roadmapMetrics, roadmapRange } from './roadmapLayout';
 
 const project = (startDate: string, endDate: string) => ({ startDate, endDate });
 
@@ -29,13 +29,6 @@ describe('projectPeriod', () => {
     expect(projectPeriod(project('2026-11-02', '2027-02-28'))).toBe('nov 2026 – feb 2027');
     expect(projectPeriod(project('2026-09-01', '2026-12-31'))).toBe('set – dic 2026');
     expect(projectPeriod(project('2026-01-05', '2026-01-30'))).toBe('gen 2026');
-  });
-
-  it('gives a new project about three months from its day', () => {
-    expect(newProjectPeriod('2026-10-05')).toEqual({
-      startDate: '2026-10-05',
-      endDate: '2026-12-31',
-    });
   });
 });
 

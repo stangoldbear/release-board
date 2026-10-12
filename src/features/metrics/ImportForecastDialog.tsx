@@ -7,8 +7,8 @@ import type { ForecastParseResult } from '../../domain/revenueForecast';
 import type { DailyMetric } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
-import { formatDateToIT } from '../../utils/dateUtils';
 import { APPROVAL_TONE, ApprovalIcon, preciseValue } from './MetricDetails';
+import { useFormatDate, useDateFormat } from '../..//shared/dateFormat';
 
 /** A forecast is a few kilobytes per year: anything far larger is not one. */
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -39,6 +39,7 @@ function fileProblem(file: File): string | null {
  * rows it leaves out with the reason, before anything is saved. Mounted only while open.
  */
 export function ImportForecastDialog({ metrics, onImport, onClose }: ImportForecastDialogProps) {
+  const dateFormat = useDateFormat();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,7 +56,7 @@ export function ImportForecastDialog({ metrics, onImport, onClose }: ImportForec
     // A zip archive, such as an Excel file renamed to .csv.
     const result: ForecastParseResult = text.startsWith('PK')
       ? { ok: false, error: SPREADSHEET_FILE }
-      : parseRevenueForecast(text);
+      : parseRevenueForecast(text, dateFormat);
     setLoaded({ fileName: file.name, result });
   };
 
@@ -189,6 +190,7 @@ interface ForecastPreviewProps {
 }
 
 function ForecastPreview({ fileName, result, updated, onChooseAnother }: ForecastPreviewProps) {
+  const formatDate = useFormatDate();
   const { days, problems } = result;
   const first = days[0];
   const last = days.at(-1);
@@ -215,7 +217,7 @@ function ForecastPreview({ fileName, result, updated, onChooseAnother }: Forecas
             <dt className="text-xs text-fg-muted">Giorni</dt>
             <dd className="text-lg font-bold tabular-nums">{days.length}</dd>
             <dd className="text-xs text-fg-muted">
-              dal {formatDateToIT(first.date)} al {formatDateToIT(last.date)}
+              dal {formatDate(first.date)} al {formatDate(last.date)}
             </dd>
           </div>
           <div className="rounded-lg border border-line bg-surface-muted p-2.5">
@@ -273,7 +275,7 @@ function ForecastPreview({ fileName, result, updated, onChooseAnother }: Forecas
               {days.slice(0, PREVIEW_DAYS).map((day) => (
                 <tr key={day.date}>
                   <td className="px-2 py-1.5 whitespace-nowrap tabular-nums">
-                    {formatDateToIT(day.date)}
+                    {formatDate(day.date)}
                   </td>
                   <td className="px-2 py-1.5 text-right whitespace-nowrap tabular-nums">
                     {preciseValue(day.value)}

@@ -244,7 +244,7 @@ export function MemoDialog({
 
           <fieldset>
             <legend className={LABEL_CLASS}>Colore</legend>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
               {colorOption(undefined, 'Nessuno')}
               {TASK_COLORS.map((color) => colorOption(color.id, color.name))}
             </div>

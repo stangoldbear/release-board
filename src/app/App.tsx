@@ -3,6 +3,7 @@ import {
   NO_FILTER,
   SEARCH_MODES,
   filterMemos,
+  filterMilestones,
   filterProjects,
   filterTasks,
   isSearching,
@@ -23,12 +24,24 @@ import {
   rememberReminders,
 } from '../domain/memos';
 import type { MemoContent } from '../domain/memos';
+import { assignmentsOfProject, moveAssignment } from '../domain/assignments';
 import type { AssignmentChanges, AssignmentContent } from '../domain/assignments';
 import { copyOfTask, diffTask, isPlanEmpty } from '../domain/plan';
 import { notesOfProject, rememberNoteReminders } from '../domain/projectNotes';
 import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
-import { diffProject } from '../domain/projects';
-import type { ProjectContent } from '../domain/projects';
+import { arrangementOf, diffProject } from '../domain/projects';
+import type { ProjectChanges, ProjectContent } from '../domain/projects';
+import {
+  nextProjectPosition,
+  projectMoves,
+  renumberProjects,
+  sortProjectsBy,
+} from '../domain/projectOrder';
+import { projectSpan } from '../domain/projectSpan';
+import type { ProjectSpan } from '../domain/projectSpan';
+import { projectColorField } from '../domain/roadmapConfig';
+import type { TeamPlan } from '../domain/teamPlan';
+import type { RoadmapSettingsChanges } from '../domain/roadmapConfig';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
 import { buildSamplePlan } from '../domain/sample';
 import { isInRange, weekRange } from '../domain/schedule';
@@ -61,6 +74,8 @@ import { DailyMetricsDialog } from '../features/metrics/DailyMetricsDialog';
 import { ImportForecastDialog } from '../features/metrics/ImportForecastDialog';
 import { fieldSearchTexts } from '../features/roadmaps/fieldUi';
 import { ProjectNoteReminders } from '../features/roadmaps/ProjectNoteReminders';
+import { ProjectReminders } from '../features/roadmaps/ProjectReminders';
+import { rememberProjectReminders } from '../domain/projectReminders';
 import { NEW_PROJECT_ID, RoadmapArea } from '../features/roadmaps/RoadmapArea';
 import { useRoadmapDisplay } from '../features/roadmaps/useRoadmapDisplay';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
@@ -75,7 +90,7 @@ import { Button } from '../shared/ui/Button';
 import { TEXT_SCALES } from '../shared/ui/textScale';
 import { useToast } from '../shared/ui/Toast';
 import { VersionStamp } from '../shared/ui/VersionStamp';
-import { parseISODate, startOfMonth, startOfWeek, todayIso } from '../utils/dateUtils';
+import { addDaysIso, parseISODate, startOfMonth, startOfWeek, todayIso } from '../utils/dateUtils';
 import {
   ALL_AREAS_VISIBLE,
   BETA_FEATURES_PREFERENCE,
@@ -93,9 +108,22 @@ import type { PlanRepository } from './PlanRepository';
 import { SearchResultsBar, describeFound } from './SearchResultsBar';
 import type { FoundCount } from './SearchResultsBar';
 import { SyncIndicator } from './SyncIndicator';
+import { useDateFormatSetting } from './DateFormatProvider';
+import {
+  ALL_TAB,
+  DEFAULT_PAGE_LAYOUT,
+  PAGE_LAYOUT_IDS,
+  parsePageTab,
+  tabShowsArea,
+} from './layout';
+import type { PageTab } from './layout';
+import { TAB_BAR_HEIGHT_VAR, TabBar } from './TabBar';
 import { useThemeSetting } from './ThemeProvider';
 import { useHashPage } from './useHashPage';
 import { useSyncState } from './useSyncState';
+import { rememberMilestoneReminders } from '../domain/milestones';
+import type { MilestoneChanges, MilestoneContent } from '../domain/milestones';
+import { milestoneElementId } from '../features/roadmaps/MilestoneDiamond';
 
 /** Where each kind of search result is: its area, and its element in the area. */
 const RESULT_TARGETS: Record<
@@ -106,6 +134,7 @@ const RESULT_TARGETS: Record<
   task: { area: 'releases', elementId: taskBarId },
   note: { area: 'releases', elementId: noteCellId },
   project: { area: 'roadmaps', elementId: projectBarId },
+  milestone: { area: 'roadmaps', elementId: milestoneElementId },
 };
 
 /** The dialog on screen, if any: only one at a time; projects have theirs in their own area. */
@@ -150,7 +179,12 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const plan = usePlan(repository);
   const sync = useSyncState(repository);
   const showToast = useToast();
+  // The layout of the page: tabs at the bottom, one of them open, or the buttons in the header
+  // that show and hide the areas, each remembered by this browser.
+  const [layout, setLayout] = usePreference('layout', oneOf(PAGE_LAYOUT_IDS), DEFAULT_PAGE_LAYOUT);
+  const [tab, setTab] = usePreference<PageTab>('tab', parsePageTab, ALL_TAB);
   const [areas, setAreas] = usePreference('areas', parseAreaVisibility, ALL_AREAS_VISIBLE);
+  const isShown = (area: AreaId) => (layout === 'tabs' ? tabShowsArea(tab, area) : areas[area]);
   // The parts still in development: off by default, on for who works on them, in their browser.
   const [betaFeatures, setBetaFeatures] = usePreference(BETA_FEATURES_PREFERENCE, isBoolean, false);
   const shownAreas = availableAreas(betaFeatures);
@@ -169,11 +203,43 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     {},
   );
   const { theme, setTheme } = useThemeSetting();
+  const { dateFormat, setDateFormat } = useDateFormatSetting();
 
   const [view, dispatchView] = useCalendarView();
   // The roadmap has a view of its own, over the same kinds of days, and its own display choices.
   const [roadmapView, dispatchRoadmapView] = useCalendarView('roadmap-', 'quarter');
   const [roadmapDisplay, roadmapControls] = useRoadmapDisplay();
+  // Where each project falls, from its data and the work of its team: the roadmap, the order and
+  // the search use it. Before the plan loads, nothing.
+  const planProjects = plan?.projects;
+  const planAssignments = plan?.assignments;
+  const planStakeholders = plan?.roadmap.stakeholders;
+  const spans = useMemo(
+    () =>
+      new Map<string, ProjectSpan>(
+        (planProjects ?? []).map((project) => [
+          project.id,
+          projectSpan(project, planAssignments ?? [], planStakeholders ?? []),
+        ]),
+      ),
+    [planProjects, planAssignments, planStakeholders],
+  );
+  const [seenProjectReminders, setSeenProjectReminders] = usePreference(
+    'project-reminders-seen',
+    readSeenReminders,
+    {},
+  );
+  // A project or a note the alerts ask to open: the roadmap opens its window.
+  const [projectToOpen, setProjectToOpen] = useState<{
+    kind: 'project' | 'milestone';
+    id: string;
+    nonce: number;
+  } | null>(null);
+  const [seenMilestoneReminders, setSeenMilestoneReminders] = usePreference(
+    'milestone-reminders-seen',
+    readSeenReminders,
+    {},
+  );
   const [seenNoteReminders, setSeenNoteReminders] = usePreference(
     'project-note-reminders-seen',
     readSeenReminders,
@@ -322,6 +388,12 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     showToast('Dati di esempio caricati');
   };
 
+  // A tab opens at the top of the page: its area starts there.
+  const handleSelectTab = (next: PageTab) => {
+    setTab(next);
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  };
+
   // An area that appears comes into view: it may be far down the page.
   const handleToggleArea = (area: AreaId) => {
     const showing = !areas[area];
@@ -380,9 +452,56 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   };
 
   // Projects
-  const handleCreateProject = (content: ProjectContent) => {
-    repository.createProject(content);
+  const handleCreateProject = (content: ProjectContent): string => {
+    const id = repository.createProject({
+      ...content,
+      position: nextProjectPosition(plan.projects),
+    });
     showToast(`Progetto «${oneLine(content.title)}» aggiunto`);
+    return id;
+  };
+
+  // A project put before another: one position changes, or every project is numbered again when
+  // the rows follow a criterion, which then becomes the order of the members.
+  const handleReorderProject = (projectId: string, beforeId: string | null) => {
+    let moves: Map<string, number>;
+    if (roadmapDisplay.sort === 'custom') {
+      moves = projectMoves(plan.projects, projectId, beforeId);
+    } else {
+      const moved = orderedProjects.find((project) => project.id === projectId);
+      if (!moved) return;
+      const others = orderedProjects.filter((project) => project.id !== projectId);
+      const to = beforeId === null ? others.length : others.findIndex((p) => p.id === beforeId);
+      if (to < 0) return;
+      moves = renumberProjects([...others.slice(0, to), moved, ...others.slice(to)]);
+      roadmapControls.setSort('custom');
+    }
+    for (const [id, position] of moves) repository.updateProject(id, { position });
+  };
+
+  // The window of a project plans the work of its team as a whole: one toast for the project is
+  // enough.
+  const handleSaveTeam = (projectId: string, teamPlan: TeamPlan) => {
+    for (const content of teamPlan.create) repository.createAssignment({ ...content, projectId });
+    for (const item of teamPlan.update) repository.updateAssignment(item.id, item.changes);
+    for (const assignmentId of teamPlan.remove) repository.deleteAssignment(assignmentId);
+  };
+
+  // The whole project moves: start, planned end, contingency and the bars of its team, each on a
+  // working day; the hard deadline stays where it is.
+  const handleMoveProject = (projectId: string, days: number) => {
+    const project = plan.projects.find((item) => item.id === projectId);
+    if (!project || days === 0) return;
+    const changes: ProjectChanges = { startDate: addDaysIso(project.startDate, days) };
+    if (project.endDate) changes.endDate = addDaysIso(project.endDate, days);
+    if (project.contingency) changes.contingency = moveAssignment(project.contingency, days);
+    repository.updateProject(projectId, changes);
+    for (const assignment of assignmentsOfProject(plan.assignments, projectId)) {
+      const { startDate } = moveAssignment(assignment, days);
+      if (startDate !== assignment.startDate) {
+        repository.updateAssignment(assignment.id, { startDate });
+      }
+    }
   };
 
   const handleSaveProject = (project: Project, content: ProjectContent) => {
@@ -415,11 +534,34 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       repository.createAssignment(content);
       showToast('Persona aggiunta al progetto');
     },
-    onUpdate: (assignmentId: string, changes: AssignmentChanges) =>
-      repository.updateAssignment(assignmentId, changes),
+    onUpdate: (assignmentId: string, changes: AssignmentChanges) => {
+      repository.updateAssignment(assignmentId, changes);
+      // A start moved by hand, by a drag, the keys or the window: the bars of the project stay
+      // where they are put, until its window arranges them again.
+      const assignment = plan.assignments.find((item) => item.id === assignmentId);
+      if (!assignment || !changes.startDate || changes.startDate === assignment.startDate) return;
+      const project = plan.projects.find((item) => item.id === assignment.projectId);
+      if (project && arrangementOf(project) !== 'manual') {
+        repository.updateProject(project.id, { arrangement: 'manual' });
+      }
+    },
     onDelete: (assignmentId: string) => {
       repository.deleteAssignment(assignmentId);
       showToast('Persona tolta dal progetto');
+    },
+  };
+  const milestoneActions = {
+    onCreate: (content: MilestoneContent) => {
+      const id = repository.createMilestone(content);
+      showToast(`Nota «${oneLine(content.title)}» aggiunta alla timeline`);
+      return id;
+    },
+    onUpdate: (milestoneId: string, changes: MilestoneChanges) => {
+      if (Object.keys(changes).length > 0) repository.updateMilestone(milestoneId, changes);
+    },
+    onDelete: (milestoneId: string) => {
+      repository.deleteMilestone(milestoneId);
+      showToast('Nota sulla timeline eliminata');
     },
   };
   const stakeholderActions = {
@@ -444,6 +586,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       repository.deleteStakeholder(stakeholderId);
       showToast('Persona eliminata, con il suo lavoro sui progetti');
     },
+    onSaveSettings: (changes: RoadmapSettingsChanges) => repository.updateRoadmapSettings(changes),
     onReplaceConfig: (config: RoadmapConfig) => {
       repository.replaceRoadmapConfig(config);
       showToast('Configurazione della roadmap caricata');
@@ -460,9 +603,20 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     ]),
     ...fieldSearchTexts(project, plan.roadmap.fields),
   ];
+  // In the order of the roadmap, so that the results of the search follow the page.
+  const orderedProjects = sortProjectsBy(plan.projects, roadmapDisplay.sort, {
+    today,
+    endOf: (project) => spans.get(project.id)?.end ?? project.startDate,
+    field: projectColorField(plan.roadmap),
+  });
   const shownProjects = searching
-    ? filterProjects(plan.projects, filters.search, searchMode, projectTexts)
-    : plan.projects;
+    ? filterProjects(orderedProjects, filters.search, searchMode, projectTexts)
+    : orderedProjects;
+  const shownMilestones = searching
+    ? filterMilestones(plan.milestones, filters.search, searchMode, (milestone) => [
+        plan.projects.find((project) => project.id === milestone.projectId)?.title,
+      ])
+    : plan.milestones;
 
   // Search
   const results: SearchResult[] = searching
@@ -475,8 +629,8 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
         notes: Object.fromEntries(
           Object.entries(plan.dailyNotes).filter(([date]) => noteMatches?.has(date)),
         ),
-        // Without the beta features the projects are not on the page: the search leaves them out.
-        projects: betaFeatures ? shownProjects : [],
+        projects: shownProjects,
+        milestones: shownMilestones,
       })
     : [];
   const searchCounts: FoundCount[] = [
@@ -488,16 +642,13 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       one: 'nota del giorno',
       many: 'note dei giorni',
     },
-    ...(betaFeatures
-      ? [
-          {
-            found: shownProjects.length,
-            total: plan.projects.length,
-            one: 'progetto',
-            many: 'progetti',
-          },
-        ]
-      : []),
+    { found: shownProjects.length, total: plan.projects.length, one: 'progetto', many: 'progetti' },
+    {
+      found: shownMilestones.length,
+      total: plan.milestones.length,
+      one: 'nota sulla timeline',
+      many: 'note sulla timeline',
+    },
   ];
   const currentIndex = results.findIndex(
     (result) => resultKey(result.kind, result.id) === currentResult,
@@ -517,17 +668,30 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     if (!result) return;
     setCurrentResult(resultKey(result.kind, result.id));
     const { area, elementId } = RESULT_TARGETS[result.kind];
-    if (!areas[area]) setAreas((current) => ({ ...current, [area]: true }));
+    if (layout === 'tabs') {
+      if (!tabShowsArea(tab, area)) setTab(area);
+    } else if (!areas[area]) {
+      setAreas((current) => ({ ...current, [area]: true }));
+    }
     let wait = 0;
     if (result.kind === 'project') {
       // The roadmap goes to the start of the project, with the past when the project is past.
       const project = plan.projects.find((item) => item.id === result.id);
       if (project) {
-        if (roadmapDisplay.hidePastDays && project.endDate < today)
+        if (
+          roadmapDisplay.hidePastDays &&
+          (spans.get(project.id)?.end ?? project.endDate ?? project.startDate) < today
+        ) {
           roadmapControls.togglePastDays();
+        }
         dispatchRoadmapView({ type: 'goTo', date: project.startDate });
         if (!prefersReducedMotion()) wait = SCROLL_DURATION_MS + 50;
       }
+    } else if (result.kind === 'milestone' && result.date) {
+      // The roadmap goes to the day of the note, with the past when the day is past.
+      if (roadmapDisplay.hidePastDays && result.date < today) roadmapControls.togglePastDays();
+      dispatchRoadmapView({ type: 'goTo', date: result.date });
+      if (!prefersReducedMotion()) wait = SCROLL_DURATION_MS + 50;
     } else if (result.date) {
       // The result is drawn only on the timeline, with its day, its lane and the notes row.
       if (display.hidePastDays && (result.endDate ?? result.date) < today) {
@@ -563,9 +727,11 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           onTextScaleChange={setTextScale}
           compact={compact}
           onToggleCompact={() => setCompact((value) => !value)}
-          availableAreas={shownAreas}
-          areas={areas}
-          onToggleArea={handleToggleArea}
+          areaToggles={
+            layout === 'classic'
+              ? { areas: shownAreas, visibility: areas, onToggle: handleToggleArea }
+              : undefined
+          }
           search={filters.search}
           onSearchChange={handleSearchChange}
           onSearchKey={(backwards) => {
@@ -622,7 +788,13 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           </p>
         )}
 
-        <main className="w-full flex-1 space-y-6 px-4 py-5 sm:px-6">
+        <main
+          className="w-full flex-1 space-y-6 px-4 py-5 sm:px-6"
+          // The bar of the tabs is fixed at the bottom: the page ends above it.
+          style={
+            layout === 'tabs' ? { paddingBottom: `var(${TAB_BAR_HEIGHT_VAR}, 0px)` } : undefined
+          }
+        >
           {isPlanEmpty(plan) && (
             <EmptyPlanNotice
               warning={loadWarning}
@@ -631,7 +803,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             />
           )}
 
-          {areas.notes && (
+          {isShown('notes') && (
             <MemoStrip
               id={areaElementId('notes')}
               unavailable={sync.missing.includes('memos')}
@@ -668,7 +840,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             />
           )}
 
-          {areas.releases && (
+          {isShown('releases') && (
             <ReleasesArea
               id={areaElementId('releases')}
               plan={plan}
@@ -697,13 +869,17 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             />
           )}
 
-          {betaFeatures && areas.roadmaps && (
+          {isShown('roadmaps') && (
             <RoadmapArea
               id={areaElementId('roadmaps')}
               unavailable={sync.missing.includes('projects')}
               detailsUnavailable={sync.missing.includes('roadmap')}
               plan={plan}
               shown={shownProjects}
+              spans={spans}
+              milestones={shownMilestones}
+              milestoneActions={milestoneActions}
+              openRequest={projectToOpen}
               searching={searching}
               view={roadmapView}
               onViewAction={dispatchRoadmapView}
@@ -717,6 +893,9 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
               projectActions={{
                 onCreate: handleCreateProject,
                 onUpdate: (projectId, changes) => repository.updateProject(projectId, changes),
+                onMove: handleMoveProject,
+                onSaveTeam: handleSaveTeam,
+                onReorder: handleReorderProject,
                 onSave: handleSaveProject,
                 onDelete: handleDeleteProject,
               }}
@@ -726,7 +905,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             />
           )}
 
-          {shownAreas.every(({ id }) => !areas[id]) && (
+          {layout === 'classic' && shownAreas.every(({ id }) => !areas[id]) && (
             <div className="flex flex-col items-center gap-2 rounded-xl border border-line bg-surface p-10 text-center">
               <p className="text-sm font-bold">Tutte le aree sono nascoste</p>
               <p className="text-xs text-fg-muted">Scegli in alto quali mostrare.</p>
@@ -746,9 +925,11 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           )}
         </main>
 
-        <footer className="w-full px-4 pb-5 sm:px-6">
+        {/* With the tabs, version and commit are in their bar from 640 px, and here on phones. */}
+        <footer className={`w-full px-4 pb-5 sm:px-6 ${layout === 'tabs' ? 'sm:hidden' : ''}`}>
           <VersionStamp />
         </footer>
+        {layout === 'tabs' && <TabBar areas={shownAreas} tab={tab} onSelect={handleSelectTab} />}
 
         {dialog?.kind === 'task' && (
           <TaskDialog
@@ -784,7 +965,33 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           onOpen={(memo) => setDialog({ kind: 'memo', memo })}
         />
 
-        {betaFeatures && !sync.missing.includes('roadmap') && (
+        <ProjectReminders
+          projects={plan.projects}
+          milestones={plan.milestones}
+          seenMilestones={seenMilestoneReminders}
+          onSeenMilestones={(shown) =>
+            setSeenMilestoneReminders((seen) =>
+              rememberMilestoneReminders(seen, shown, plan.milestones),
+            )
+          }
+          onOpenMilestone={(milestoneId) => {
+            if (!tabShowsArea(tab, 'roadmaps')) setTab('roadmaps');
+            setAreas((current) => ({ ...current, roadmaps: true }));
+            setProjectToOpen({ kind: 'milestone', id: milestoneId, nonce: Date.now() });
+          }}
+          endOf={(project) => spans.get(project.id)?.end ?? project.startDate}
+          seen={seenProjectReminders}
+          onSeen={(shown) =>
+            setSeenProjectReminders((seen) => rememberProjectReminders(seen, shown, plan.projects))
+          }
+          onOpen={(projectId) => {
+            if (!tabShowsArea(tab, 'roadmaps')) setTab('roadmaps');
+            setAreas((current) => ({ ...current, roadmaps: true }));
+            setProjectToOpen({ kind: 'project', id: projectId, nonce: Date.now() });
+          }}
+        />
+
+        {!sync.missing.includes('roadmap') && (
           <ProjectNoteReminders
             notes={plan.projectNotes}
             projects={plan.projects}
@@ -822,8 +1029,14 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             onToggleBetaFeatures={setBetaFeatures}
             roadmapUnavailable={sync.missing.includes('roadmap')}
             roadmapActions={configActions}
+            barRendering={roadmapDisplay.barRendering}
+            onChangeBarRendering={roadmapControls.setBarRendering}
             theme={theme}
             onChangeTheme={setTheme}
+            dateFormat={dateFormat}
+            onChangeDateFormat={setDateFormat}
+            layout={layout}
+            onChangeLayout={setLayout}
             textScale={textScale}
             onTextScaleChange={setTextScale}
             onClose={() => setDialog(null)}

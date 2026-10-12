@@ -1,13 +1,15 @@
 import type { DocumentData } from 'firebase/firestore';
 import { APPROVAL_LIGHTS } from '../../domain/approval';
 import { parseAssignment, sortAssignments } from '../../domain/assignments';
+import { FORMULA_MAX } from '../../domain/teamFormula';
 import { DEFAULT_COLOR_ID, isKnownColorId } from '../../domain/colors';
 import { sortMemos } from '../../domain/memos';
 import { parseProjectNote, sortProjectNotes } from '../../domain/projectNotes';
-import { PROJECT_STATUSES, sortProjects } from '../../domain/projects';
+import { DEFAULT_ARRANGEMENT, parseProjectData, sortProjects } from '../../domain/projects';
 import {
   isGroupable,
-  parseFieldValues,
+  isProjectColorsMode,
+  isRoadmapId,
   parseProjectField,
   parseStakeholder,
   parseTeam,
@@ -21,15 +23,18 @@ import type {
   Lane,
   Memo,
   MemoAuthor,
+  Milestone,
   PlanSnapshot,
   Project,
   ProjectField,
   ProjectNote,
+  RoadmapConfig,
   Stakeholder,
   TaskItem,
   Team,
 } from '../../domain/types';
 import { isIsoDate } from '../../utils/dateUtils';
+import { parseMilestone, sortMilestones } from '../../domain/milestones';
 
 // How the plan is laid out in Firestore, under plans/{planId}:
 //   lanes/{laneId}                    name, position
@@ -42,6 +47,7 @@ import { isIsoDate } from '../../utils/dateUtils';
 //   projects/{projectId}              the project of the roadmap without its id, fields included
 //   projectNotes/{noteId}             projectId, text, createdAt, author, and the optional fields
 //   assignments/{assignmentId}        projectId, stakeholderId, startDate, manDays, and note when set
+//   milestones/{milestoneId}          date, title, colorId, and body, projectId, remind when set
 //   projectFields/{fieldId}           a custom field of the projects, as the settings define it
 //   teams/{teamId}                    name, tag, colorId, position
 //   stakeholders/{stakeholderId}      name, teamId, absences, position, and info when set
@@ -182,34 +188,33 @@ export function projectContent(project: Omit<Project, 'id'>): DocumentData {
   const data: DocumentData = {
     title: project.title,
     startDate: project.startDate,
-    endDate: project.endDate,
     colorId: project.colorId,
     status: project.status,
   };
+  if (project.endDate) data.endDate = project.endDate;
+  if (project.manDays) data.manDays = project.manDays;
+  if (project.deadline) data.deadline = project.deadline;
+  if (project.remindDaysBefore !== undefined) data.remindDaysBefore = project.remindDaysBefore;
+  if (project.contingency) {
+    data.contingency = {
+      startDate: project.contingency.startDate,
+      manDays: project.contingency.manDays,
+    };
+  }
+  if (project.arrangement && project.arrangement !== DEFAULT_ARRANGEMENT) {
+    data.arrangement = project.arrangement;
+  }
+  if (project.position !== undefined) data.position = project.position;
   if (project.owner) data.owner = project.owner;
   if (project.description) data.description = project.description;
   if (project.fields && Object.keys(project.fields).length > 0) data.fields = project.fields;
   return data;
 }
 
+/** A project from its document; an unknown color, from an older version, becomes the default. */
 export function readProject(id: string, data: DocumentData): Project | null {
-  const { title, startDate, endDate, colorId, status } = data;
-  if (!isText(title) || !isIsoDate(startDate) || !isIsoDate(endDate) || endDate < startDate)
-    return null;
-  if (!oneOf(status, PROJECT_STATUSES)) return null;
-  const project: Project = {
-    id,
-    title,
-    startDate,
-    endDate,
-    colorId: typeof colorId === 'string' && isKnownColorId(colorId) ? colorId : DEFAULT_COLOR_ID,
-    status,
-  };
-  if (isText(data.owner)) project.owner = data.owner;
-  if (isText(data.description)) project.description = data.description;
-  const fields = data.fields === undefined ? null : parseFieldValues(data.fields);
-  if (fields && Object.keys(fields).length > 0) project.fields = fields;
-  return project;
+  const parsed = parseProjectData(data, true);
+  return 'content' in parsed ? { id, ...parsed.content } : null;
 }
 
 /** A note of a project without its id, and without empty optional fields. */
@@ -230,6 +235,23 @@ export function projectNoteContent(note: Omit<ProjectNote, 'id'>): DocumentData 
 
 export function readProjectNote(id: string, data: DocumentData): ProjectNote | null {
   return parseProjectNote(id, data);
+}
+
+/** A note on the timeline without its id, and without empty optional fields. */
+export function milestoneContent(milestone: Omit<Milestone, 'id'>): DocumentData {
+  const data: DocumentData = {
+    date: milestone.date,
+    title: milestone.title,
+    colorId: milestone.colorId,
+  };
+  if (milestone.body) data.body = milestone.body;
+  if (milestone.projectId) data.projectId = milestone.projectId;
+  if (milestone.remind) data.remind = true;
+  return data;
+}
+
+export function readMilestone(id: string, data: DocumentData): Milestone | null {
+  return parseMilestone(id, data);
 }
 
 /** An assignment without its id, and without an empty note. */
@@ -261,6 +283,8 @@ export function projectFieldContent(field: Omit<ProjectField, 'id'>): DocumentDa
   if (field.description) data.description = field.description;
   // Only when it groups: the rules published before 0.9 do not know the key.
   if (isGroupable(field)) data.group = true;
+  // Only when true: the rules published before 0.11 do not know the key.
+  if (field.quick) data.quick = true;
   if (field.type === 'choice' && field.options) {
     data.options = field.options.map((option) => {
       const item: DocumentData = { id: option.id, label: option.label };
@@ -275,8 +299,17 @@ export function readProjectField(id: string, data: DocumentData): ProjectField |
   return parseProjectField(id, data, Number.MAX_SAFE_INTEGER);
 }
 
+/** A team without its id; the formula goes only when there is one. */
 export function teamContent(team: Omit<Team, 'id'>): DocumentData {
-  return { name: team.name, tag: team.tag, colorId: team.colorId, position: team.position };
+  const data: DocumentData = {
+    name: team.name,
+    tag: team.tag,
+    colorId: team.colorId,
+    phase: team.phase,
+    position: team.position,
+  };
+  if (team.formula) data.formula = team.formula;
+  return data;
 }
 
 export function readTeam(id: string, data: DocumentData): Team | null {
@@ -296,11 +329,41 @@ export function stakeholderContent(stakeholder: Omit<Stakeholder, 'id'>): Docume
     }),
   };
   if (stakeholder.info) data.info = stakeholder.info;
+  // Only when true: the rules published before 0.11 do not know the key.
+  if (stakeholder.default) data.default = true;
   return data;
 }
 
 export function readStakeholder(id: string, data: DocumentData): Stakeholder | null {
   return parseStakeholder(id, data, Number.MAX_SAFE_INTEGER);
+}
+
+/** The one document of the shared settings of the roadmap. */
+export const ROADMAP_SETTINGS_ID = 'roadmap';
+
+/** The shared settings of the roadmap: the keys that are set, and nothing else. */
+export type RoadmapSettings = Pick<
+  RoadmapConfig,
+  'contingencyFormula' | 'projectColors' | 'colorFieldId'
+>;
+
+export function roadmapSettingsContent(config: RoadmapSettings): DocumentData {
+  const data: DocumentData = {};
+  if (config.contingencyFormula) data.contingencyFormula = config.contingencyFormula;
+  if (config.projectColors) data.projectColors = config.projectColors;
+  if (config.colorFieldId) data.colorFieldId = config.colorFieldId;
+  return data;
+}
+
+/** The settings from their document: a value that does not fit is left out. */
+export function readRoadmapSettings(data: DocumentData): RoadmapSettings {
+  const settings: RoadmapSettings = {};
+  if (isText(data.contingencyFormula) && data.contingencyFormula.length <= FORMULA_MAX) {
+    settings.contingencyFormula = data.contingencyFormula;
+  }
+  if (isProjectColorsMode(data.projectColors)) settings.projectColors = data.projectColors;
+  if (isRoadmapId(data.colorFieldId)) settings.colorFieldId = data.colorFieldId;
+  return settings;
 }
 
 export interface PlanParts {
@@ -312,9 +375,11 @@ export interface PlanParts {
   projects: Project[];
   projectNotes: ProjectNote[];
   assignments: Assignment[];
+  milestones: Milestone[];
   fields: ProjectField[];
   teams: Team[];
   stakeholders: Stakeholder[];
+  settings: RoadmapSettings;
 }
 
 /** The plan as the app sees it: lanes in position order, values and tasks in a stable order. */
@@ -336,7 +401,9 @@ export function buildPlan(parts: PlanParts): PlanSnapshot {
     projects: sortProjects(parts.projects),
     projectNotes: sortProjectNotes(parts.projectNotes),
     assignments: sortAssignments(parts.assignments),
+    milestones: sortMilestones(parts.milestones),
     roadmap: {
+      ...parts.settings,
       fields: sortByPosition(parts.fields),
       teams: sortByPosition(parts.teams),
       stakeholders: sortByPosition(parts.stakeholders),
@@ -392,13 +459,18 @@ export function contentWrites(plan: PlanSnapshot): ContentWrite[] {
       path: `assignments/${id}`,
       data: assignmentContent(content),
     })),
+    ...plan.milestones.map(({ id, ...content }) => ({
+      path: `milestones/${id}`,
+      data: milestoneContent(content),
+    })),
     ...configWrites(plan.roadmap),
   ];
 }
 
-/** The documents of the configuration of the roadmap: fields, teams and stakeholders. */
+/** The documents of the configuration of the roadmap: fields, teams, stakeholders and settings. */
 export function configWrites(config: PlanSnapshot['roadmap']): ContentWrite[] {
   return [
+    { path: `settings/${ROADMAP_SETTINGS_ID}`, data: roadmapSettingsContent(config) },
     ...config.fields.map(({ id, ...content }) => ({
       path: `projectFields/${id}`,
       data: projectFieldContent(content),

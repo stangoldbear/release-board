@@ -33,13 +33,85 @@
     "overlay": "#000000"
   },
   "tasks": {
-    "yellow": { "bg": "#3D3212", "border": "#D6A21E", "fg": "#FCE8B2" },
-    "gray": { "bg": "#2F3338", "border": "#7A8391", "fg": "#E1E5EA" },
-    "blue": { "bg": "#0E3048", "border": "#3AA0D8", "fg": "#CFEAFB" },
-    "ice": { "bg": "#242A30", "border": "#3AA0D8", "fg": "#DCE6EE" },
-    "green": { "bg": "#0F3A2C", "border": "#2FB981", "fg": "#C8F2DF" },
-    "indigo": { "bg": "#25284F", "border": "#7C83F0", "fg": "#DADDFE" },
-    "red": { "bg": "#45202A", "border": "#EE6A80", "fg": "#FFD6DC" },
-    "purple": { "bg": "#36224C", "border": "#B57CF0", "fg": "#EBDAFE" }
+    "yellow": {
+      "bg": "#3D3212",
+      "border": "#D6A21E",
+      "fg": "#FCE8B2"
+    },
+    "gray": {
+      "bg": "#2F3338",
+      "border": "#7A8391",
+      "fg": "#E1E5EA"
+    },
+    "blue": {
+      "bg": "#0E3048",
+      "border": "#3AA0D8",
+      "fg": "#CFEAFB"
+    },
+    "ice": {
+      "bg": "#242A30",
+      "border": "#3AA0D8",
+      "fg": "#DCE6EE"
+    },
+    "green": {
+      "bg": "#0F3A2C",
+      "border": "#2FB981",
+      "fg": "#C8F2DF"
+    },
+    "indigo": {
+      "bg": "#25284F",
+      "border": "#7C83F0",
+      "fg": "#DADDFE"
+    },
+    "red": {
+      "bg": "#45202A",
+      "border": "#EE6A80",
+      "fg": "#FFD6DC"
+    },
+    "purple": {
+      "bg": "#36224C",
+      "border": "#B57CF0",
+      "fg": "#EBDAFE"
+    },
+    "orange": {
+      "bg": "#543B26",
+      "border": "#E28336",
+      "fg": "#FDD3B1"
+    },
+    "coral": {
+      "bg": "#53332F",
+      "border": "#E06858",
+      "fg": "#FDC7C0"
+    },
+    "pink": {
+      "bg": "#523343",
+      "border": "#DC67A4",
+      "fg": "#FBC7E2"
+    },
+    "magenta": {
+      "bg": "#4F3553",
+      "border": "#D16DE0",
+      "fg": "#F6C9FD"
+    },
+    "teal": {
+      "bg": "#224A45",
+      "border": "#28BFAC",
+      "fg": "#ABEEE5"
+    },
+    "lime": {
+      "bg": "#3F4F24",
+      "border": "#93CF30",
+      "fg": "#DAF5AE"
+    },
+    "olive": {
+      "bg": "#404025",
+      "border": "#979734",
+      "fg": "#DCDCB0"
+    },
+    "brown": {
+      "bg": "#433731",
+      "border": "#A37660",
+      "fg": "#E1CDC4"
+    }
   }
 }

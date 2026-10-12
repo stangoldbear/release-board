@@ -7,8 +7,9 @@ giornalieri.
 
 ## Funzionalità
 
-- Due aree, Note e Next Releases, da mostrare o nascondere dall'intestazione; una terza, Roadmap,
-  in beta: compare attivando «Funzioni beta» nelle Impostazioni.
+- Tre aree, Notes, Next Releases e Roadmap: con le schede in fondo alla pagina («All» le mostra
+  tutte, le altre una sola) oppure, a scelta nelle Impostazioni, con i pulsanti nell'intestazione
+  che le mostrano e le nascondono.
 - Calendario continuo a corsie, con i mesi uno dopo l'altro, quattro livelli di zoom («Dettaglio»,
   «Mese», «2 mesi», «Trimestre») più «Mostra N giorni», che riempie la finestra con quanti giorni
   interi si vogliono, i giorni passati in grigio o nascosti, e bacheca settimanale. A scelta,
@@ -22,16 +23,23 @@ giornalieri.
 - Note libere sotto la ricerca, una dopo l'altra: titolo, testo, colore, un promemoria che compare
   il giorno scelto e un ordine che si cambia trascinandole. In un'istanza condivisa ognuno vede le
   sue, può guardare quelle di tutti, raggruppate per autore, e può tenerne alcune private.
-- Roadmap (funzione beta): i progetti passati, in corso e futuri su una linea del tempo con le
-  scale del calendario, con stato, responsabile, descrizione e campi personalizzati (link a Jira,
-  Figma e Confluence, team impattati, stime…), i cui valori compaiono come etichette colorate; i
-  progetti si raggruppano a scelta per un campo, come la dimensione, che colora anche una barra
-  accanto al nome di ogni progetto. Note con autore, scadenza e
-  avviso; una vista Team con una barra per persona, che salta weekend, festività e assenze.
-  Progetti e barre si spostano trascinandoli, anche da tastiera.
-- Ricerca in attività, note dei giorni, note libere e, con le funzioni beta, progetti (anche note
-  e campi), con tutte le parole o almeno una: le parole trovate sono evidenziate e i risultati si
+- Roadmap: i progetti passati, in corso e futuri su una linea del tempo con le scale del
+  calendario, con stato, responsabile, descrizione e campi personalizzati (link a Jira, Figma e
+  Confluence, stime…), i cui valori compaiono come etichette colorate; la barra di un progetto
+  prende il colore della sua dimensione, o un colore libero a scelta nelle Impostazioni, e i
+  progetti si raggruppano per un campo e si ordinano a mano o per inizio, fine, deadline, stato o
+  titolo. Ogni progetto ha il suo team: le persone con i giorni uomo in una tabella che le formule
+  dei team (analisi, test, contingency) riempiono da sole, disposte nel Gantt in parallelo o in
+  sequenza, con la fine calcolata dal lavoro, una hard deadline segnata dove il lavoro la supera e
+  un avviso qualche giorno prima; la barra mostra il lavoro come lane per persona, come fasi o da
+  sola, e le note sulla timeline sono rombi su un giorno, di un progetto o liberi. Note con autore,
+  scadenza e avviso; una vista Team con una barra per persona, che salta weekend, festività e
+  assenze, allungabile dal bordo o scrivendo i giorni con un doppio clic. Progetti, barre e note si
+  spostano trascinandoli, anche da tastiera.
+- Ricerca in attività, note dei giorni, note libere, progetti (anche note e campi) e note sulla
+  timeline, con tutte le parole o almeno una: le parole trovate sono evidenziate e i risultati si
   scorrono uno alla volta.
+- Date per esteso nel formato scelto nelle Impostazioni, `gg-mm-aa` di serie.
 - Fatturato previsto importato da un foglio Google in CSV, con il semaforo dei rilasci e le
   promozioni di ogni giorno.
 - Festività italiane e weekend evidenziati.

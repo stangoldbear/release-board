@@ -51,7 +51,7 @@ interface Explained {
 }
 
 /** The flags a field can have, with their English name. */
-const FLAGS = ['multiple', 'required', 'main', 'group'] as const;
+const FLAGS = ['multiple', 'required', 'main', 'group', 'quick'] as const;
 
 /** An option with another color, or none when the value is not a color. */
 function withColor(option: FieldOption, colorId: string): FieldOption {
@@ -81,6 +81,7 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
   const [required, setRequired] = useState(field?.required ?? false);
   const [main, setMain] = useState(field?.main ?? false);
   const [group, setGroup] = useState(field?.group === true);
+  const [quick, setQuick] = useState(field?.quick === true);
   const [options, setOptions] = useState<FieldOption[]>(field?.options ?? []);
   const [optionDraft, setOptionDraft] = useState('');
   const formId = useId();
@@ -115,6 +116,7 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
     if (description.trim()) saved.description = description.trim();
     if (type === 'choice') saved.options = options;
     if (group && canGroup) saved.group = true;
+    if (quick) saved.quick = true;
     onSave(saved);
     onClose();
   };
@@ -226,7 +228,9 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
                     ? required
                     : flag === 'main'
                       ? main
-                      : group && canGroup;
+                      : flag === 'group'
+                        ? group && canGroup
+                        : quick;
               const set =
                 flag === 'multiple'
                   ? setMultiple
@@ -234,7 +238,9 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
                     ? setRequired
                     : flag === 'main'
                       ? setMain
-                      : setGroup;
+                      : flag === 'group'
+                        ? setGroup
+                        : setQuick;
               const disabled = flag === 'group' && !canGroup;
               const wording = FIELD_FLAG_INFO[flag];
               // For a list of values the request speaks of "exclusive" choices: the opposite flag.

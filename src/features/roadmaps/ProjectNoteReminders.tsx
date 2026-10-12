@@ -8,6 +8,7 @@ import { useOpenDialogCount } from '../../shared/ui/openDialogs';
 import { useNow } from '../../shared/useNow';
 import { formatDateToISO } from '../../utils/dateUtils';
 import { dueText } from './noteUi';
+import { useDateFormat } from '../..//shared/dateFormat';
 
 /** How often the day is checked, so that a calendar left open shows the deadlines of a new day. */
 const CHECK_MS = 60_000;
@@ -35,6 +36,7 @@ export function ProjectNoteReminders({
   onSeen,
   onDone,
 }: ProjectNoteRemindersProps) {
+  const dateFormat = useDateFormat();
   const today = formatDateToISO(useNow(CHECK_MS));
   const openDialogs = useOpenDialogCount();
   const due = dueProjectNotes(notes, today, seen);
@@ -72,7 +74,9 @@ export function ProjectNoteReminders({
             </p>
             <p className="mt-1 whitespace-pre-line wrap-break-word">{note.text}</p>
             <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-              <span className="font-semibold first-letter:uppercase">{dueText(note, today)}</span>
+              <span className="font-semibold first-letter:uppercase">
+                {dueText(note, today, dateFormat)}
+              </span>
               <Button size="sm" onClick={() => onDone(note.id)} aria-label={`Fatta: ${note.text}`}>
                 <Check className="h-3.5 w-3.5" aria-hidden="true" />
                 Fatta

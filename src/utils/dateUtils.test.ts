@@ -7,7 +7,8 @@ import {
   endOfMonth,
   formatDateTimeLongIT,
   formatDateToISO,
-  formatDateToIT,
+  formatDate,
+  formatDayMonth,
   getDaysInMonth,
   getEasterSunday,
   getItalianHolidayName,
@@ -62,8 +63,23 @@ describe('ISO dates', () => {
     expect(isIsoDate(20260905)).toBe(false);
   });
 
-  it('formats dates the Italian way', () => {
-    expect(formatDateToIT('2026-09-05')).toBe('05/09/2026');
+  it('writes dates in full in the chosen format, day and month first by default', () => {
+    expect(formatDate('2026-09-05')).toBe('05-09-26');
+    expect(formatDate('2026-09-05', 'dd-mm-yyyy')).toBe('05-09-2026');
+    expect(formatDate('2026-09-05', 'dd/mm/yyyy')).toBe('05/09/2026');
+    expect(formatDate('2026-09-05', 'yy-mm-dd')).toBe('26-09-05');
+    expect(formatDate('2026-09-05', 'yyyy-mm-dd')).toBe('2026-09-05');
+    expect(formatDate(new Date(2026, 8, 5), 'dd/mm/yyyy')).toBe('05/09/2026');
+    expect(formatDate('05/09/2026')).toBe('05-09-26');
+    expect(formatDate('2026-09-05T10:30:00', 'dd-mm-yyyy')).toBe('05-09-2026');
+    expect(formatDate(null)).toBe('');
+    expect(formatDate('domani')).toBe('domani');
+  });
+
+  it('writes day and month alone in the order of the format', () => {
+    expect(formatDayMonth('2026-09-05')).toBe('05-09');
+    expect(formatDayMonth('2026-09-05', 'dd/mm/yyyy')).toBe('05/09');
+    expect(formatDayMonth('2026-09-05', 'yyyy-mm-dd')).toBe('09-05');
   });
 });
 

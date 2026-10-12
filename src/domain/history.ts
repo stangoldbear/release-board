@@ -1,10 +1,19 @@
-import { formatDateToIT } from '../utils/dateUtils';
+import { DEFAULT_DATE_FORMAT, formatDate } from '../utils/dateUtils';
+import type { DateFormat } from '../utils/dateUtils';
 import { TASK_COLORS } from './colors';
 import { formatLocaleNumber } from './numberFormat';
 import { TASK_STATUS_LABELS } from './plan';
 import { PROJECT_NOTE_STATUS_LABELS } from './projectNotes';
-import { PROJECT_STATUS_LABELS } from './projects';
-import { FIELD_TYPE_INFO, isFieldType } from './roadmapConfig';
+import { describeRemindDays, isRemindDays } from './projectReminders';
+import { PROJECT_ARRANGEMENT_INFO, PROJECT_STATUS_LABELS, isProjectArrangement } from './projects';
+import {
+  FIELD_TYPE_INFO,
+  PROJECT_COLORS_INFO,
+  TEAM_PHASE_INFO,
+  isFieldType,
+  isProjectColorsMode,
+  isTeamPhase,
+} from './roadmapConfig';
 import type { ProjectNoteStatus, ProjectStatus, TaskStatus } from './types';
 
 export type HistoryEntity =
@@ -17,10 +26,12 @@ export type HistoryEntity =
   | 'memo'
   | 'project'
   | 'projectNote'
+  | 'milestone'
   | 'assignment'
   | 'projectField'
   | 'team'
   | 'stakeholder'
+  | 'roadmapSettings'
   | 'member';
 export type HistoryAction = 'create' | 'update' | 'delete' | 'import' | 'setup';
 
@@ -50,10 +61,12 @@ const ENTITY_LABELS: Record<HistoryEntity, string> = {
   memo: 'la nota libera',
   project: 'il progetto',
   projectNote: 'la nota del progetto',
+  milestone: 'la nota sulla timeline',
   assignment: "l'assegnazione",
   projectField: 'il campo dei progetti',
   team: 'il team',
   stakeholder: 'la persona del team',
+  roadmapSettings: 'le impostazioni della roadmap',
   member: 'il membro',
 };
 
@@ -62,6 +75,7 @@ const TITLED_ENTITIES: readonly HistoryEntity[] = [
   'memo',
   'project',
   'projectNote',
+  'milestone',
   'assignment',
   'projectField',
   'team',
@@ -136,7 +150,10 @@ function memoVerb(entry: HistoryEntry): string {
 }
 
 /** "ha fatto cosa", without who: the history page shows the author apart. */
-export function describeChange(entry: HistoryEntry): string {
+export function describeChange(
+  entry: HistoryEntry,
+  dateFormat: DateFormat = DEFAULT_DATE_FORMAT,
+): string {
   if (entry.summary) return `${ACTION_LABELS[entry.action]}: ${entry.summary}`;
   // Free notes, projects and what goes with them are named with what they are.
   if (TITLED_ENTITIES.includes(entry.entity)) {
@@ -147,19 +164,22 @@ export function describeChange(entry: HistoryEntry): string {
   }
   const move = noteMove(entry);
   if (move) {
-    return `ha spostato la nota dal ${formatDateToIT(move.from)} al ${formatDateToIT(move.to)}`;
+    return `ha spostato la nota dal ${formatDate(move.from, dateFormat)} al ${formatDate(move.to, dateFormat)}`;
   }
   const what =
     titleOf(entry) ??
     (entry.entity === 'note'
-      ? `${ENTITY_LABELS.note} del ${formatDateToIT(entry.entityId)}`
+      ? `${ENTITY_LABELS.note} del ${formatDate(entry.entityId, dateFormat)}`
       : ENTITY_LABELS[entry.entity]);
   return `${ACTION_LABELS[entry.action]} ${what}`;
 }
 
 /** "chi ha fatto cosa", to list the history. */
-export function describeHistoryEntry(entry: HistoryEntry): string {
-  return `${entry.actor.login || 'Qualcuno'} ${describeChange(entry)}`;
+export function describeHistoryEntry(
+  entry: HistoryEntry,
+  dateFormat: DateFormat = DEFAULT_DATE_FORMAT,
+): string {
+  return `${entry.actor.login || 'Qualcuno'} ${describeChange(entry, dateFormat)}`;
 }
 
 /** What a change is about, as the history page groups and filters it. */
@@ -187,11 +207,13 @@ export function historyKind(entry: HistoryEntry): HistoryKind {
     case 'value':
       return 'revenue';
     case 'projectNote':
+    case 'milestone':
     case 'assignment':
       return 'project';
     case 'projectField':
     case 'team':
     case 'stakeholder':
+    case 'roadmapSettings':
       return 'roadmap';
     default:
       return entry.entity;
@@ -224,7 +246,13 @@ const TASK_SUMMARY_FIELDS = ['laneId', 'startDate', 'endDate', 'status'];
 const PROJECT_FIELDS: Record<string, string> = {
   title: 'Titolo',
   startDate: 'Inizio',
-  endDate: 'Fine',
+  endDate: 'Fine pianificata',
+  manDays: 'Giorni uomo',
+  deadline: 'Hard deadline',
+  remindDaysBefore: 'Avviso di scadenza',
+  contingency: 'Contingency',
+  arrangement: 'Disposizione',
+  position: 'Posizione',
   status: 'Stato',
   colorId: 'Colore',
   owner: 'Responsabile',
@@ -233,7 +261,7 @@ const PROJECT_FIELDS: Record<string, string> = {
 };
 
 /** Fields worth showing for a project that was added or deleted. */
-const PROJECT_SUMMARY_FIELDS = ['startDate', 'endDate', 'status', 'owner'];
+const PROJECT_SUMMARY_FIELDS = ['startDate', 'endDate', 'deadline', 'status', 'owner'];
 
 /** The fields of the entities that go with the projects, named the same way in every change. */
 const ROADMAP_FIELDS: Partial<Record<HistoryEntity, Record<string, string>>> = {
@@ -251,6 +279,14 @@ const ROADMAP_FIELDS: Partial<Record<HistoryEntity, Record<string, string>>> = {
     manDays: 'Giorni',
     note: 'Nota',
   },
+  milestone: {
+    date: 'Giorno',
+    title: 'Titolo',
+    body: 'Testo',
+    colorId: 'Colore',
+    projectId: 'Progetto',
+    remind: 'Avviso',
+  },
   projectField: {
     label: 'Etichetta',
     description: 'Descrizione',
@@ -259,16 +295,30 @@ const ROADMAP_FIELDS: Partial<Record<HistoryEntity, Record<string, string>>> = {
     required: 'Almeno uno',
     main: 'Principale',
     group: 'Raggruppa',
+    quick: 'In primo piano',
     options: 'Valori',
     position: 'Posizione',
   },
-  team: { name: 'Nome', tag: 'Tag', colorId: 'Colore', position: 'Posizione' },
+  team: {
+    name: 'Nome',
+    tag: 'Tag',
+    colorId: 'Colore',
+    phase: 'Fase',
+    formula: 'Formula',
+    position: 'Posizione',
+  },
   stakeholder: {
     name: 'Nome',
     teamId: 'Team',
     info: 'Info',
     absences: 'Assenze',
+    default: 'Membro di default',
     position: 'Posizione',
+  },
+  roadmapSettings: {
+    contingencyFormula: 'Formula della contingency',
+    projectColors: 'Colori dei progetti',
+    colorFieldId: 'Campo dei colori',
   },
 };
 
@@ -303,6 +353,7 @@ function formatField(
   field: string,
   value: unknown,
   laneName: (id: string) => string | undefined,
+  dateFormat: DateFormat,
 ): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   if (Array.isArray(value) && field === 'options') return formatOptions(value);
@@ -314,6 +365,14 @@ function formatField(
     const count = Object.keys(value).length;
     return `${count} ${count === 1 ? 'campo' : 'campi'}`;
   }
+  if (typeof value === 'object' && field === 'contingency') {
+    const { startDate, manDays } = value as { startDate?: unknown; manDays?: unknown };
+    const days =
+      typeof manDays === 'number'
+        ? formatLocaleNumber(manDays, Number.isInteger(manDays) ? 0 : 1)
+        : '?';
+    return `${days} ${manDays === 1 ? 'giorno' : 'giorni'} dal ${typeof startDate === 'string' ? formatDate(startDate, dateFormat) : '?'}`;
+  }
   if (typeof value !== 'string') return undefined;
   switch (field) {
     case 'startDate':
@@ -321,7 +380,15 @@ function formatField(
     case 'date':
     case 'remindOn':
     case 'dueOn':
-      return formatDateToIT(value);
+      return formatDate(value, dateFormat);
+    case 'phase':
+      return isTeamPhase(value) ? TEAM_PHASE_INFO[value].label : value;
+    case 'arrangement':
+      return isProjectArrangement(value) ? PROJECT_ARRANGEMENT_INFO[value].label : value;
+    case 'projectColors':
+      return isProjectColorsMode(value) ? PROJECT_COLORS_INFO[value].label : value;
+    case 'remindDaysBefore':
+      return isRemindDays(value) ? describeRemindDays(value) : value;
     case 'status':
       return (
         (entity === 'project'
@@ -350,13 +417,14 @@ function formatField(
 export function fieldChanges(
   entry: HistoryEntry,
   laneName: (id: string) => string | undefined,
+  dateFormat: DateFormat = DEFAULT_DATE_FORMAT,
 ): FieldChange[] {
   const before = entry.before ?? {};
   const after = entry.after ?? {};
   const pair = (field: string, label: string): FieldChange => ({
     label,
-    before: formatField(entry.entity, field, before[field], laneName),
-    after: formatField(entry.entity, field, after[field], laneName),
+    before: formatField(entry.entity, field, before[field], laneName, dateFormat),
+    after: formatField(entry.entity, field, after[field], laneName, dateFormat),
   });
 
   if (entry.entity === 'task') {
@@ -421,8 +489,11 @@ export function fieldChanges(
       .filter(([date]) => /^\d{4}-\d{2}-\d{2}$/.test(date))
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, value]) => ({
-        label: formatDateToIT(date),
-        after: value === null ? 'Rimosso' : formatField(entry.entity, 'value', value, laneName),
+        label: formatDate(date, dateFormat),
+        after:
+          value === null
+            ? 'Rimosso'
+            : formatField(entry.entity, 'value', value, laneName, dateFormat),
       }));
   }
   return [];

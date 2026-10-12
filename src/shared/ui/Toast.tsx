@@ -33,7 +33,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {/* The live region stays mounted so screen readers announce each new message; the key makes
           a repeated message count as new. */}
-      <div role="status" aria-live="polite" className="fixed bottom-5 right-5 z-50">
+      <div
+        role="status"
+        aria-live="polite"
+        className="fixed right-5 z-50"
+        style={{ bottom: 'calc(1.25rem + var(--tab-bar-height, 0px))' }}
+      >
         {toast && (
           <div
             key={toast.id}

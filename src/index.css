@@ -20,6 +20,11 @@
     }
   }
 
+  /* The bar of the tabs, when the layout has it, is fixed at the bottom at every width. */
+  html {
+    scroll-padding-bottom: calc(var(--tab-bar-height, 0px) + 0.5rem);
+  }
+
   /* The page behind an open modal dialog stays still: on phones it would scroll in its place. */
   html:has(dialog:modal) {
     overflow: hidden;

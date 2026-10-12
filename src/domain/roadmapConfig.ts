@@ -1,8 +1,10 @@
-import { formatDateToIT, isIsoDate } from '../utils/dateUtils';
+import { DEFAULT_DATE_FORMAT, formatDate, isIsoDate } from '../utils/dateUtils';
+import type { DateFormat } from '../utils/dateUtils';
 import { isKnownColorId } from './colors';
 import type { TaskColorId } from './colors';
 import { formatLocaleNumber, parseLocaleNumber } from './numberFormat';
 import defaults from './roadmapDefaults.json';
+import { FORMULA_MAX } from './teamFormula';
 import type {
   Absence,
   FieldOption,
@@ -10,11 +12,13 @@ import type {
   FieldValue,
   Price,
   Project,
+  ProjectColorsMode,
   ProjectField,
   ProjectFieldValues,
   RoadmapConfig,
   Stakeholder,
   Team,
+  TeamPhase,
 } from './types';
 
 // The configuration of the roadmap: how the projects are described. The parsers here are shared
@@ -96,7 +100,113 @@ export const FIELD_FLAG_INFO = {
     description:
       'La roadmap può raggruppare i progetti per i valori di questo campo: si sceglie in «Raggruppa per», sotto la roadmap. Solo per una lista di valori esclusivi, così ogni progetto sta in un gruppo solo.',
   },
+  quick: {
+    label: 'In primo piano',
+    description:
+      'Il campo compare anche nella vista standard della finestra del progetto, quella con i pochi campi che servono subito; gli altri campi stanno nella vista avanzata.',
+  },
 } as const;
+
+/** The phases of the teams, in the order of the standard arrangement of a project. */
+export const TEAM_PHASES: readonly TeamPhase[] = ['analysis', 'development', 'test'];
+
+/** Each phase with its name and where it falls, for the editor of the teams. */
+export const TEAM_PHASE_INFO: Record<TeamPhase, { label: string; description: string }> = {
+  analysis: {
+    label: 'Analisi',
+    description:
+      'Lavora per prima, dall’inizio del progetto: analisi e definizione delle attività.',
+  },
+  development: {
+    label: 'Sviluppo',
+    description: 'Lavora dopo l’analisi, in parallelo con gli altri team di sviluppo.',
+  },
+  test: {
+    label: 'Test',
+    description: 'Lavora dopo l’ultimo sviluppo, prima della contingency.',
+  },
+};
+
+/** A team read from before the phases existed is a development team. */
+export const DEFAULT_TEAM_PHASE: TeamPhase = 'development';
+
+export function isTeamPhase(value: unknown): value is TeamPhase {
+  return (TEAM_PHASES as readonly unknown[]).includes(value);
+}
+
+/** The shared settings of the roadmap that can change on their own; null clears one. */
+export interface RoadmapSettingsChanges {
+  contingencyFormula?: string | null;
+  projectColors?: ProjectColorsMode;
+  /** The field that colors the projects; null for the first that can. */
+  colorFieldId?: string | null;
+}
+
+export const PROJECT_COLORS_MODES: readonly ProjectColorsMode[] = ['field', 'free'];
+export const DEFAULT_PROJECT_COLORS: ProjectColorsMode = 'field';
+export const PROJECT_COLORS_INFO: Record<
+  ProjectColorsMode,
+  { label: string; description: string }
+> = {
+  field: {
+    label: 'Dal campo',
+    description:
+      'La barra di ogni progetto ha il colore del suo valore in una lista con i colori, come «Dimensione»; senza valore è grigia. La finestra del progetto non chiede il colore.',
+  },
+  free: {
+    label: 'Liberi',
+    description:
+      'Ogni progetto ha il colore scelto nella sua finestra; un progetto nuovo prende il colore dopo quello dell’ultimo.',
+  },
+};
+
+export function isProjectColorsMode(value: unknown): value is ProjectColorsMode {
+  return (PROJECT_COLORS_MODES as readonly unknown[]).includes(value);
+}
+
+/** The configuration with its settings changed. */
+export function applyRoadmapSettings(
+  config: RoadmapConfig,
+  changes: RoadmapSettingsChanges,
+): RoadmapConfig {
+  const next = { ...config };
+  if (changes.contingencyFormula !== undefined) {
+    const formula = changes.contingencyFormula?.trim();
+    if (formula) next.contingencyFormula = formula;
+    else delete next.contingencyFormula;
+  }
+  if (changes.projectColors !== undefined) {
+    if (changes.projectColors === DEFAULT_PROJECT_COLORS) delete next.projectColors;
+    else next.projectColors = changes.projectColors;
+  }
+  if (changes.colorFieldId !== undefined) {
+    if (changes.colorFieldId) next.colorFieldId = changes.colorFieldId;
+    else delete next.colorFieldId;
+  }
+  return next;
+}
+
+/** The field whose values color the projects: the one chosen, or the first that can; null without. */
+export function projectColorField(
+  config: Pick<RoadmapConfig, 'fields' | 'colorFieldId'>,
+): ProjectField | null {
+  const candidates = config.fields.filter(colorsProjects);
+  return candidates.find((field) => field.id === config.colorFieldId) ?? candidates[0] ?? null;
+}
+
+/**
+ * The color of a project on the roadmap: that of its value of the color field, grey without one;
+ * its own color when the colors are free, or when no field colors the projects.
+ */
+export function projectColorOf(
+  project: Pick<Project, 'colorId' | 'fields'>,
+  config: Pick<RoadmapConfig, 'fields' | 'colorFieldId' | 'projectColors'>,
+): TaskColorId {
+  if ((config.projectColors ?? DEFAULT_PROJECT_COLORS) === 'free') return project.colorId;
+  const field = projectColorField(config);
+  if (!field) return project.colorId;
+  return coloredValueOf(project, field)?.colorId ?? 'gray';
+}
 
 /** Currencies offered first; any three-letter code is accepted. */
 export const CURRENCIES: readonly string[] = ['EUR', 'USD', 'GBP', 'CHF'];
@@ -123,13 +233,17 @@ export function parseTeam(id: string, value: unknown, fallbackPosition: number):
   const tag = text(value.tag, TEAM_TAG_MAX);
   if (!name || !tag || typeof value.colorId !== 'string' || !isKnownColorId(value.colorId))
     return null;
-  return {
+  const team: Team = {
     id,
     name,
     tag,
     colorId: value.colorId,
+    phase: isTeamPhase(value.phase) ? value.phase : DEFAULT_TEAM_PHASE,
     position: position(value.position, fallbackPosition),
   };
+  const formula = text(value.formula, FORMULA_MAX);
+  if (formula) team.formula = formula;
+  return team;
 }
 
 /** An absence from its data; null when the dates are not a range. */
@@ -167,6 +281,7 @@ export function parseStakeholder(
   };
   const info = text(value.info, STAKEHOLDER_INFO_MAX);
   if (info) stakeholder.info = info;
+  if (value.default === true) stakeholder.default = true;
   return stakeholder;
 }
 
@@ -213,6 +328,7 @@ export function parseProjectField(
     field.options = options;
   }
   if (value.group === true && isGroupable({ ...field, group: true })) field.group = true;
+  if (value.quick === true) field.quick = true;
   return field;
 }
 
@@ -311,7 +427,7 @@ export function parseRoadmapConfig(value: unknown): RoadmapConfig {
   const data = isData(value) ? value : {};
   const items = (list: unknown): Data[] => (Array.isArray(list) ? list.filter(isData) : []);
   const idOf = (item: Data) => (typeof item.id === 'string' ? item.id : '');
-  return {
+  const config: RoadmapConfig = {
     fields: sortByPosition(
       items(data.fields).flatMap((item, at) => parseProjectField(idOf(item), item, at) ?? []),
     ),
@@ -322,6 +438,11 @@ export function parseRoadmapConfig(value: unknown): RoadmapConfig {
       items(data.stakeholders).flatMap((item, at) => parseStakeholder(idOf(item), item, at) ?? []),
     ),
   };
+  const contingency = text(data.contingencyFormula, FORMULA_MAX);
+  if (contingency) config.contingencyFormula = contingency;
+  if (data.projectColors === 'free') config.projectColors = 'free';
+  if (isRoadmapId(data.colorFieldId)) config.colorFieldId = data.colorFieldId;
+  return config;
 }
 
 /** The configuration a plan starts with, from roadmapDefaults.json. */
@@ -354,6 +475,45 @@ export function teamOf(
   stakeholder: Pick<Stakeholder, 'teamId'>,
 ): Team | null {
   return config.teams.find((team) => team.id === stakeholder.teamId) ?? null;
+}
+
+/** The teams in the order of their phases, then of their positions: the order of the work. */
+export function teamsInPhaseOrder(config: Pick<RoadmapConfig, 'teams'>): Team[] {
+  return [...config.teams].sort(
+    (a, b) =>
+      TEAM_PHASES.indexOf(a.phase) - TEAM_PHASES.indexOf(b.phase) ||
+      a.position - b.position ||
+      a.id.localeCompare(b.id),
+  );
+}
+
+/** The people in the table of a new project: the default member of each team, in the order of the work. */
+/**
+ * Where a person falls in the order of the work: the phase and the position of their team, then
+ * their own position. A person no longer in the configuration comes last.
+ */
+export function workRank(
+  config: Pick<RoadmapConfig, 'teams' | 'stakeholders'>,
+  stakeholderId: string | undefined,
+): [team: number, person: number] {
+  const stakeholder = config.stakeholders.find((item) => item.id === stakeholderId);
+  if (!stakeholder) return [Number.MAX_SAFE_INTEGER, 0];
+  const teams = teamsInPhaseOrder(config);
+  const team = teams.findIndex((item) => item.id === stakeholder.teamId);
+  return [team === -1 ? teams.length : team, stakeholder.position];
+}
+
+export function compareWorkRank(
+  a: [team: number, person: number],
+  b: [team: number, person: number],
+): number {
+  return a[0] - b[0] || a[1] - b[1];
+}
+
+export function defaultMembers(config: RoadmapConfig): Stakeholder[] {
+  return teamsInPhaseOrder(config).flatMap((team) =>
+    sortByPosition(config.stakeholders.filter((item) => item.teamId === team.id && item.default)),
+  );
 }
 
 /** The stakeholders by team, in the order of the teams; those of a team that is gone come last. */
@@ -405,8 +565,12 @@ export function missingRequiredFields(
   );
 }
 
-/** A value of a field in words: dates in Italian, numbers with the locale, options by label. */
-export function formatFieldValue(field: ProjectField, value: FieldValue): string {
+/** A value of a field in words: dates in the chosen format, numbers with the locale, options by label. */
+export function formatFieldValue(
+  field: ProjectField,
+  value: FieldValue,
+  dateFormat: DateFormat = DEFAULT_DATE_FORMAT,
+): string {
   if (typeof value === 'number') {
     return formatLocaleNumber(value, Number.isInteger(value) ? 0 : 2);
   }
@@ -414,7 +578,7 @@ export function formatFieldValue(field: ProjectField, value: FieldValue): string
     const decimals = Number.isInteger(value.amount) ? 0 : 2;
     return `${formatLocaleNumber(value.amount, decimals)} ${value.currency}`;
   }
-  if (field.type === 'date') return formatDateToIT(value);
+  if (field.type === 'date') return formatDate(value, dateFormat);
   if (field.type === 'choice') {
     return (field.options ?? []).find((option) => option.id === value)?.label ?? value;
   }

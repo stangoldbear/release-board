@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_AREAS_VISIBLE, availableAreas, parseAreaVisibility } from './areas';
+import { ALL_AREAS_VISIBLE, HAS_BETA_FEATURES, availableAreas, parseAreaVisibility } from './areas';
 
 describe('the areas shown', () => {
   it('reads what a browser saved', () => {
@@ -27,8 +27,9 @@ describe('the areas shown', () => {
 });
 
 describe('the areas available', () => {
-  it('keeps the roadmap for the beta features', () => {
-    expect(availableAreas(false).map(({ id }) => id)).toEqual(['notes', 'releases']);
-    expect(availableAreas(true).map(({ id }) => id)).toEqual(['notes', 'releases', 'roadmaps']);
+  it('offers every area with or without the beta features, now that nothing is in beta', () => {
+    expect(availableAreas(false).map(({ id }) => id)).toEqual(['notes', 'releases', 'roadmaps']);
+    expect(availableAreas(true)).toEqual(availableAreas(false));
+    expect(HAS_BETA_FEATURES).toBe(false);
   });
 });

@@ -9,7 +9,7 @@ import {
   SearchHighlightContext,
   resultKey,
 } from '../../shared/ui/Highlight';
-import { formatDateToIT, todayIso } from '../../utils/dateUtils';
+import { todayIso } from '../../utils/dateUtils';
 import {
   LABEL_CELL,
   NARROW_DAY_WIDTH,
@@ -19,6 +19,7 @@ import {
 } from './timelineLayout';
 import type { Column } from './timelineLayout';
 import type { NoteDrag } from './useNoteDrag';
+import { useFormatDate } from '../..//shared/dateFormat';
 
 /** The cell of the note of a day, to give it the focus or bring it into view. */
 export function noteCellId(date: string): string {
@@ -66,6 +67,7 @@ export const NotesRow = memo(function NotesRow({
   onKeyDown,
   onShowDays,
 }: NotesRowProps) {
+  const formatDate = useFormatDate();
   // The Tab key stops at the notes and at one empty day, today's: hundreds of empty days would
   // each be a stop. From there a note goes to any day, with the day field of its window.
   const today = todayIso();
@@ -96,8 +98,8 @@ export const NotesRow = memo(function NotesRow({
               style={{ width: column.width, minHeight: weekHeight }}
               title={
                 notes.length > 0
-                  ? notes.map(([date, text]) => `${formatDateToIT(date)}: ${text}`).join('\n')
-                  : `Mostra i giorni dal ${formatDateToIT(column.start)}`
+                  ? notes.map(([date, text]) => `${formatDate(date)}: ${text}`).join('\n')
+                  : `Mostra i giorni dal ${formatDate(column.start)}`
               }
               className={`shrink-0 cursor-pointer p-1 text-xs hover:bg-warning-soft ${columnEdge(column)} ${column.past ? 'bg-past' : ''}`}
             >
@@ -149,10 +151,10 @@ export const NotesRow = memo(function NotesRow({
             style={{ width: column.width, minHeight: dayHeight, '--z': stacking } as CSSProperties}
             aria-label={
               text
-                ? `Nota del ${formatDateToIT(date)}: ${text}`
+                ? `Nota del ${formatDate(date)}: ${text}`
                 : hidden
-                  ? `Nota del ${formatDateToIT(date)}, nascosta dalla ricerca`
-                  : `Aggiungi una nota per il ${formatDateToIT(date)}`
+                  ? `Nota del ${formatDate(date)}, nascosta dalla ricerca`
+                  : `Aggiungi una nota per il ${formatDate(date)}`
             }
             aria-describedby={text ? describedBy : undefined}
             title={text || (hidden ? 'Nota nascosta dalla ricerca' : undefined)}

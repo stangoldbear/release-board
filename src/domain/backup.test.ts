@@ -100,6 +100,7 @@ const plan: PlanSnapshot = {
       note: 'Prima fase',
     },
   ],
+  milestones: [],
   roadmap: defaultRoadmapConfig(),
 };
 
@@ -235,13 +236,14 @@ describe('files of the previous app version', () => {
       projects: [],
       projectNotes: [],
       assignments: [],
+      milestones: [],
       roadmap: defaultRoadmapConfig(),
     });
   });
 
   it('report metric values that are not numbers', () => {
     const file = { ...legacyFile, metrics: [{ date: '2026-09-10', value: 'n/d' }] };
-    expect(errorsOf(file)).toEqual(['Metrica del 10/09/2026: valore non numerico.']);
+    expect(errorsOf(file)).toEqual(['Metrica del 10-09-26: valore non numerico.']);
   });
 });
 
@@ -258,7 +260,7 @@ describe('invalid backups', () => {
   it('reject unknown files and newer versions', () => {
     expect(errorsOf([])).toEqual(['Il file non contiene un backup.']);
     expect(errorsOf({ hello: 'world' })).toEqual(['Il file non è un backup di Release Board.']);
-    expect(errorsOf({ ...valid, schemaVersion: 7 })).toEqual([
+    expect(errorsOf({ ...valid, schemaVersion: 8 })).toEqual([
       'Il backup è stato creato con una versione più recente di Release Board.',
     ]);
     expect(errorsOf({ ...valid, schemaVersion: 2 })).toEqual([
@@ -289,6 +291,7 @@ describe('invalid backups', () => {
       ...valid,
       projectNotes: [],
       assignments: [],
+      milestones: [],
       projects: [
         {
           id: 'p-1',
@@ -374,7 +377,7 @@ describe('invalid backups', () => {
           startDate: '2026-09-10',
           endDate: '2026-09-02',
           laneId: 'missing',
-          colorId: 'pink',
+          colorId: 'neon',
         },
       ],
     };
@@ -413,8 +416,8 @@ describe('invalid backups', () => {
       ],
     };
     expect(errorsOf(broken)).toEqual([
-      'Metrica del 02/09/2026: semaforo non valido.',
-      'Metrica del 03/09/2026: promozione non valida.',
+      'Metrica del 02-09-26: semaforo non valido.',
+      'Metrica del 03-09-26: promozione non valida.',
     ]);
   });
 
@@ -445,6 +448,7 @@ describe('backups of 0.6 and the roadmap of 0.7', () => {
         projects: plan.projects,
         projectNotes: [],
         assignments: [],
+        milestones: [],
         roadmap: defaultRoadmapConfig(),
       },
     });
@@ -463,6 +467,7 @@ describe('backups of 0.6 and the roadmap of 0.7', () => {
         ...valid,
         projectNotes: [],
         assignments: [],
+        milestones: [],
         projects: [{ ...plan.projects[0], fields: ['x'] }],
       }),
     ).toEqual(['Progetto "App mobile 3.0": campi non validi.']);
@@ -503,6 +508,7 @@ describe('backups of 0.6 and the roadmap of 0.7', () => {
       errorsOf({
         ...valid,
         assignments: [],
+        milestones: [],
         roadmap: {
           fields: [roadmap.fields[0], { id: 'x', label: 'X', type: 'attachment' }],
           teams: [roadmap.teams[0], roadmap.teams[0]],

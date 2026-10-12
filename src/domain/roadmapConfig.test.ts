@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   coloredValueOf,
   colorsProjects,
+  defaultMembers,
   defaultRoadmapConfig,
   fieldValuesOf,
   fitsField,
@@ -15,11 +16,14 @@ import {
   parseFieldInput,
   parseFieldValues,
   parseProjectField,
+  parseRoadmapConfig,
   parseStakeholder,
   parseTeam,
   stakeholdersByTeam,
+  teamsInPhaseOrder,
   uniqueId,
 } from './roadmapConfig';
+import { formulaProblem } from './teamFormula';
 import type { ProjectField, ProjectFieldValues } from './types';
 
 const defaults = defaultRoadmapConfig();
@@ -38,7 +42,6 @@ describe('the default configuration', () => {
     expect(defaults.stakeholders.map((item) => item.name)).toContain('iOS Dev #3');
     expect(defaults.fields.map((field) => field.id)).toEqual([
       'projectSize',
-      'impactedTeams',
       'jiraRequest',
       'jiraEpics',
       'figma',
@@ -62,18 +65,47 @@ describe('the default configuration', () => {
     ]);
   });
 
+  it('gives every team a phase, BA and QA a formula and the contingency its own', () => {
+    const byId = Object.fromEntries(defaults.teams.map((team) => [team.id, team]));
+    expect(defaults.teams.map((team) => team.phase)).toEqual([
+      'development',
+      'development',
+      'development',
+      'test',
+      'analysis',
+      'development',
+    ]);
+    expect(byId.ba?.formula).toBe('0.12*(ServerSide+iOSDev+AndDev)');
+    expect(byId.qa?.formula).toBe('0.12*(ServerSide+iOSDev+AndDev)');
+    expect(byId.server?.formula).toBeUndefined();
+    expect(defaults.contingencyFormula).toBe('0.10*(ServerSide+iOSDev+AndDev)');
+    for (const team of defaults.teams) {
+      if (team.formula) expect(formulaProblem(team.formula, defaults.teams, team.id)).toBeNull();
+    }
+    expect(formulaProblem(defaults.contingencyFormula ?? '', defaults.teams)).toBeNull();
+  });
+
+  it('marks the first person of every team as the default member, in the order of the work', () => {
+    expect(defaultMembers(defaults).map((item) => item.name)).toEqual([
+      'BA #1',
+      'Server #1',
+      'iOS Dev #1',
+      'Android Dev #1',
+      'CONTENT #1',
+      'QA #1',
+    ]);
+    expect(teamsInPhaseOrder(defaults).map((team) => team.tag)).toEqual([
+      'BA',
+      'ServerSide',
+      'iOSDev',
+      'AndDev',
+      'CONTENT',
+      'QA',
+    ]);
+  });
+
   it('marks the main fields and the lists as the request says', () => {
     const byId = Object.fromEntries(defaults.fields.map((field) => [field.id, field]));
-    expect(byId.impactedTeams).toMatchObject({ type: 'choice', multiple: true, main: true });
-    expect(byId.impactedTeams?.options?.map((option) => option.label)).toEqual([
-      'iOS Dev',
-      'Android Dev',
-      'Backend Dev',
-      'Backend Config',
-      'Content',
-      'QA',
-      'BA',
-    ]);
     expect(byId.jiraRequest).toMatchObject({ type: 'url', multiple: false, main: false });
     expect(byId.jiraEpics).toMatchObject({ type: 'url', multiple: true, main: true });
     expect(byId.confluence).toMatchObject({ type: 'url', multiple: true, main: true });
@@ -85,6 +117,13 @@ describe('the default configuration', () => {
   it('groups by the size of the projects, and colors the values of the lists', () => {
     const groupable = defaults.fields.filter(isGroupable);
     expect(groupable.map((field) => field.label)).toEqual(['Dimensione']);
+    // The size is the one field of the standard view of a new project.
+    expect(defaults.fields.filter((field) => field.quick).map((field) => field.id)).toEqual([
+      'projectSize',
+    ]);
+    expect(
+      parseProjectField('x', { label: 'X', type: 'text', quick: 'yes' }, 0)?.quick,
+    ).toBeUndefined();
     expect(groupable[0]?.options?.map((option) => option.label)).toEqual([
       'Big project',
       'Medium project',
@@ -126,7 +165,7 @@ describe('the fields that group the projects', () => {
     expect(parseProjectField(id, data, 0)).toEqual(size);
     expect(parseProjectField(id, { ...data, multiple: true }, 0)?.group).toBeUndefined();
     expect(parseProjectField(id, { ...data, group: 'yes' }, 0)?.group).toBeUndefined();
-    const options = [{ id: 'big', label: 'Big project', colorId: 'pink' }];
+    const options = [{ id: 'big', label: 'Big project', colorId: 'neon' }];
     expect(parseProjectField(id, { ...data, options }, 0)?.options).toEqual([
       { id: 'big', label: 'Big project' },
     ]);
@@ -179,9 +218,23 @@ describe('parsing the configuration', () => {
       name: 'QA',
       tag: 'QA',
       colorId: 'ice',
+      phase: 'development',
       position: 3,
     });
-    expect(parseTeam('qa', { name: 'QA', tag: 'QA', colorId: 'pink' }, 0)).toBeNull();
+    expect(
+      parseTeam(
+        'qa',
+        { name: 'QA', tag: 'QA', colorId: 'ice', phase: 'test', formula: '0.1*ServerSide' },
+        3,
+      ),
+    ).toMatchObject({ phase: 'test', formula: '0.1*ServerSide' });
+    expect(
+      parseTeam('qa', { name: 'QA', tag: 'QA', colorId: 'ice', phase: 'buffer' }, 3),
+    ).toMatchObject({ phase: 'development' });
+    expect(
+      parseTeam('qa', { name: 'QA', tag: 'QA', colorId: 'ice', formula: '  ' }, 3)?.formula,
+    ).toBeUndefined();
+    expect(parseTeam('qa', { name: 'QA', tag: 'QA', colorId: 'neon' }, 0)).toBeNull();
     expect(parseTeam('bad id!', { name: 'QA', tag: 'QA', colorId: 'ice' }, 0)).toBeNull();
 
     const person = parseStakeholder(
@@ -205,7 +258,16 @@ describe('parsing the configuration', () => {
       { start: '2026-12-20', end: '2027-01-20', reason: 'Ferie' },
     ]);
     expect(person?.position).toBe(7);
+    expect(person?.default).toBeUndefined();
+    expect(
+      parseStakeholder('qa-1', { name: 'QA #1', teamId: 'qa', default: true }, 0)?.default,
+    ).toBe(true);
+    expect(
+      parseStakeholder('qa-1', { name: 'QA #1', teamId: 'qa', default: 'yes' }, 0)?.default,
+    ).toBeUndefined();
     expect(parseStakeholder('qa-1', { name: 'QA #1' }, 0)).toBeNull();
+    expect(parseRoadmapConfig({ contingencyFormula: '0.1*QA' }).contingencyFormula).toBe('0.1*QA');
+    expect(parseRoadmapConfig({ contingencyFormula: 12 }).contingencyFormula).toBeUndefined();
 
     expect(parseProjectField('figma', { label: 'Figma', type: 'url', multiple: true }, 2)).toEqual({
       id: 'figma',
@@ -257,7 +319,17 @@ describe('field values', () => {
     main: true,
     position: 0,
   };
-  const choice = defaults.fields.find((field) => field.id === 'impactedTeams')!;
+  // A list of additive values, as «Team impattati» was in the defaults up to 0.10.
+  const choice: ProjectField = {
+    ...url,
+    id: 'impactedTeams',
+    type: 'choice',
+    options: [
+      { id: 'qa', label: 'QA' },
+      { id: 'ba', label: 'BA' },
+      { id: 'backend-config', label: 'Backend Config' },
+    ],
+  };
   const price: ProjectField = { ...url, id: 'budget', type: 'price', multiple: false };
   const date: ProjectField = { ...url, id: 'kickoff', type: 'date', multiple: false };
   const amount: ProjectField = { ...url, id: 'days', type: 'number', multiple: false };
@@ -290,7 +362,7 @@ describe('field values', () => {
   it('are written for people and read from what is typed', () => {
     expect(formatFieldValue(price, { amount: 12000, currency: 'EUR' })).toBe('12.000 EUR');
     expect(formatFieldValue(price, { amount: 12.5, currency: 'USD' })).toBe('12,50 USD');
-    expect(formatFieldValue(date, '2026-12-15')).toBe('15/12/2026');
+    expect(formatFieldValue(date, '2026-12-15')).toBe('15-12-26');
     expect(formatFieldValue(choice, 'backend-config')).toBe('Backend Config');
     expect(formatFieldValue(amount, 12345.5)).toBe('12.345,50');
     expect(parseFieldInput(amount, ' 1.250,5 ')).toBe(1250.5);

@@ -28,27 +28,25 @@ describe('describeHistoryEntry', () => {
       before: { date: '2026-10-05', text: 'Code freeze' },
       after: { date: '2026-10-07', text: 'Code freeze' },
     });
-    expect(describeHistoryEntry(entry)).toBe(
-      'anna ha spostato la nota dal 05/10/2026 al 07/10/2026',
-    );
+    expect(describeHistoryEntry(entry)).toBe('anna ha spostato la nota dal 05-10-26 al 07-10-26');
   });
 
   it('names the day of a note that stays where it is', () => {
     expect(describeHistoryEntry(noteEntry({ after: { text: 'Rilascio' } }))).toBe(
-      'anna ha modificato la nota del 07/10/2026',
+      'anna ha modificato la nota del 07-10-26',
     );
     expect(
       describeHistoryEntry(
         noteEntry({ action: 'create', after: { date: '2026-10-07', text: 'Rilascio' } }),
       ),
-    ).toBe('anna ha aggiunto la nota del 07/10/2026');
+    ).toBe('anna ha aggiunto la nota del 07-10-26');
   });
 });
 
 describe('describeChange', () => {
   it('says what was done without who did it', () => {
     expect(describeChange(noteEntry({ after: { text: 'Rilascio' } }))).toBe(
-      'ha modificato la nota del 07/10/2026',
+      'ha modificato la nota del 07-10-26',
     );
     expect(
       describeChange(noteEntry({ entity: 'metric', action: 'import', summary: '2 giorni' })),
@@ -67,7 +65,7 @@ describe('fieldChanges', () => {
     });
     expect(fieldChanges(entry, lanes)).toEqual([
       { label: 'Corsia', before: 'Frontend', after: 'Backend' },
-      { label: 'Fine', before: '08/10/2026', after: '09/10/2026' },
+      { label: 'Fine', before: '08-10-26', after: '09-10-26' },
       { label: 'Stato', before: 'Pianificato', after: 'In corso' },
     ]);
   });
@@ -78,7 +76,7 @@ describe('fieldChanges', () => {
       after: { date: '2026-10-07', text: 'A' },
     });
     expect(fieldChanges(move, lanes)).toEqual([
-      { label: 'Giorno', before: '05/10/2026', after: '07/10/2026' },
+      { label: 'Giorno', before: '05-10-26', after: '07-10-26' },
     ]);
     const values = noteEntry({
       entity: 'metric',
@@ -86,8 +84,8 @@ describe('fieldChanges', () => {
       summary: '2 valori giornalieri',
     });
     expect(fieldChanges(values, lanes)).toEqual([
-      { label: '05/10/2026', after: 'Rimosso' },
-      { label: '06/10/2026', after: '1250,50' },
+      { label: '05-10-26', after: 'Rimosso' },
+      { label: '06-10-26', after: '1250,50' },
     ]);
   });
 });
@@ -118,7 +116,7 @@ describe('free notes in the history', () => {
     expect(fieldChanges(entry, () => undefined)).toEqual([
       { label: 'Testo', before: 'Entro il 17' },
       { label: 'Colore', before: 'Rosso', after: 'Azzurro' },
-      { label: 'Promemoria', before: '17/07/2026', after: '20/07/2026' },
+      { label: 'Promemoria', before: '17-07-26', after: '20-07-26' },
     ]);
     expect(
       fieldChanges(
@@ -167,8 +165,8 @@ describe('projects in the history', () => {
     });
     expect(describeChange(entry)).toBe('ha aggiunto il progetto «App mobile 3.0»');
     expect(fieldChanges(entry, () => undefined)).toEqual([
-      { label: 'Inizio', after: '10/09/2026' },
-      { label: 'Fine', after: '20/12/2026' },
+      { label: 'Inizio', after: '10-09-26' },
+      { label: 'Fine pianificata', after: '20-12-26' },
       { label: 'Stato', after: 'In corso' },
       { label: 'Responsabile', after: 'Giulia' },
     ]);
@@ -180,7 +178,7 @@ describe('projects in the history', () => {
       after: { title: 'App mobile 3.0', status: 'on_hold', endDate: '2027-01-31' },
     });
     expect(fieldChanges(entry, () => undefined)).toEqual([
-      { label: 'Fine', before: '20/12/2026', after: '31/01/2027' },
+      { label: 'Fine pianificata', before: '20-12-26', after: '31-01-27' },
       { label: 'Stato', before: 'Idea', after: 'In pausa' },
     ]);
   });

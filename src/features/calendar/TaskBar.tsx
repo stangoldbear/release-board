@@ -6,9 +6,10 @@ import type { PlacedTask } from '../../domain/schedule';
 import type { TaskItem } from '../../domain/types';
 import { CURRENT_RESULT, Highlight, useIsCurrentResult } from '../../shared/ui/Highlight';
 import { taskColorStyle } from '../../themes';
-import { daysBetween, formatDateToIT } from '../../utils/dateUtils';
+import { daysBetween } from '../../utils/dateUtils';
 import { clampLines } from './timelineLayout';
 import type { DragKind } from './useTaskDrag';
+import { useFormatDate } from '../..//shared/dateFormat';
 
 /** Bars narrower than this have no resize handles: the whole bar moves. */
 const MIN_RESIZABLE_WIDTH = 40;
@@ -63,6 +64,7 @@ export function TaskBar({
   onContextMenu,
   onChange,
 }: TaskBarProps) {
+  const formatDate = useFormatDate();
   const { task, first, last, continuesBefore, continuesAfter } = placed;
   const width = (last - first + 1) * dayWidth - 4;
   const resizable = width >= MIN_RESIZABLE_WIDTH;
@@ -70,7 +72,7 @@ export function TaskBar({
   // The details take the last line.
   const titleLines = detailed ? lines - 1 : lines;
   const length = daysBetween(task.startDate, task.endDate);
-  const period = `dal ${formatDateToIT(task.startDate)} al ${formatDateToIT(task.endDate)}`;
+  const period = `dal ${formatDate(task.startDate)} al ${formatDate(task.endDate)}`;
   const current = useIsCurrentResult('task', task.id);
 
   const handleKeyDown = (event: KeyboardEvent) => {
@@ -103,7 +105,7 @@ export function TaskBar({
       id={taskBarId(task.id)}
       aria-label={`${oneLine(task.title)}, ${period}, ${TASK_STATUS_LABELS[task.status]}`}
       aria-describedby={describedBy}
-      title={`${task.title}\n${formatDateToIT(task.startDate)} → ${formatDateToIT(task.endDate)}`}
+      title={`${task.title}\n${formatDate(task.startDate)} → ${formatDate(task.endDate)}`}
       onPointerDown={(event) => onPointerDown(event, 'move')}
       onClick={onOpen}
       onContextMenu={(event) => {

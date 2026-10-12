@@ -3,16 +3,11 @@ import { parseAssignment, sortAssignments } from './assignments';
 import { DEFAULT_COLOR_ID, isKnownColorId, normalizeColorId } from './colors';
 import { MEMO_BODY_MAX, MEMO_TITLE_MAX, sortMemos } from './memos';
 import { parseProjectNote, sortProjectNotes } from './projectNotes';
-import {
-  PROJECT_DESCRIPTION_MAX,
-  PROJECT_OWNER_MAX,
-  PROJECT_STATUSES,
-  PROJECT_TITLE_MAX,
-  sortProjects,
-} from './projects';
+import { parseProjectData, sortProjects } from './projects';
 import {
   defaultRoadmapConfig,
-  parseFieldValues,
+  isProjectColorsMode,
+  isRoadmapId,
   parseProjectField,
   parseStakeholder,
   parseTeam,
@@ -25,23 +20,28 @@ import type {
   Lane,
   Memo,
   MemoAuthor,
+  Milestone,
   PlanSnapshot,
   Project,
   ProjectNote,
   RoadmapConfig,
   TaskItem,
 } from './types';
-import { formatDateToIT, formatDateToISO, isIsoDate } from '../utils/dateUtils';
+import { DEFAULT_DATE_FORMAT, formatDate, formatDateToISO, isIsoDate } from '../utils/dateUtils';
+import type { DateFormat } from '../utils/dateUtils';
 import { parseLocaleNumber } from './numberFormat';
+import { FORMULA_MAX } from './teamFormula';
 import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES } from './plan';
+import { parseMilestone, sortMilestones } from './milestones';
 
 export const BACKUP_FORMAT = 'release-board/backup';
-export const BACKUP_SCHEMA_VERSION = 6;
+export const BACKUP_SCHEMA_VERSION = 7;
 /**
  * Older schemas this version still reads: 3 had no free notes, 4 no projects, 5 no notes of the
- * projects, assignments or roadmap configuration.
+ * projects, assignments or roadmap configuration, 6 no phases, formulas and default members of
+ * the teams, nor the settings of the roadmap.
  */
-const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, 4, 5, BACKUP_SCHEMA_VERSION];
+const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, 4, 5, 6, BACKUP_SCHEMA_VERSION];
 /** Larger files are rejected before parsing: a real plan weighs a few hundred kilobytes. */
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 const MAX_REPORTED_ERRORS = 20;
@@ -67,6 +67,8 @@ export interface BackupFile {
   projects: Project[];
   projectNotes: ProjectNote[];
   assignments: Assignment[];
+  /** Absent in the backups written before the notes on the timeline. */
+  milestones?: Milestone[];
   roadmap: RoadmapConfig;
 }
 
@@ -95,7 +97,9 @@ export function createBackupFile(plan: PlanSnapshot, exportedAt: Date): BackupFi
     projects: sortProjects(plan.projects),
     projectNotes: sortProjectNotes(plan.projectNotes),
     assignments: sortAssignments(plan.assignments),
+    milestones: sortMilestones(plan.milestones),
     roadmap: {
+      ...plan.roadmap,
       fields: sortByPosition(plan.roadmap.fields),
       teams: sortByPosition(plan.roadmap.teams),
       stakeholders: sortByPosition(plan.roadmap.stakeholders),
@@ -111,22 +115,33 @@ export function backupFileName(date: Date, suffix?: string): string {
   return `release-board-backup-${formatDateToISO(date)}${suffix ? `-${suffix}` : ''}.json`;
 }
 
-export function parseBackupText(text: string): BackupParseResult {
+export function parseBackupText(
+  text: string,
+  dateFormat: DateFormat = DEFAULT_DATE_FORMAT,
+): BackupParseResult {
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch {
     return failure('Il file non contiene JSON valido.');
   }
-  return parseBackup(value);
+  return parseBackup(value, dateFormat);
 }
 
-/** Validates a backup (current or previous format) and returns the plan it contains. */
-export function parseBackup(value: unknown): BackupParseResult {
+/**
+ * Validates a backup (current or previous format) and returns the plan it contains. The errors
+ * name the days in the given format.
+ */
+export function parseBackup(
+  value: unknown,
+  dateFormat: DateFormat = DEFAULT_DATE_FORMAT,
+): BackupParseResult {
   if (!isObject(value)) return failure('Il file non contiene un backup.');
 
   if (value.format === BACKUP_FORMAT) {
-    if (READABLE_SCHEMA_VERSIONS.includes(value.schemaVersion)) return readPlan(value, 'current');
+    if (READABLE_SCHEMA_VERSIONS.includes(value.schemaVersion)) {
+      return readPlan(value, 'current', dateFormat);
+    }
     const newer =
       typeof value.schemaVersion === 'number' && value.schemaVersion > BACKUP_SCHEMA_VERSION;
     return failure(
@@ -137,7 +152,7 @@ export function parseBackup(value: unknown): BackupParseResult {
   }
 
   if (typeof value.version === 'string' && value.version.startsWith('2.')) {
-    return readPlan(migrateFromV2(value), 'legacy-v2');
+    return readPlan(migrateFromV2(value), 'legacy-v2', dateFormat);
   }
 
   return failure('Il file non è un backup di Release Board.');
@@ -202,12 +217,16 @@ function legacyMetricValue(metric: JsonObject): unknown {
   return metric.value;
 }
 
-function readPlan(file: JsonObject, source: BackupSource): BackupParseResult {
+function readPlan(
+  file: JsonObject,
+  source: BackupSource,
+  dateFormat: DateFormat,
+): BackupParseResult {
   const errors: string[] = [];
   const lanes = readLanes(file.lanes, errors);
   const tasks = readTasks(file.tasks, new Set(lanes.map((lane) => lane.id)), errors);
-  const metrics = readMetrics(file.metrics, errors);
-  const dailyNotes = readNotes(file.notes, errors);
+  const metrics = readMetrics(file.metrics, errors, dateFormat);
+  const dailyNotes = readNotes(file.notes, errors, dateFormat);
   const memos = readMemos(file.memos, errors);
   const projects = readProjects(file.projects, errors);
   const projectIds = new Set(projects.map((project) => project.id));
@@ -219,6 +238,7 @@ function readPlan(file: JsonObject, source: BackupSource): BackupParseResult {
     new Set(roadmap.stakeholders.map((item) => item.id)),
     errors,
   );
+  const milestones = readMilestones(file.milestones, projectIds, errors);
 
   if (errors.length > 0) return { ok: false, errors: limitErrors(errors) };
   return {
@@ -232,6 +252,7 @@ function readPlan(file: JsonObject, source: BackupSource): BackupParseResult {
       projects,
       projectNotes,
       assignments,
+      milestones,
       roadmap,
     },
     source,
@@ -328,7 +349,7 @@ function readTasks(value: unknown, laneIds: Set<string>, errors: string[]): Task
   return tasks;
 }
 
-function readMetrics(value: unknown, errors: string[]): DailyMetric[] {
+function readMetrics(value: unknown, errors: string[], dateFormat: DateFormat): DailyMetric[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
     errors.push('Metriche: formato non valido.');
@@ -358,7 +379,7 @@ function readMetrics(value: unknown, errors: string[]): DailyMetric[] {
         : undefined;
     const promoEu = isObject(entry) ? optionalString(entry.promoEu) : undefined;
     const promoNonEu = isObject(entry) ? optionalString(entry.promoNonEu) : undefined;
-    const where = date ? `Metrica del ${formatDateToIT(date)}` : `Metrica ${index + 1}`;
+    const where = date ? `Metrica del ${formatDate(date, dateFormat)}` : `Metrica ${index + 1}`;
     if (!date) errors.push(`${where}: data non valida.`);
     else if (values.some((existing) => existing.date === date))
       errors.push(`${where}: data ripetuta.`);
@@ -377,7 +398,7 @@ function readMetrics(value: unknown, errors: string[]): DailyMetric[] {
   return values;
 }
 
-function readNotes(value: unknown, errors: string[]): DailyNotes {
+function readNotes(value: unknown, errors: string[], dateFormat: DateFormat): DailyNotes {
   const notes: DailyNotes = {};
   if (value === undefined) return notes;
   if (!Array.isArray(value)) {
@@ -390,7 +411,7 @@ function readNotes(value: unknown, errors: string[]): DailyNotes {
     if (!date || text === null)
       errors.push(`Nota ${index + 1}: servono una data valida e un testo.`);
     else if (Object.hasOwn(notes, date))
-      errors.push(`Nota del ${formatDateToIT(date)}: data ripetuta.`);
+      errors.push(`Nota del ${formatDate(date, dateFormat)}: data ripetuta.`);
     else if (text.trim() !== '') notes[date] = text;
   });
   return notes;
@@ -468,48 +489,18 @@ function readProjects(value: unknown, errors: string[]): Project[] {
       errors.push(`Progetto ${index + 1}: formato non valido.`);
       return;
     }
-    const owner = optionalString(item.owner);
-    const description = optionalString(item.description);
-    const fields = item.fields === undefined ? undefined : parseFieldValues(item.fields);
     const problems: string[] = [];
     if (!isFilledString(item.id)) problems.push("manca l'identificativo");
     else if (projects.some((project) => project.id === item.id))
       problems.push(`identificativo "${item.id}" ripetuto`);
-    if (fields === null) problems.push('campi non validi');
-    if (!isFilledString(item.title)) problems.push('manca il titolo');
-    else if (item.title.length > PROJECT_TITLE_MAX) problems.push('titolo troppo lungo');
-    if (!isIsoDate(item.startDate)) problems.push('data di inizio non valida');
-    if (!isIsoDate(item.endDate)) problems.push('data di fine non valida');
-    if (isIsoDate(item.startDate) && isIsoDate(item.endDate) && item.endDate < item.startDate)
-      problems.push("la fine precede l'inizio");
-    if (!(typeof item.colorId === 'string' && isKnownColorId(item.colorId)))
-      problems.push('colore non riconosciuto');
-    const status = oneOf(item.status, PROJECT_STATUSES);
-    if (!status) problems.push('stato non valido');
-    if (owner === null || (owner !== undefined && owner.length > PROJECT_OWNER_MAX))
-      problems.push('responsabile non valido');
-    if (
-      description === null ||
-      (description !== undefined && description.length > PROJECT_DESCRIPTION_MAX)
-    )
-      problems.push('descrizione non valida');
-    if (problems.length > 0 || !status) {
+    const parsed = parseProjectData(item);
+    if ('problems' in parsed) problems.push(...parsed.problems);
+    if (problems.length > 0 || 'problems' in parsed) {
       const name = isFilledString(item.title) ? `"${item.title}"` : String(index + 1);
       errors.push(`Progetto ${name}: ${problems.join(', ')}.`);
       return;
     }
-    const project: Project = {
-      id: item.id as string,
-      title: item.title as string,
-      startDate: item.startDate as string,
-      endDate: item.endDate as string,
-      colorId: item.colorId as Project['colorId'],
-      status,
-    };
-    if (owner?.trim()) project.owner = owner;
-    if (description?.trim()) project.description = description;
-    if (fields && Object.keys(fields).length > 0) project.fields = fields;
-    projects.push(project);
+    projects.push({ id: item.id as string, ...parsed.content });
   });
   return sortProjects(projects);
 }
@@ -536,6 +527,28 @@ function readProjectNotes(
     else notes.push(note);
   });
   return sortProjectNotes(notes);
+}
+
+/** The notes on the timeline; one of a project must belong to a project of the file. */
+function readMilestones(value: unknown, projectIds: Set<string>, errors: string[]): Milestone[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push('Note sulla timeline: formato non valido.');
+    return [];
+  }
+  const milestones: Milestone[] = [];
+  value.forEach((item: unknown, index) => {
+    const where = `Nota sulla timeline ${index + 1}`;
+    const milestone =
+      isObject(item) && isFilledString(item.id) ? parseMilestone(item.id, item) : null;
+    if (!milestone) errors.push(`${where}: formato non valido.`);
+    else if (milestones.some((other) => other.id === milestone.id))
+      errors.push(`${where}: identificativo "${milestone.id}" ripetuto.`);
+    else if (milestone.projectId !== undefined && !projectIds.has(milestone.projectId))
+      errors.push(`${where}: progetto inesistente.`);
+    else milestones.push(milestone);
+  });
+  return sortMilestones(milestones);
 }
 
 /** The assignments; each must name a project of the file and a person of its configuration. */
@@ -603,11 +616,33 @@ function readRoadmap(value: unknown, errors: string[]): RoadmapConfig {
     if (!teams.some((team) => team.id === item.teamId))
       errors.push(`Persona del team ${index + 1}: team inesistente.`);
   });
-  return {
+  const config: RoadmapConfig = {
     fields: readList(value.fields, 'Campo dei progetti', parseProjectField),
     teams,
     stakeholders,
   };
+  if (value.contingencyFormula !== undefined) {
+    if (
+      typeof value.contingencyFormula === 'string' &&
+      value.contingencyFormula.length <= FORMULA_MAX
+    ) {
+      if (value.contingencyFormula.trim()) config.contingencyFormula = value.contingencyFormula;
+    } else {
+      errors.push('Formula della contingency: formato non valido.');
+    }
+  }
+  if (value.projectColors !== undefined) {
+    if (isProjectColorsMode(value.projectColors)) {
+      if (value.projectColors !== 'field') config.projectColors = value.projectColors;
+    } else {
+      errors.push('Colori dei progetti: valore non valido.');
+    }
+  }
+  if (value.colorFieldId !== undefined) {
+    if (isRoadmapId(value.colorFieldId)) config.colorFieldId = value.colorFieldId;
+    else errors.push('Campo dei colori dei progetti: formato non valido.');
+  }
+  return config;
 }
 
 function limitErrors(errors: string[]): string[] {

@@ -1,13 +1,6 @@
 import type { DateRange } from '../../domain/schedule';
-import type { Project } from '../../domain/types';
 import { LINE_HEIGHT } from '../../shared/ui/textScale';
-import {
-  ITALIAN_MONTHS_SHORT,
-  addDaysIso,
-  addMonthsIso,
-  endOfMonth,
-  startOfWeek,
-} from '../../utils/dateUtils';
+import { ITALIAN_MONTHS_SHORT, addDaysIso, addMonthsIso, startOfWeek } from '../../utils/dateUtils';
 import type { DetailLevel } from './projectUi';
 
 /** Months of room before the first project and after the last one, to move them further. */
@@ -19,7 +12,7 @@ const MARGIN_MONTHS = 1;
  */
 export function roadmapRange(
   view: DateRange,
-  projects: readonly Pick<Project, 'startDate' | 'endDate'>[],
+  projects: readonly { startDate: string; endDate: string }[],
 ): DateRange {
   let { start, end } = view;
   for (const project of projects) {
@@ -35,7 +28,7 @@ export function roadmapRange(
  * "nov 2026 – feb 2027", "set – dic 2026" in the same year, "gen 2026" in the same month: the
  * months a project spans.
  */
-export function projectPeriod(project: Pick<Project, 'startDate' | 'endDate'>): string {
+export function projectPeriod(project: { startDate: string; endDate: string }): string {
   const month = (iso: string) => ITALIAN_MONTHS_SHORT[Number(iso.slice(5, 7)) - 1] ?? '';
   const startYear = project.startDate.slice(0, 4);
   const endYear = project.endDate.slice(0, 4);
@@ -47,11 +40,6 @@ export function projectPeriod(project: Pick<Project, 'startDate' | 'endDate'>): 
     : `${month(project.startDate)} ${startYear} – ${month(project.endDate)} ${endYear}`;
 }
 
-/** The period of a new project: from the day clicked, or today, to the end of the third month. */
-export function newProjectPeriod(from: string): { startDate: string; endDate: string } {
-  return { startDate: from, endDate: endOfMonth(addMonthsIso(from, 2)) };
-}
-
 /** The sizes of the roadmap for a zoom level, a text size and a density. */
 export interface RoadmapMetrics {
   dayWidth: number;
@@ -59,6 +47,8 @@ export interface RoadmapMetrics {
   barHeight: number;
   /** The bar of a person under the project's: one line of text and its border. */
   assignmentHeight: number;
+  /** A lane of the work inside the bar of a project. */
+  laneHeight: number;
   /** Space above and below the bars of a row. */
   rowPadding: number;
   /** Width of the column with the projects, before the phone's limit: wider with more to show. */
@@ -83,6 +73,7 @@ export function roadmapMetrics(
     dayWidth,
     barHeight: Math.round(24 * textScale) + 4,
     assignmentHeight: Math.round(line) + 8,
+    laneHeight: compact ? 6 : 8,
     rowPadding: Math.round((compact ? 3 : 6) * spacing),
     labelWidth: Math.round((level === 'titles' ? 220 : 260) * textScale),
     descriptionLines: compact ? 1 : 2,

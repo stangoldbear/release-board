@@ -8,6 +8,7 @@ import { useOpenDialogCount } from '../../shared/ui/openDialogs';
 import { useNow } from '../../shared/useNow';
 import { formatDateToISO } from '../../utils/dateUtils';
 import { MemoDot, MemoTitle, memoSurface, reminderText } from './memoUi';
+import { useDateFormat } from '../..//shared/dateFormat';
 
 /** How often the day is checked, so that a calendar left open shows the reminders of a new day. */
 const CHECK_MS = 60_000;
@@ -28,6 +29,7 @@ interface MemoRemindersProps {
  * The window waits for the ones the user opened to close.
  */
 export function MemoReminders({ memos, seen, onSeen, onOpen }: MemoRemindersProps) {
+  const dateFormat = useDateFormat();
   const today = formatDateToISO(useNow(CHECK_MS));
   const openDialogs = useOpenDialogCount();
   const due = dueMemos(memos, today, seen);
@@ -68,7 +70,7 @@ export function MemoReminders({ memos, seen, onSeen, onOpen }: MemoRemindersProp
             {memo.body && <p className="mt-1 whitespace-pre-line wrap-break-word">{memo.body}</p>}
             <div className="mt-2 flex items-center justify-between gap-2 text-xs">
               <span className="first-letter:uppercase">
-                {reminderText(memo.remindOn ?? today, today)}
+                {reminderText(memo.remindOn ?? today, today, dateFormat)}
               </span>
               <Button
                 size="sm"

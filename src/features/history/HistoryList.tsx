@@ -3,6 +3,7 @@ import { describeChange, fieldChanges, historyKind } from '../../domain/history'
 import type { HistoryEntry } from '../../domain/history';
 import { entryDay } from '../../domain/historyStats';
 import { avatarUrl, dayHeading, KindIcon, timeOf } from './historyUi';
+import { useDateFormat } from '../..//shared/dateFormat';
 
 interface HistoryListProps {
   entries: HistoryEntry[];
@@ -44,7 +45,8 @@ function HistoryRow({
   entry: HistoryEntry;
   laneName: HistoryListProps['laneName'];
 }) {
-  const changes = fieldChanges(entry, laneName);
+  const dateFormat = useDateFormat();
+  const changes = fieldChanges(entry, laneName, dateFormat);
   const kind = historyKind(entry);
   return (
     <li className="flex gap-3 py-2.5">
@@ -59,7 +61,7 @@ function HistoryRow({
       </span>
       <div className="min-w-0 flex-1 text-sm">
         <p className="wrap-break-word">
-          <Author entry={entry} /> {describeChange(entry)}
+          <Author entry={entry} /> {describeChange(entry, dateFormat)}
           {!entry.at && <span className="ml-1 text-xs text-fg-muted">(in attesa di conferma)</span>}
         </p>
         {changes.length > 0 && (

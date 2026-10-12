@@ -156,6 +156,27 @@ export function moveAssignment<T extends Pick<Assignment, 'startDate'>>(
   return { ...assignment, startDate };
 }
 
+/**
+ * The days of effort that end on a day: the working days from the start to it, those away
+ * skipped; at least one, and within the limit. The edge of a bar is dragged to a day, and the
+ * effort follows.
+ */
+export function manDaysEndingOn(
+  startDate: string,
+  endDate: string,
+  absences: readonly Absence[],
+): number {
+  let days = 0;
+  for (
+    let day = startDate, steps = 0;
+    day <= endDate && steps < MAX_SPAN_DAYS;
+    day = addDaysIso(day, 1), steps += 1
+  ) {
+    if (isWorkingDay(day) && !isAbsentOn(absences, day)) days += 1;
+  }
+  return Math.max(1, Math.min(MAN_DAYS_MAX, days));
+}
+
 /** "15 giorni (3 settimane)", "1 giorno", "2,5 giorni": the effort in words. */
 export function describeEffort(manDays: number): string {
   const days = `${formatLocaleNumber(manDays, Number.isInteger(manDays) ? 0 : 1)} ${
