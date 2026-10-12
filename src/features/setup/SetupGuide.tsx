@@ -6,6 +6,7 @@ import { LABEL_CLASS } from '../../shared/ui/field';
 import { VersionStamp } from '../../shared/ui/VersionStamp';
 import { BeforeYouStart, stepNumberIn, stepsFor } from './setupSteps';
 import type { GuideStep, Place, ProjectKind, StepContext } from './setupSteps';
+import { PlaceLogoIcon } from './placeLogos';
 
 const PROJECT_KINDS: { kind: ProjectKind; label: string; hint: string }[] = [
   {
@@ -67,8 +68,9 @@ function PlaceLink({ place }: { place: Place }) {
         href={place.url}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface-muted px-2.5 py-0.5 font-semibold text-link hover:bg-surface-strong"
+        className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface-muted px-2.5 py-0.5 font-semibold text-link hover:bg-surface-strong"
       >
+        <PlaceLogoIcon logo={place.logo} className="h-3.5 w-3.5 shrink-0" />
         {place.name}
         <ExternalLink className="h-3 w-3" aria-hidden="true" />
         <span className="sr-only"> (si apre in una nuova scheda)</span>

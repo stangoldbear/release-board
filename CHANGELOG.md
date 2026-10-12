@@ -6,6 +6,30 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-10-12
+
+### Aggiunto
+
+- Nella guida "Configura la tua istanza" il riquadro «Dove:» di ogni passo mostra il marchio del
+  servizio, Firebase, Google Cloud o GitHub, accanto al suo nome.
+
+### Modificato
+
+- Guida "Configura la tua istanza": ogni passo dice il percorso completo nella console, a partire
+  dalla console stessa e dal menu a sinistra (per esempio «Sicurezza → Authentication →
+  Impostazioni → Domini autorizzati»), non solo la voce finale. Il passo «Autorizza il dominio del
+  sito» dice di incollare solo il nome del dominio, senza `https://`, barra finale o `/*`, e che
+  vale subito, senza ripubblicare.
+- Guida "Configura la tua istanza", percorso «Progetto esistente»: il passo «Crea una chiave API
+  dedicata» è segnato come consigliato, non obbligatorio, con un approfondimento su cosa cambia se
+  lo si salta (il sito funziona con la chiave del `firebaseConfig`; restano l'accoppiamento con le
+  altre app e le API aperte a chi legge la chiave). I passi seguono il pannello «Crea chiave API»
+  della console, una sezione per punto e nel suo ordine: nome, le quattro API in «Seleziona
+  limitazioni dell'API», «Siti web», le due voci con un avviso ben visibile sul `/*` finale (senza,
+  l'accesso con GitHub, che passa da un'altra pagina dell'`authDomain`, viene rifiutato), «Crea» e
+  «Mostra chiave». Il passo «Imposta le variabili del sito» dice che `VITE_FIREBASE_API_KEY` è la
+  chiave dedicata copiata con «Mostra chiave», o l'`apiKey` se quel passo è stato saltato.
+
 ## [0.10.2] - 2026-10-08
 
 ### Modificato

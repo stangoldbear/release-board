@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { FIREBASE_ENV_VARS } from '../../infra/firebase/config';
 import { CopyButton } from '../../shared/ui/CopyButton';
 import rules from '../../../firestore/firestore.rules?raw';
+import type { PlaceLogo } from './placeLogos';
 
 /** Whether the guide sets up a new Firebase project or one that is already in use. */
 export type ProjectKind = 'new' | 'existing';
@@ -26,6 +27,8 @@ export type StepId =
 export interface Place {
   name: string;
   url: string;
+  /** The service, for its mark next to the name. */
+  logo: PlaceLogo;
 }
 
 /** What the steps need to know about this copy of the app and about the guide they belong to. */
@@ -48,17 +51,24 @@ export interface GuideStep {
 const FIREBASE_CONSOLE: Place = {
   name: 'console Firebase',
   url: 'https://console.firebase.google.com/',
+  logo: 'firebase',
 };
 const CLOUD_DATABASES: Place = {
   name: 'console Google Cloud',
   url: 'https://console.cloud.google.com/firestore/databases',
+  logo: 'google-cloud',
 };
 const CLOUD_CREDENTIALS: Place = {
   name: 'console Google Cloud',
   url: 'https://console.cloud.google.com/apis/credentials',
+  logo: 'google-cloud',
 };
-const GITHUB_OAUTH_APPS: Place = { name: 'GitHub', url: 'https://github.com/settings/developers' };
-const GITHUB: Place = { name: 'GitHub', url: 'https://github.com/' };
+const GITHUB_OAUTH_APPS: Place = {
+  name: 'GitHub',
+  url: 'https://github.com/settings/developers',
+  logo: 'github',
+};
+const GITHUB: Place = { name: 'GitHub', url: 'https://github.com/', logo: 'github' };
 
 const APP_ENGINE_PAGE = 'https://console.cloud.google.com/appengine';
 
@@ -249,8 +259,8 @@ const STEPS: Record<StepId, GuideStep> = {
       <>
         <Actions>
           <li>
-            Nel menu a sinistra apri <strong>{FIRESTORE_MENU}</strong> e premi{' '}
-            <strong>Crea database</strong>.
+            Nella console Firebase, nel menu a sinistra apri <strong>{FIRESTORE_MENU}</strong> e
+            premi <strong>Crea database</strong>.
           </li>
           <li>
             Scegli l'edizione <strong>Standard</strong> e lascia l'ID <code>(default)</code>.
@@ -276,8 +286,9 @@ const STEPS: Record<StepId, GuideStep> = {
         <>
           <Actions>
             <li>
-              Apri la pagina dal link qui sopra e scegli il progetto nel selettore in alto: ha lo
-              stesso nome che nella console Firebase.
+              Nella console Google Cloud apri <strong>Firestore → Database</strong> (il link qui
+              sopra porta lì) e scegli il progetto nel selettore in alto: ha lo stesso nome che
+              nella console Firebase.
             </li>
             <li>
               Cerca la riga con ID <code>(default)</code>, guarda le colonne{' '}
@@ -378,8 +389,9 @@ const STEPS: Record<StepId, GuideStep> = {
       <>
         <Actions>
           <li>
-            Apri il progetto e nel menu a sinistra apri <strong>{AUTHENTICATION_MENU}</strong>. Se è
-            la prima volta, premi <strong>Inizia</strong>.
+            Nella console Firebase apri il progetto e nel menu a sinistra apri{' '}
+            <strong>{AUTHENTICATION_MENU}</strong>. Se è la prima volta, premi{' '}
+            <strong>Inizia</strong>.
           </li>
           <li>
             Nella scheda <strong>Metodo di accesso</strong> premi{' '}
@@ -569,8 +581,9 @@ const STEPS: Record<StepId, GuideStep> = {
         <Actions>
           <li>
             Torna alla finestra del provider GitHub lasciata aperta al passo{' '}
-            {stepNumber('enableGitHub')}. Se l'hai chiusa, riaprila da{' '}
-            <strong>Authentication → Metodo di accesso</strong>.
+            {stepNumber('enableGitHub')}. Se l&apos;hai chiusa, riaprila dalla console Firebase: nel
+            menu a sinistra <strong>{AUTHENTICATION_MENU}</strong>, scheda{' '}
+            <strong>Metodo di accesso</strong>, riga <strong>GitHub</strong>.
           </li>
           <li>
             Incolla <strong>Client ID</strong> e <strong>Client secret</strong> e premi{' '}
@@ -597,13 +610,16 @@ const STEPS: Record<StepId, GuideStep> = {
       <>
         <Actions>
           <li>
-            In <strong>Authentication</strong> apri la scheda <strong>Impostazioni</strong>, poi{' '}
-            <strong>Domini autorizzati</strong>, e premi <strong>Aggiungi dominio</strong>.
+            Nella console Firebase, nel menu a sinistra apri <strong>{AUTHENTICATION_MENU}</strong>,
+            poi la scheda <strong>Impostazioni</strong> e la voce{' '}
+            <strong>Domini autorizzati</strong>; premi <strong>Aggiungi dominio</strong>.
           </li>
           <li>
             Incolla il dominio di questo sito,{' '}
             <CopyValue value={host} confirmation="Dominio copiato" />, e premi{' '}
-            <strong>Aggiungi</strong>.
+            <strong>Aggiungi</strong>. Solo il nome, così com&apos;è qui: senza{' '}
+            <code>https://</code>, senza barra finale e senza <code>/*</code>. Vale subito, senza
+            ripubblicare il sito.
           </li>
         </Actions>
         {kind === 'existing' && (
@@ -631,9 +647,9 @@ const STEPS: Record<StepId, GuideStep> = {
       <>
         <Actions>
           <li>
-            Nel menu a sinistra apri <strong>Impostazioni</strong>, sotto{' '}
-            <strong>Panoramica del progetto</strong>: si apre <strong>Impostazioni progetto</strong>
-            , scheda <strong>Generali</strong>.
+            Nella console Firebase, nel menu a sinistra premi l&apos;ingranaggio accanto a{' '}
+            <strong>Panoramica del progetto</strong> e scegli <strong>Impostazioni progetto</strong>
+            : si apre la scheda <strong>Generali</strong>.
           </li>
           <li>
             Scorri fino a <strong>Le tue app</strong>. Se il progetto ha già delle app, anche web,
@@ -709,38 +725,66 @@ const STEPS: Record<StepId, GuideStep> = {
     place: CLOUD_CREDENTIALS,
     content: ({ host, stepNumber }) => (
       <>
+        <p>
+          Consigliato, non obbligatorio: il sito funziona anche con l&apos;<code>apiKey</code> del{' '}
+          <code>firebaseConfig</code>. Una chiave tutta sua lo tiene separato dalle altre app del
+          progetto e lo limita alle API che usa; l&apos;approfondimento in fondo dice cosa cambia se
+          salti il passo.
+        </p>
         <Actions>
           <li>
-            Apri la pagina dal link qui sopra, <strong>API e servizi → Credenziali</strong>, con il
-            progetto scelto nel selettore in alto.
+            Nella console Google Cloud apri <strong>API e servizi → Credenziali</strong> (il link
+            qui sopra porta lì), con il progetto scelto nel selettore in alto.
           </li>
           <li>
-            Premi <strong>Crea credenziali</strong> e scegli <strong>Chiave API</strong>. Se la
-            chiave viene creata subito, aprila dall'elenco per impostarla.
+            Premi <strong>Crea credenziali</strong> e scegli <strong>Chiave API</strong>: si apre il
+            pannello <strong>Crea chiave API</strong>, con le sezioni dei punti che seguono. Se la
+            console crea la chiave subito, senza pannello, aprila dall&apos;elenco: le sezioni sono
+            le stesse.
           </li>
           <li>
-            Nome: <code>Release Board web</code>.
+            <strong>Nome</strong>: <code>Release Board web</code>, o un altro nome univoco.
           </li>
           <li>
-            In <strong>Restrizioni delle applicazioni</strong> scegli <strong>Siti web</strong> e
-            aggiungi due voci: <CopyValue value={`https://${host}/*`} confirmation="Voce copiata" />{' '}
-            e l'<code>authDomain</code> del <code>firebaseConfig</code> (passo{' '}
+            <strong>API accessibili utilizzando questa chiave</strong>: apri{' '}
+            <strong>Seleziona limitazioni dell&apos;API</strong> e spunta{' '}
+            <strong>Identity Toolkit API</strong>, <strong>Token Service API</strong>,{' '}
+            <strong>Cloud Firestore API</strong> e <strong>Cloud Datastore API</strong>; il campo
+            deve dire «4 API». Il riquadro sul service account riguarda altre API: ignoralo.
+          </li>
+          <li>
+            <strong>Limita la chiave per ridurre i rischi per la sicurezza</strong>: in{' '}
+            <strong>Restrizioni delle applicazioni</strong> scegli <strong>Siti web</strong>.
+          </li>
+          <li>
+            <strong>Restrizioni relative ai siti web</strong>: con <strong>Add</strong> aggiungi due
+            voci,{' '}
+            <strong>
+              tutte e due con <code>/*</code> in fondo
+            </strong>
+            : <CopyValue value={`https://${host}/*`} confirmation="Voce copiata" /> e l&apos;
+            <code>authDomain</code> del <code>firebaseConfig</code> (passo{' '}
             {stepNumber('registerWebApp')}) nello stesso formato, per esempio{' '}
             <code>https://mio-progetto.firebaseapp.com/*</code>.
+            <p className="mt-1.5 rounded-lg border border-warning bg-warning-soft px-2.5 py-1.5 text-xs">
+              <strong>
+                Ricorda il <code>/*</code> finale su ogni sito web.
+              </strong>{' '}
+              Senza, la voce vale per la sola pagina iniziale e l&apos;accesso con GitHub, che passa
+              da un&apos;altra pagina di quel dominio, viene rifiutato. Prima di premere Crea,
+              controlla che tutte e due le voci finiscano con <code>/*</code>.
+            </p>
           </li>
           <li>
-            In <strong>Restrizioni delle API</strong> scegli <strong>Limita chiave</strong> e
-            seleziona <strong>Identity Toolkit API</strong>, <strong>Token Service API</strong>,{' '}
-            <strong>Cloud Firestore API</strong> e <strong>Cloud Datastore API</strong>. Premi{' '}
-            <strong>Salva</strong>.
+            Premi <strong>Crea</strong>.
           </li>
           <li>
-            Nell'elenco premi <strong>Mostra chiave</strong> e copiala: va nelle variabili del sito
-            al passo {stepNumber('setVariables')}, al posto dell'<code>apiKey</code> del{' '}
-            <code>firebaseConfig</code>.
+            Nell&apos;elenco premi <strong>Mostra chiave</strong> e copiala: è il valore di{' '}
+            <code>VITE_FIREBASE_API_KEY</code> al passo {stepNumber('setVariables')}, al posto
+            dell&apos;<code>apiKey</code> del <code>firebaseConfig</code>.
           </li>
         </Actions>
-        <Note>Non modificare le chiavi che c'erano già: le usano le altre app.</Note>
+        <Note>Non modificare le chiavi che c&apos;erano già: le usano le altre app.</Note>
         <More title="perché una chiave dedicata">
           <p>
             La chiave identifica il progetto, non dà accesso ai dati: quello lo decidono le regole.
@@ -756,8 +800,28 @@ const STEPS: Record<StepId, GuideStep> = {
           </p>
           <p>
             Le API scelte sono quelle che usa il sito: Identity Toolkit e Token Service per
-            l'accesso, Cloud Firestore e Cloud Datastore per il database. Se dopo la pubblicazione
-            l'accesso non riesce per colpa della chiave, l'app dice quale restrizione controllare.
+            l&apos;accesso, Cloud Firestore e Cloud Datastore per il database. Se dopo la
+            pubblicazione l&apos;accesso non riesce per colpa della chiave, l&apos;app dice quale
+            restrizione controllare.
+          </p>
+        </More>
+        <More title="cosa cambia se salti questo passo">
+          <p>
+            Il sito usa l&apos;<code>apiKey</code> del <code>firebaseConfig</code>, condivisa con le
+            altre app del progetto, e la pubblica nel suo codice come già fanno le app. I dati
+            restano protetti dalle regole: la chiave non li apre.
+          </p>
+          <p>
+            Resta un accoppiamento: se un giorno quella chiave viene limitata per le app, per
+            esempio a un pacchetto Android, il sito smette di accedere. E se non ha restrizioni
+            sulle API, chi la legge dal sito può chiamare qualsiasi API abilitata nel progetto,
+            dentro le quote: non i dati di Release Board, ma, con la fatturazione attiva, anche API
+            a pagamento.
+          </p>
+          <p>
+            Puoi fare questo passo in qualsiasi momento, ed è reversibile: la chiave nuova nella
+            variabile e un nuovo deploy; se qualcosa non va, rimetti la chiave di prima e cancella
+            quella nuova. Le chiavi che c&apos;erano già non si toccano in nessun caso.
           </p>
         </More>
       </>
@@ -770,8 +834,8 @@ const STEPS: Record<StepId, GuideStep> = {
       <>
         <Actions>
           <li>
-            Nel menu a sinistra apri <strong>{FIRESTORE_MENU}</strong> e la scheda{' '}
-            <strong>Regole</strong>.
+            Nella console Firebase, nel menu a sinistra apri <strong>{FIRESTORE_MENU}</strong>, poi
+            la scheda <strong>Regole</strong>.
           </li>
           <li>
             Sostituisci tutto il testo con queste regole{' '}
@@ -826,7 +890,11 @@ const STEPS: Record<StepId, GuideStep> = {
             valore e premi <strong>Add variable</strong>. I valori vengono dal{' '}
             <code>firebaseConfig</code> del passo {stepNumber('registerWebApp')}
             {kind === 'existing' && (
-              <>, tranne la chiave, che è quella del passo {stepNumber('createApiKey')}</>
+              <>
+                , tranne la chiave: se hai fatto il passo {stepNumber('createApiKey')}, è la chiave
+                API dedicata copiata lì con <strong>Mostra chiave</strong>; se l&apos;hai saltato, è
+                l&apos;<code>apiKey</code> del <code>firebaseConfig</code>
+              </>
             )}
             .
           </li>
@@ -838,7 +906,10 @@ const STEPS: Record<StepId, GuideStep> = {
               <span>
                 ←{' '}
                 {kind === 'existing' && name === 'VITE_FIREBASE_API_KEY' ? (
-                  'la chiave API dedicata'
+                  <>
+                    la chiave API dedicata del passo {stepNumber('createApiKey')} (o{' '}
+                    <code>apiKey</code>, se l&apos;hai saltato)
+                  </>
                 ) : (
                   <code>{CONFIG_FIELDS[name]}</code>
                 )}
