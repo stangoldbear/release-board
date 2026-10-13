@@ -4,7 +4,7 @@ import {
   compareWorkRank,
   sortByPosition,
   teamOf,
-  teamsInPhaseOrder,
+  teamsInOrder,
   workRank,
 } from '../../domain/roadmapConfig';
 import { suggestedDays } from '../../domain/teamFormula';
@@ -68,8 +68,8 @@ function personRow(
   return row;
 }
 
-/** The people in the order of the work: by the phase and the position of their team, then theirs. */
-function inWorkOrder(rows: EffortRow[], config: RoadmapConfig): EffortRow[] {
+/** The people in the order of the teams, as the settings give it, then in their own order. */
+function inTeamOrder(rows: EffortRow[], config: RoadmapConfig): EffortRow[] {
   return [...rows].sort(
     (a, b) =>
       compareWorkRank(workRank(config, a.stakeholderId), workRank(config, b.stakeholderId)) ||
@@ -78,7 +78,7 @@ function inWorkOrder(rows: EffortRow[], config: RoadmapConfig): EffortRow[] {
 }
 
 /**
- * The rows a project opens with: its assignments, in the order of the work, and for a new
+ * The rows a project opens with: its assignments, in the order of the teams, and for a new
  * project the default member of each team; the contingency last, on its formula while the
  * project has no work yet (a project with its team and no contingency keeps none until asked).
  */
@@ -121,7 +121,7 @@ export function initialRows(
     auto: !project?.contingency && assignments.length === 0 && Boolean(config.contingencyFormula),
   };
   if (config.contingencyFormula) contingency.formula = config.contingencyFormula;
-  return [...inWorkOrder(people, config), contingency];
+  return [...inTeamOrder(people, config), contingency];
 }
 
 /** The days typed for each team without a formula: what the formulas are fed with. */
@@ -170,10 +170,10 @@ export function totalDays(rows: readonly EffortRow[], config: RoadmapConfig): nu
   return rows.reduce((sum, row) => sum + (rowDays(row, rows, config) ?? 0), 0);
 }
 
-/** The people of the configuration not in the table, in the order of the work. */
+/** The people of the configuration not in the table, in the order of the teams. */
 export function peopleNotInRows(rows: readonly EffortRow[], config: RoadmapConfig): Stakeholder[] {
   const taken = new Set(rows.map((row) => row.stakeholderId));
-  return teamsInPhaseOrder(config).flatMap((team) =>
+  return teamsInOrder(config).flatMap((team) =>
     sortByPosition(
       config.stakeholders.filter((item) => item.teamId === team.id && !taken.has(item.id)),
     ),
@@ -189,7 +189,7 @@ export function nextOfTeam(
   return peopleNotInRows(rows, config).find((item) => item.teamId === team.id) ?? null;
 }
 
-/** The rows with a person added, in the order of the work; the contingency stays last. */
+/** The rows with a person added, in the order of the teams; the contingency stays last. */
 export function addRow(
   rows: readonly EffortRow[],
   stakeholder: Stakeholder,
@@ -198,7 +198,7 @@ export function addRow(
   if (rows.some((row) => row.stakeholderId === stakeholder.id)) return [...rows];
   const people = rows.filter((row) => row.kind === 'person');
   const rest = rows.filter((row) => row.kind !== 'person');
-  return [...inWorkOrder([...people, personRow(stakeholder, config)], config), ...rest];
+  return [...inTeamOrder([...people, personRow(stakeholder, config)], config), ...rest];
 }
 
 export function removeRow(rows: readonly EffortRow[], key: string): EffortRow[] {

@@ -231,6 +231,18 @@ export interface Absence {
 }
 
 /**
+ * Days the whole company is closed, both ends included: nobody works, as on a weekend, and the
+ * timeline shows them striped in red.
+ */
+export interface Closure {
+  /** YYYY-MM-DD */
+  start: string;
+  /** YYYY-MM-DD, inclusive */
+  end: string;
+  reason?: string;
+}
+
+/**
  * Someone who works on the projects: a person, or a seat such as "Server #1", in a team. Their
  * assignments skip the days they are away, and show them hatched.
  */
@@ -281,6 +293,8 @@ export interface RoadmapConfig {
    * the contingency is a bar of the project, not of a person.
    */
   contingencyFormula?: string;
+  /** The company closures, by start; absent when there are none. */
+  closures?: Closure[];
 }
 
 /**

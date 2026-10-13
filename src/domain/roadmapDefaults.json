@@ -3,6 +3,14 @@
   "contingencyFormula": "0.10*(ServerSide+iOSDev+AndDev)",
   "teams": [
     {
+      "id": "ba",
+      "name": "Business analysis",
+      "tag": "BA",
+      "colorId": "purple",
+      "phase": "analysis",
+      "formula": "0.12*(ServerSide+iOSDev+AndDev)"
+    },
+    {
       "id": "server",
       "name": "Server side",
       "tag": "ServerSide",
@@ -24,27 +32,19 @@
       "phase": "development"
     },
     {
+      "id": "content",
+      "name": "Content",
+      "tag": "CONTENT",
+      "colorId": "indigo",
+      "phase": "development"
+    },
+    {
       "id": "qa",
       "name": "QA",
       "tag": "QA",
       "colorId": "ice",
       "phase": "test",
       "formula": "0.12*(ServerSide+iOSDev+AndDev)"
-    },
-    {
-      "id": "ba",
-      "name": "Business analysis",
-      "tag": "BA",
-      "colorId": "purple",
-      "phase": "analysis",
-      "formula": "0.12*(ServerSide+iOSDev+AndDev)"
-    },
-    {
-      "id": "content",
-      "name": "Content",
-      "tag": "CONTENT",
-      "colorId": "indigo",
-      "phase": "development"
     }
   ],
   "stakeholders": [

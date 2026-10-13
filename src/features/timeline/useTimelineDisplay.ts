@@ -22,6 +22,8 @@ export interface TimelineDisplay {
   hidePastDays: boolean;
   /** The lanes hidden and the row of the notes of the days. */
   visibility: RowVisibility;
+  /** The notes of the days show their whole text, however long. */
+  notesExpanded: boolean;
   /** The row of the notes on the timeline that belong to no project. */
   showFreeNotes: boolean;
   /** How much each row shows: one line, the main information, or the people too. */
@@ -44,6 +46,7 @@ export interface TimelineDisplayControls {
   togglePastDays: () => void;
   toggleLane: (laneId: string) => void;
   toggleNotes: () => void;
+  toggleNotesExpanded: () => void;
   toggleFreeNotes: () => void;
   /** Every row, the revenue included. */
   showAllRows: () => void;
@@ -108,6 +111,7 @@ export function useTimelineDisplay(): [TimelineDisplay, TimelineDisplayControls]
     true,
   );
   const [showMetrics, setShowMetrics] = usePreference('show-metrics', isBoolean, true);
+  const [notesExpanded, setNotesExpanded] = usePreference('notes-expanded', isBoolean, false);
   // A new key: the past is hidden by default since 0.6, also where the old choice was saved.
   const [hidePastDays, setHidePastDays] = usePreference('past-days-hidden', isBoolean, true);
   const [showFreeNotes, setShowFreeNotes] = usePreference('show-timeline-notes', isBoolean, true);
@@ -149,6 +153,7 @@ export function useTimelineDisplay(): [TimelineDisplay, TimelineDisplayControls]
       showMetrics,
       hidePastDays,
       visibility,
+      notesExpanded,
       showFreeNotes,
       level,
       projectLevels,
@@ -164,6 +169,7 @@ export function useTimelineDisplay(): [TimelineDisplay, TimelineDisplayControls]
       toggleLane: (laneId) => setVisibility((current) => toggleLane(current, laneId)),
       toggleNotes: () =>
         setVisibility((current) => ({ ...current, showNotes: !current.showNotes })),
+      toggleNotesExpanded: () => setNotesExpanded((value) => !value),
       toggleFreeNotes: () => setShowFreeNotes((value) => !value),
       showAllRows: () => {
         setVisibility(ALL_ROWS_VISIBLE);

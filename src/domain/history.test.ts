@@ -90,6 +90,25 @@ describe('fieldChanges', () => {
   });
 });
 
+describe('the settings of the roadmap in the history', () => {
+  it('count the company closures before and after', () => {
+    const entry = noteEntry({
+      entity: 'roadmapSettings',
+      entityId: 'roadmap',
+      before: { closures: [{ start: '2026-08-10', end: '2026-08-21' }] },
+      after: {
+        closures: [
+          { start: '2026-08-10', end: '2026-08-21' },
+          { start: '2026-12-24', end: '2026-12-31' },
+        ],
+      },
+    });
+    expect(fieldChanges(entry, () => undefined)).toEqual([
+      { label: 'Chiusure aziendali', before: '1 chiusura', after: '2 chiusure' },
+    ]);
+  });
+});
+
 describe('free notes in the history', () => {
   const memoEntry = (changes: Partial<HistoryEntry>): HistoryEntry =>
     noteEntry({ entity: 'memo', entityId: 'memo-1', ...changes });

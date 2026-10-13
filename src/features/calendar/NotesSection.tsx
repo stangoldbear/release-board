@@ -19,6 +19,9 @@ interface NotesSectionProps {
   sizes: Pick<TimelineMetrics, 'noteHeight' | 'weekNoteHeight' | 'noteLines'>;
   /** The text on one line, out of its day when longer. */
   oneLineTitles: boolean;
+  /** Every note shows its whole text; the row grows to hold it. */
+  expanded: boolean;
+  onToggleExpanded: () => void;
   onSaveNote: (date: string, text: string) => void;
   /** Moves the note of a day to another day, with a new text when one is given. */
   onMoveNote: (from: string, to: string, text?: string) => void;
@@ -34,6 +37,8 @@ export function NotesSection({
   noteMatches,
   sizes,
   oneLineTitles,
+  expanded,
+  onToggleExpanded,
   onSaveNote,
   onMoveNote,
 }: NotesSectionProps) {
@@ -48,6 +53,7 @@ export function NotesSection({
     if (!noteDrag.isClickAfterDrag()) setEditingNoteDate(date);
   });
   const startNoteDrag = useStableCallback(noteDrag.startDrag);
+  const toggleExpanded = useStableCallback(onToggleExpanded);
   // Arrows move a note by a day, within the timeline and only to a day without a note; the focus
   // follows the note to its new cell.
   const moveNoteByKey = useStableCallback((event: KeyboardEvent, date: string) => {
@@ -74,6 +80,8 @@ export function NotesSection({
         weekHeight={sizes.weekNoteHeight}
         lines={sizes.noteLines}
         overflowText={oneLineTitles}
+        expanded={expanded}
+        onToggleExpanded={toggleExpanded}
         drag={noteDrag.drag}
         describedBy={noteHelpId}
         onStartDrag={startNoteDrag}

@@ -9,10 +9,17 @@ interface CopyButtonProps {
   label?: string;
   /** What the toast confirms, e.g. "Regole copiate". */
   confirmation?: string;
+  /** The name of the button when several say the same, as "Copia la formula 0.12*QA". */
+  ariaLabel?: string;
 }
 
 /** Puts a text in the clipboard and confirms it with a toast. */
-export function CopyButton({ text, label = 'Copia', confirmation = 'Copiato' }: CopyButtonProps) {
+export function CopyButton({
+  text,
+  label = 'Copia',
+  confirmation = 'Copiato',
+  ariaLabel,
+}: CopyButtonProps) {
   const showToast = useToast();
   const copy = async () => {
     try {
@@ -23,7 +30,7 @@ export function CopyButton({ text, label = 'Copia', confirmation = 'Copiato' }: 
     }
   };
   return (
-    <Button size="sm" onClick={() => void copy()}>
+    <Button size="sm" onClick={() => void copy()} aria-label={ariaLabel}>
       <Copy className="h-3.5 w-3.5" aria-hidden="true" />
       {label}
     </Button>

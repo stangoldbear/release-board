@@ -95,7 +95,8 @@ service cloud.firestore {
         && (!('body' in data) || isText(data.body, 2000))
         && (!('colorId' in data)
           || data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
-              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown'])
+              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown', 'navy', 'cyan',
+              'petrol', 'forest', 'amber', 'wine', 'plum', 'slate'])
         && (!('remindOn' in data) || isIsoDate(data.remindOn))
         && data.position is number;
     }
@@ -183,7 +184,8 @@ service cloud.firestore {
             && isIsoDate(data.endDate)
             && data.startDate <= data.endDate
             && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
-              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown']
+              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown', 'navy', 'cyan',
+              'petrol', 'forest', 'amber', 'wine', 'plum', 'slate']
             && data.borderStyle in ['dashed', 'solid']
             && data.status in ['planned', 'in_progress', 'review', 'completed', 'blocked']
             && (!('assignee' in data) || (data.assignee is string && data.assignee.size() <= 100))
@@ -299,7 +301,8 @@ service cloud.firestore {
               || data.arrangement in ['standard', 'parallel', 'sequence', 'manual'])
             && (!('position' in data) || data.position is number)
             && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
-              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown']
+              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown', 'navy', 'cyan',
+              'petrol', 'forest', 'amber', 'wine', 'plum', 'slate']
             && data.status in ['idea', 'planned', 'in_progress', 'completed', 'on_hold']
             && (!('owner' in data) || isText(data.owner, 100))
             && (!('description' in data) || isText(data.description, 5000))
@@ -352,7 +355,8 @@ service cloud.firestore {
             && isText(data.title, 200)
             && (!('body' in data) || isText(data.body, 2000))
             && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
-              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown']
+              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown', 'navy', 'cyan',
+              'petrol', 'forest', 'amber', 'wine', 'plum', 'slate']
             && (!('projectId' in data) || isText(data.projectId, 100))
             && (!('remind' in data) || data.remind == true);
         }
@@ -426,7 +430,8 @@ service cloud.firestore {
             && data.phase in ['analysis', 'development', 'test']
             && (!('formula' in data) || isText(data.formula, 200))
             && data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
-              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown']
+              'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown', 'navy', 'cyan',
+              'petrol', 'forest', 'amber', 'wine', 'plum', 'slate']
             && data.position is number;
         }
 
@@ -458,18 +463,20 @@ service cloud.firestore {
       }
 
       // The shared settings of the roadmap: one document, "roadmap", with the formula of the
-      // contingency and the colors of the projects. An empty document is fine: an import always
-      // writes it.
+      // contingency, the colors of the projects and the company closures. An empty document is
+      // fine: an import always writes it.
       match /settings/{settingId} {
         allow read: if isMember(planId);
         function validSettings() {
           let data = request.resource.data;
           return settingId == 'roadmap'
             && data.keys().hasOnly(['contingencyFormula', 'projectColors', 'colorFieldId',
-              'updatedAt', 'updatedBy', 'lastHistoryId'])
+              'closures', 'updatedAt', 'updatedBy', 'lastHistoryId'])
             && (!('contingencyFormula' in data) || isText(data.contingencyFormula, 200))
             && (!('projectColors' in data) || data.projectColors in ['field', 'free'])
-            && (!('colorFieldId' in data) || isText(data.colorFieldId, 100));
+            && (!('colorFieldId' in data) || isText(data.colorFieldId, 100))
+            && (!('closures' in data)
+              || (data.closures is list && data.closures.size() <= 100));
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validSettings();

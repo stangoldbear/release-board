@@ -24,20 +24,25 @@ export interface WorkDrag {
 export function draggedWork({ item, kind, days }: WorkDrag): WorkItem {
   if (days === 0) return item;
   if (kind === 'move') {
-    const moved = moveAssignment(item, days);
-    return { ...moved, schedule: scheduleAssignment(moved, item.absences) };
+    const moved = moveAssignment(item, days, item.closures);
+    return { ...moved, schedule: scheduleAssignment(moved, item.absences, item.closures) };
   }
   const end = addDaysIso(item.schedule.end, days);
   const manDays = manDaysEndingOn(
     item.schedule.start,
     end < item.schedule.start ? item.schedule.start : end,
     item.absences,
+    item.closures,
   );
   if (manDays === item.manDays) return item;
   return {
     ...item,
     manDays,
-    schedule: scheduleAssignment({ startDate: item.startDate, manDays }, item.absences),
+    schedule: scheduleAssignment(
+      { startDate: item.startDate, manDays },
+      item.absences,
+      item.closures,
+    ),
   };
 }
 

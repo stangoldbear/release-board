@@ -116,10 +116,27 @@ export function deriveTheme(seed: ThemeSeed): Theme {
     ['lime', mix(seed.yellow, seed.green, 0.5)],
     ['olive', mix(seed.yellow, seed.fgMuted, 0.5)],
     ['brown', mix(seed.orange, seed.fgMuted, 0.5)],
+    ['cyan', mix(seed.cyan, seed.blue, 0.25)],
+    ['amber', mix(seed.yellow, seed.orange, 0.5)],
+  ];
+  // The deep colors: a hue moved towards the ink, with a stronger background, so that each one
+  // stays apart from the light color of the same hue.
+  const deepHues: [TaskColorId, string][] = [
+    ['navy', mix(seed.blue, seed.purple, 0.2)],
+    ['petrol', mix(seed.cyan, seed.green, 0.4)],
+    ['forest', seed.green],
+    ['wine', seed.red],
+    ['plum', mix(seed.purple, seed.red, 0.3)],
+    ['slate', mix(seed.fgMuted, seed.blue, 0.3)],
   ];
   for (const [id, hue] of hues) {
     // Ice is the palest of all, close to the surface.
     const bg = id === 'ice' ? tint(hue, 0.06, 0.1) : tint(hue, 0.16, 0.24);
+    tasks[id] = { bg, border: hue, fg: readable(mix(hue, ink, 0.6), [bg]) };
+  }
+  for (const [id, base] of deepHues) {
+    const hue = mix(base, ink, 0.35);
+    const bg = tint(base, 0.26, 0.34);
     tasks[id] = { bg, border: hue, fg: readable(mix(hue, ink, 0.6), [bg]) };
   }
 

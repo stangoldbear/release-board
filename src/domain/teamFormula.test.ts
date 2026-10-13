@@ -5,6 +5,7 @@ import {
   formulaExample,
   formulaInputTeams,
   formulaProblem,
+  formulaSamples,
   parseFormula,
   roundToHalfDays,
   suggestedDays,
@@ -117,5 +118,24 @@ describe('formulas', () => {
     expect(formulaExample('0.1*QA')).toBe('con 10 giorni per QA: 1 giorno');
     expect(formulaExample('2')).toBe('sempre 2 giorni');
     expect(formulaExample('(')).toBeNull();
+  });
+
+  it('offer three samples to copy on the tags that can be named', () => {
+    const samples = formulaSamples(['ServerSide', 'iOSDev', 'AndDev', 'CONTENT']);
+    expect(samples.map((sample) => sample.formula)).toEqual([
+      '0.12*(ServerSide+iOSDev+AndDev)',
+      '(ServerSide+iOSDev)/2',
+      '2+0.05*(ServerSide+iOSDev+AndDev)',
+    ]);
+    for (const sample of samples) expect(formulaProblem(sample.formula, TEAMS)).toBeNull();
+    expect(samples[0]?.description).toBe('Il 12% dei giorni di ServerSide, iOSDev e AndDev.');
+    expect(formulaSamples(['QA']).map((sample) => sample.formula)).toEqual([
+      '0.12*QA',
+      'QA/2',
+      '2+0.05*QA',
+    ]);
+    expect(formulaSamples([])[0]?.formula).toBe('0.12*(ServerSide+iOSDev+AndDev)');
+    expect(formulaSamples(['UX/UI', 'Front end', 'QA'])[1]?.formula).toBe('QA/2');
+    expect(formulaSamples(['UX/UI'])[0]?.formula).toBe('0.12*(ServerSide+iOSDev+AndDev)');
   });
 });

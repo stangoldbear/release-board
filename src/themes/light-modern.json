@@ -112,6 +112,46 @@
       "bg": "#F3EBE7",
       "border": "#B5836B",
       "fg": "#48342B"
+    },
+    "navy": {
+      "bg": "#C9D6F8",
+      "border": "#2F4FC4",
+      "fg": "#0F1D52"
+    },
+    "cyan": {
+      "bg": "#CCF4FA",
+      "border": "#0EA5C6",
+      "fg": "#083B47"
+    },
+    "petrol": {
+      "bg": "#CDE5E5",
+      "border": "#1F6F72",
+      "fg": "#0B2D2E"
+    },
+    "forest": {
+      "bg": "#D1E7D5",
+      "border": "#2E7D43",
+      "fg": "#0F2E17"
+    },
+    "amber": {
+      "bg": "#FCE3A6",
+      "border": "#D88A07",
+      "fg": "#4A2A03"
+    },
+    "wine": {
+      "bg": "#F2D3DA",
+      "border": "#A3223F",
+      "fg": "#4A0B1C"
+    },
+    "plum": {
+      "bg": "#EBD3E6",
+      "border": "#8A3A7C",
+      "fg": "#3D1236"
+    },
+    "slate": {
+      "bg": "#D3DAE4",
+      "border": "#4B5B70",
+      "fg": "#1A2330"
     }
   }
 }

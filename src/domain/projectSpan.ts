@@ -2,7 +2,7 @@ import { addDaysIso } from '../utils/dateUtils';
 import { isWorkingDay, scheduleAssignment } from './assignments';
 import type { WorkSchedule } from './assignments';
 import type { DateRange } from './schedule';
-import type { Assignment, Project, Stakeholder } from './types';
+import type { Assignment, Project, RoadmapConfig } from './types';
 
 // Where a project falls on the calendar: its start, the furthest of its planned end, its own
 // days of effort and the work of its team, and the days in between without any work.
@@ -37,16 +37,23 @@ export interface ProjectSpan {
   bars: WorkBar[];
 }
 
+/** What the work of a project is scheduled on: the calendars of the people and of the company. */
+export type WorkCalendar = Pick<RoadmapConfig, 'stakeholders' | 'closures'>;
+
 /** The last day of an effort that starts on a day, on working days. */
-export function endFromManDays(startDate: string, manDays: number): string {
-  return scheduleAssignment({ startDate, manDays }, []).end;
+export function endFromManDays(
+  startDate: string,
+  manDays: number,
+  closures: readonly DateRange[],
+): string {
+  return scheduleAssignment({ startDate, manDays }, [], closures).end;
 }
 
 /** The bars of the work of a project: its assignments, then its contingency. */
 export function workBarsOf(
   project: Pick<Project, 'id' | 'contingency'>,
   assignments: readonly Assignment[],
-  stakeholders: readonly Stakeholder[],
+  { stakeholders, closures = [] }: WorkCalendar,
 ): WorkBar[] {
   const bars: WorkBar[] = assignments
     .filter((assignment) => assignment.projectId === project.id)
@@ -59,6 +66,7 @@ export function workBarsOf(
       schedule: scheduleAssignment(
         assignment,
         stakeholders.find((item) => item.id === assignment.stakeholderId)?.absences ?? [],
+        closures,
       ),
     }));
   if (project.contingency) {
@@ -67,14 +75,18 @@ export function workBarsOf(
       id: project.id,
       startDate: project.contingency.startDate,
       manDays: project.contingency.manDays,
-      schedule: scheduleAssignment(project.contingency, []),
+      schedule: scheduleAssignment(project.contingency, [], closures),
     });
   }
   return bars;
 }
 
 /** The runs of days in the range that no bar works, each with at least a working day. */
-function gapsWithin(range: DateRange, bars: readonly WorkBar[]): DateRange[] {
+function gapsWithin(
+  range: DateRange,
+  bars: readonly WorkBar[],
+  closures: readonly DateRange[],
+): DateRange[] {
   const worked = new Set(bars.flatMap((bar) => bar.schedule.workDays));
   const gaps: DateRange[] = [];
   let run: { start: string; end: string; working: boolean } | null = null;
@@ -87,7 +99,7 @@ function gapsWithin(range: DateRange, bars: readonly WorkBar[]): DateRange[] {
       close();
       continue;
     }
-    const working = isWorkingDay(day);
+    const working = isWorkingDay(day, closures);
     if (run) {
       run.end = day;
       run.working = run.working || working;
@@ -103,9 +115,10 @@ function gapsWithin(range: DateRange, bars: readonly WorkBar[]): DateRange[] {
 export function projectSpan(
   project: Project,
   assignments: readonly Assignment[],
-  stakeholders: readonly Stakeholder[],
+  calendar: WorkCalendar,
 ): ProjectSpan {
-  const bars = workBarsOf(project, assignments, stakeholders);
+  const closures = calendar.closures ?? [];
+  const bars = workBarsOf(project, assignments, calendar);
   const work =
     bars.length > 0
       ? {
@@ -119,7 +132,7 @@ export function projectSpan(
       : null;
   const ownEnd =
     bars.length === 0 && project.manDays
-      ? endFromManDays(project.startDate, project.manDays)
+      ? endFromManDays(project.startDate, project.manDays, closures)
       : null;
   const end = [project.startDate, project.endDate, work?.end, ownEnd]
     .filter((day): day is string => typeof day === 'string')
@@ -131,7 +144,7 @@ export function projectSpan(
     start: project.startDate,
     end,
     work,
-    gaps: work ? gapsWithin(work, bars) : [],
+    gaps: work ? gapsWithin(work, bars, closures) : [],
     totalManDays,
     late: project.deadline !== undefined && end > project.deadline,
     bars,

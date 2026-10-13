@@ -36,7 +36,7 @@ const assignments: Assignment[] = [
   { id: 'a-qa', projectId: 'p1', stakeholderId: 'qa-1', startDate: '2026-11-25', manDays: 3 },
   { id: 'a-ghost', projectId: 'p1', stakeholderId: 'nobody', startDate: '2026-11-09', manDays: 1 },
 ];
-const span = projectSpan(project, assignments, config.stakeholders);
+const span = projectSpan(project, assignments, config);
 
 describe('the bars of the work of a project', () => {
   it('are in the order of the work, with the contingency last and the unknown person before it', () => {
@@ -77,14 +77,14 @@ describe('the bars of the work of a project', () => {
     const late = projectSpan(
       { ...project, startDate: '2026-10-26', contingency: undefined },
       assignments.filter((item) => item.id !== 'a-qa'),
-      config.stakeholders,
+      config,
     );
     expect(fadedParts(late)).toEqual([
       { start: '2026-10-26', end: '2026-11-01' },
       { start: '2026-11-06', end: '2026-11-08' },
       { start: '2026-11-25', end: '2026-12-11' },
     ]);
-    const bare = projectSpan({ ...project, contingency: undefined }, [], config.stakeholders);
+    const bare = projectSpan({ ...project, contingency: undefined }, [], config);
     expect(fadedParts(bare)).toEqual([]);
   });
 
@@ -127,11 +127,7 @@ describe('the bars of the work of a project', () => {
   });
 
   it('name the teams at work once each, in the order of the work', () => {
-    const items = workItemsOf(
-      project,
-      projectSpan(project, assignments, config.stakeholders),
-      config,
-    );
+    const items = workItemsOf(project, projectSpan(project, assignments, config), config);
     expect(teamsOf(items).map((team) => team.tag)).toEqual(['BA', 'ServerSide', 'iOSDev', 'QA']);
   });
 

@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import type { ButtonHTMLAttributes, KeyboardEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
@@ -32,6 +32,8 @@ export type MenuItem =
       kind: 'radio';
       label: string;
       icon?: LucideIcon;
+      /** Drawn before the label in place of an icon, such as the swatch of a color. Decorative. */
+      leading?: ReactNode;
       checked: boolean;
       onSelect: () => void;
       disabled?: boolean;
@@ -60,7 +62,8 @@ const ITEM_CLASS =
  * A button that opens a list of actions or choices under it, as a dropdown menu: a click, Enter,
  * Space or the arrows open it; the arrows move between the items and wrap, Home and End go to the
  * ends; Esc and Tab close it and give the focus back to the button. An action closes the menu;
- * a switch keeps it open, so that several can be turned in a row.
+ * a switch keeps it open, so that several can be turned in a row. Inside a modal dialog the list
+ * opens in the dialog, which covers everything else.
  */
 export function Menu({
   label,
@@ -75,6 +78,7 @@ export function Menu({
 }: MenuProps) {
   const { open, setOpen, dismiss, triggerRef, panelRef } = usePopup({ align });
   const menuId = useId();
+  const [host, setHost] = useState<HTMLElement | null>(null);
 
   const enabledItems = () =>
     [...(panelRef.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? [])].filter(
@@ -88,6 +92,8 @@ export function Menu({
     });
   };
   const openAt = (at: 'first' | 'last') => {
+    // In a modal dialog, inside it: the dialog is in the top layer, over anything in the body.
+    setHost(triggerRef.current?.closest('dialog') ?? document.body);
     setOpen(true);
     focusItem(at);
   };
@@ -198,13 +204,14 @@ export function Menu({
                       {checked && <Check className="h-4 w-4" />}
                     </span>
                   )}
+                  {item.kind === 'radio' && item.leading}
                   {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}
                   <span className="min-w-0 flex-1">{item.label}</span>
                 </button>
               );
             })}
           </div>,
-          document.body,
+          host ?? document.body,
         )}
     </>
   );

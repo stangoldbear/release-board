@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Pencil, Plus, RotateCcw, X } from 'lucide-react';
-import { teamsInPhaseOrder } from '../../domain/roadmapConfig';
+import { teamsInOrder } from '../../domain/roadmapConfig';
 import type { RoadmapConfig } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { FIELD_CLASS } from '../../shared/ui/field';
@@ -42,7 +42,7 @@ export function TeamEffortTable({
 }: TeamEffortTableProps) {
   const prefix = useId();
   const [picked, setPicked] = useState('');
-  const teamsWithNext = teamsInPhaseOrder(config)
+  const teamsWithNext = teamsInOrder(config)
     .map((team) => ({ team, next: nextOfTeam(rows, team, config) }))
     .filter((item) => item.next !== null && rows.some((row) => row.team?.id === item.team.id));
   const others = peopleNotInRows(rows, config);
@@ -194,7 +194,7 @@ export function TeamEffortTable({
             className={`${FIELD_CLASS} w-auto py-1 text-xs`}
           >
             <option value="">Altra persona…</option>
-            {teamsInPhaseOrder(config).map((team) => {
+            {teamsInOrder(config).map((team) => {
               const people = others.filter((item) => item.teamId === team.id);
               return people.length > 0 ? (
                 <optgroup key={team.id} label={team.name}>

@@ -43,3 +43,30 @@
     font-size: 16px;
   }
 }
+
+/*
+ * The days of a company closure: the background of the holidays with red stripes, so that they
+ * read apart from weekends and holidays by their pattern, not by their color alone. The rows have
+ * light stripes under the bars; the headers keep their text on the plain background, with strong
+ * stripes in a band at the bottom.
+ */
+@utility bg-closure {
+  background-color: var(--color-holiday);
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-holiday-fg) 40%, transparent) 0 2px,
+    transparent 2px 7px
+  );
+}
+
+@utility bg-closure-band {
+  background-color: var(--color-holiday);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--color-holiday-fg) 0 2px,
+    transparent 2px 6px
+  );
+  background-position: bottom;
+  background-repeat: repeat-x;
+  background-size: 100% 5px;
+}

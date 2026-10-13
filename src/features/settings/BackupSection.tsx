@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import { Download, TriangleAlert, Upload } from 'lucide-react';
 import { MAX_BACKUP_BYTES, parseBackupText } from '../../domain/backup';
 import type { BackupSource } from '../../domain/backup';
@@ -14,6 +14,8 @@ interface BackupSectionProps {
   plan: PlanSnapshot;
   /** Called after the user confirmed, once a copy of the current data has been downloaded. */
   onReplacePlan: (plan: PlanSnapshot) => void;
+  /** More to save and restore, under the data: the settings. */
+  children?: ReactNode;
 }
 
 type ImportState =
@@ -37,7 +39,7 @@ function countSummary(plan: PlanSnapshot): string {
 }
 
 /** Export to a JSON file, and import one after validation, preview and confirmation. */
-export function BackupSection({ plan, onReplacePlan }: BackupSectionProps) {
+export function BackupSection({ plan, onReplacePlan, children }: BackupSectionProps) {
   const dateFormat = useDateFormat();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importState, setImportState] = useState<ImportState>({ step: 'idle' });
@@ -139,6 +141,7 @@ export function BackupSection({ plan, onReplacePlan }: BackupSectionProps) {
           </div>
         </div>
       )}
+      {children}
     </section>
   );
 }

@@ -6,7 +6,15 @@ import { DAILY_METRIC } from '../../domain/plan';
 import type { TaskChanges } from '../../domain/plan';
 import { moveTask, moveTaskTo, rangeDays, tasksOnDay } from '../../domain/schedule';
 import type { DateRange } from '../../domain/schedule';
-import type { DailyMetric, DailyNotes, Lane, RowVisibility, TaskItem } from '../../domain/types';
+import { closureOn } from '../../domain/roadmapConfig';
+import type {
+  Closure,
+  DailyMetric,
+  DailyNotes,
+  Lane,
+  RowVisibility,
+  TaskItem,
+} from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { Highlight } from '../../shared/ui/Highlight';
 import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
@@ -21,6 +29,7 @@ import {
   todayIso,
 } from '../../utils/dateUtils';
 import { APPROVAL_TONE, ApprovalIcon, DayDetails, describeDay } from '../metrics/MetricDetails';
+import { CLOSURE_NAME } from './timelineLayout';
 import { useFormatDate, useDateFormat } from '../..//shared/dateFormat';
 
 interface WeekBoardProps {
@@ -34,6 +43,8 @@ interface WeekBoardProps {
   /** The revenue of each day, in its header. */
   showMetrics: boolean;
   highlightWeekends: boolean;
+  /** The company closures, striped red with their reason. */
+  closures: readonly Closure[];
   /** Size of the calendar's text, 1 being the normal one, and whether it is compact. */
   textScale: TextScale;
   compact: boolean;
@@ -59,6 +70,7 @@ export function WeekBoard({
   noteMatches,
   showMetrics,
   highlightWeekends,
+  closures,
   textScale,
   compact,
   visibility,
@@ -111,6 +123,7 @@ export function WeekBoard({
       >
         {rangeDays(week).map((date) => {
           const red = isRedDay(parseISODate(date), highlightWeekends);
+          const closure = closureOn(closures, date);
           const metric = showMetrics ? metrics.find((item) => item.date === date) : undefined;
           const note =
             visibility.showNotes && isNoteShown(noteMatches, date) ? dailyNotes[date] : undefined;
@@ -129,7 +142,13 @@ export function WeekBoard({
             >
               <header
                 className={`space-y-1 rounded-t-xl border-b border-line p-3 in-data-compact:space-y-0.5 in-data-compact:p-2 ${
-                  red.isRed ? 'bg-holiday' : isToday ? 'bg-accent-soft' : 'bg-surface-muted'
+                  closure
+                    ? 'bg-closure-band'
+                    : red.isRed
+                      ? 'bg-holiday'
+                      : isToday
+                        ? 'bg-accent-soft'
+                        : 'bg-surface-muted'
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-x-2 text-xs">
@@ -142,6 +161,14 @@ export function WeekBoard({
                 {red.holidayName && (
                   <p className="truncate text-xs font-bold text-holiday-fg" title={red.holidayName}>
                     {red.holidayName}
+                  </p>
+                )}
+                {closure && (
+                  <p
+                    className="truncate text-xs font-bold text-holiday-fg"
+                    title={closure.reason ? `${CLOSURE_NAME}: ${closure.reason}` : CLOSURE_NAME}
+                  >
+                    {closure.reason ? `Chiusura · ${closure.reason}` : CLOSURE_NAME}
                   </p>
                 )}
                 {metric && (

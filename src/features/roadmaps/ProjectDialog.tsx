@@ -233,7 +233,7 @@ export function ProjectDialog({
     if (plan.contingency) draft.contingency = plan.contingency;
     return {
       plan,
-      span: projectSpan(draft, [...kept, ...created] as Assignment[], config.stakeholders),
+      span: projectSpan(draft, [...kept, ...created] as Assignment[], config),
     };
   }, [
     startValid,

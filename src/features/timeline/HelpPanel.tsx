@@ -55,6 +55,12 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
             {projects ? ', al livello Team i giorni uomo di una persona' : ''}.
           </li>
           <li>Un clic su un giorno vuoto aggiunge lì; un clic su una barra la apre.</li>
+          {releases && (
+            <li>
+              Le note dei giorni stanno sotto le corsie di Next Releases: «Espandi», nella loro
+              riga, mostra il testo intero di ogni nota.
+            </li>
+          )}
           {projects && <li>Doppio clic su una barra del lavoro per scrivere i giorni uomo.</li>}
           {projects && (
             <li>
@@ -115,6 +121,12 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
             })}
           <Sign label="Oggi">
             <span className="block h-4 w-0.5 bg-link" />
+          </Sign>
+          <Sign label="Festivo, o weekend se evidenziato">
+            <span className="block h-3 w-7 rounded-xs border border-line-strong bg-holiday" />
+          </Sign>
+          <Sign label="Chiusura aziendale: nessuno lavora, come nel weekend">
+            <span className="block h-3 w-7 rounded-xs border border-line-strong bg-closure" />
           </Sign>
           <Sign label="Nota sulla timeline">
             <Diamond className="h-3.5 w-3.5" />

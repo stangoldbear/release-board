@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyRoadmapSettings,
+  closureOn,
   coloredValueOf,
   colorsProjects,
   defaultMembers,
@@ -12,7 +14,9 @@ import {
   isGroupable,
   isRoadmapId,
   missingRequiredFields,
+  movedPositions,
   nextPosition,
+  parseClosures,
   parseFieldInput,
   parseFieldValues,
   parseProjectField,
@@ -20,8 +24,10 @@ import {
   parseStakeholder,
   parseTeam,
   stakeholdersByTeam,
+  teamsInOrder,
   teamsInPhaseOrder,
   uniqueId,
+  workRank,
 } from './roadmapConfig';
 import { formulaProblem } from './teamFormula';
 import type { ProjectField, ProjectFieldValues } from './types';
@@ -31,12 +37,12 @@ const defaults = defaultRoadmapConfig();
 describe('the default configuration', () => {
   it('has the teams, the people and the fields of the request, each with a valid id', () => {
     expect(defaults.teams.map((team) => team.tag)).toEqual([
+      'BA',
       'ServerSide',
       'iOSDev',
       'AndDev',
-      'QA',
-      'BA',
       'CONTENT',
+      'QA',
     ]);
     expect(defaults.stakeholders).toHaveLength(16);
     expect(defaults.stakeholders.map((item) => item.name)).toContain('iOS Dev #3');
@@ -61,19 +67,19 @@ describe('the default configuration', () => {
     for (const person of defaults.stakeholders) expect(teamIds.has(person.teamId)).toBe(true);
     expect(new Set(defaults.teams.map((team) => team.colorId)).size).toBe(defaults.teams.length);
     expect(stakeholdersByTeam(defaults).map((group) => group.stakeholders.length)).toEqual([
-      3, 3, 3, 3, 2, 2,
+      2, 3, 3, 3, 2, 3,
     ]);
   });
 
   it('gives every team a phase, BA and QA a formula and the contingency its own', () => {
     const byId = Object.fromEntries(defaults.teams.map((team) => [team.id, team]));
     expect(defaults.teams.map((team) => team.phase)).toEqual([
+      'analysis',
+      'development',
       'development',
       'development',
       'development',
       'test',
-      'analysis',
-      'development',
     ]);
     expect(byId.ba?.formula).toBe('0.12*(ServerSide+iOSDev+AndDev)');
     expect(byId.qa?.formula).toBe('0.12*(ServerSide+iOSDev+AndDev)');
@@ -134,6 +140,87 @@ describe('the default configuration', () => {
       expect(colors.every(Boolean), field.id).toBe(true);
       expect(new Set(colors).size, field.id).toBe(colors.length);
     }
+  });
+});
+
+describe('the order of the teams', () => {
+  const config = {
+    ...defaults,
+    teams: defaults.teams.map((team) => (team.id === 'qa' ? { ...team, position: -1 } : team)),
+  };
+
+  it('is the one given in the settings, whatever the phases', () => {
+    expect(teamsInOrder(config).map((team) => team.tag)[0]).toBe('QA');
+    expect(
+      teamsInPhaseOrder(config)
+        .map((team) => team.tag)
+        .at(-1),
+    ).toBe('QA');
+    expect(defaultMembers(config)[0]?.name).toBe('QA #1');
+    expect(workRank(config, 'qa-2')).toEqual([0, expect.any(Number)]);
+    expect(workRank(config, 'ba-1')[0]).toBe(1);
+    expect(workRank(config, 'nobody')[0]).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it('changes the positions of the items between the old and the new place', () => {
+    const items = [
+      { id: 'a', position: 0 },
+      { id: 'b', position: 1 },
+      { id: 'c', position: 2 },
+      { id: 'd', position: 3 },
+    ];
+    expect(movedPositions(items, 'd', 1)).toEqual([
+      { id: 'd', position: 1 },
+      { id: 'b', position: 2 },
+      { id: 'c', position: 3 },
+    ]);
+    expect(movedPositions(items, 'a', 9)).toEqual([
+      { id: 'b', position: 0 },
+      { id: 'c', position: 1 },
+      { id: 'd', position: 2 },
+      { id: 'a', position: 3 },
+    ]);
+    expect(movedPositions(items, 'b', 1)).toEqual([]);
+    expect(movedPositions(items, 'z', 0)).toEqual([]);
+  });
+
+  it('numbers again items with equal positions, as after the defaults', () => {
+    const items = [
+      { id: 'a', position: 0 },
+      { id: 'b', position: 0 },
+      { id: 'c', position: 5 },
+    ];
+    expect(movedPositions(items, 'c', 0)).toEqual([
+      { id: 'c', position: 0 },
+      { id: 'a', position: 1 },
+      { id: 'b', position: 2 },
+    ]);
+  });
+});
+
+describe('the company closures', () => {
+  const summer = { start: '2026-08-10', end: '2026-08-21', reason: 'Chiusura estiva' };
+  const christmas = { start: '2026-12-24', end: '2026-12-31' };
+
+  it('are read by start, leaving out what is not a range', () => {
+    expect(
+      parseClosures([christmas, summer, { start: '2026-09-02', end: '2026-09-01' }, 'x']),
+    ).toEqual([summer, christmas]);
+    expect(parseClosures('agosto')).toEqual([]);
+    expect(parseRoadmapConfig({ closures: [christmas] }).closures).toEqual([christmas]);
+    expect(parseRoadmapConfig({ closures: [] }).closures).toBeUndefined();
+  });
+
+  it('are a shared setting: saved by start, removed by an empty list', () => {
+    const config = applyRoadmapSettings(defaults, { closures: [christmas, summer] });
+    expect(config.closures).toEqual([summer, christmas]);
+    expect(applyRoadmapSettings(config, { closures: [] }).closures).toBeUndefined();
+    expect(applyRoadmapSettings(config, { contingencyFormula: null }).closures).toHaveLength(2);
+  });
+
+  it('say which one covers a day', () => {
+    expect(closureOn([summer, christmas], '2026-08-21')).toBe(summer);
+    expect(closureOn([summer, christmas], '2026-08-22')).toBeNull();
   });
 });
 

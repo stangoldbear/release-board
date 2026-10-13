@@ -7,6 +7,7 @@ import defaults from './roadmapDefaults.json';
 import { FORMULA_MAX } from './teamFormula';
 import type {
   Absence,
+  Closure,
   FieldOption,
   FieldType,
   FieldValue,
@@ -36,6 +37,7 @@ export const STAKEHOLDER_NAME_MAX = 60;
 export const STAKEHOLDER_INFO_MAX = 500;
 export const ABSENCES_MAX = 100;
 export const ABSENCE_REASON_MAX = 100;
+export const CLOSURES_MAX = 100;
 /** Fields a project can have values for, values of one field, and the longest text among them. */
 export const PROJECT_FIELDS_MAX = 50;
 export const FIELD_VALUES_MAX = 50;
@@ -140,6 +142,8 @@ export interface RoadmapSettingsChanges {
   projectColors?: ProjectColorsMode;
   /** The field that colors the projects; null for the first that can. */
   colorFieldId?: string | null;
+  /** All the company closures; an empty list removes them. */
+  closures?: readonly Closure[];
 }
 
 export const PROJECT_COLORS_MODES: readonly ProjectColorsMode[] = ['field', 'free'];
@@ -182,6 +186,10 @@ export function applyRoadmapSettings(
   if (changes.colorFieldId !== undefined) {
     if (changes.colorFieldId) next.colorFieldId = changes.colorFieldId;
     else delete next.colorFieldId;
+  }
+  if (changes.closures !== undefined) {
+    if (changes.closures.length > 0) next.closures = sortClosures(changes.closures);
+    else delete next.closures;
   }
   return next;
 }
@@ -254,6 +262,32 @@ export function parseAbsence(value: unknown): Absence | null {
   const reason = text(value.reason, ABSENCE_REASON_MAX);
   if (reason) absence.reason = reason;
   return absence;
+}
+
+/** A company closure from its data; null when the dates are not a range. */
+export function parseClosure(value: unknown): Closure | null {
+  return parseAbsence(value);
+}
+
+/** The closures by start, then by end, so that every copy agrees. */
+export function sortClosures(closures: readonly Closure[]): Closure[] {
+  return [...closures].sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+}
+
+/** The closures from a list of data, by start; those that are not ranges are left out. */
+export function parseClosures(value: unknown): Closure[] {
+  if (!Array.isArray(value)) return [];
+  return sortClosures(
+    value
+      .slice(0, CLOSURES_MAX)
+      .map(parseClosure)
+      .filter((closure): closure is Closure => closure !== null),
+  );
+}
+
+/** The closure that covers a day, if any. */
+export function closureOn(closures: readonly Closure[], iso: string): Closure | null {
+  return closures.find((closure) => closure.start <= iso && iso <= closure.end) ?? null;
 }
 
 /** A stakeholder from its data; absences that are not ranges are left out. */
@@ -442,6 +476,8 @@ export function parseRoadmapConfig(value: unknown): RoadmapConfig {
   if (contingency) config.contingencyFormula = contingency;
   if (data.projectColors === 'free') config.projectColors = 'free';
   if (isRoadmapId(data.colorFieldId)) config.colorFieldId = data.colorFieldId;
+  const closures = parseClosures(data.closures);
+  if (closures.length > 0) config.closures = closures;
   return config;
 }
 
@@ -477,7 +513,10 @@ export function teamOf(
   return config.teams.find((team) => team.id === stakeholder.teamId) ?? null;
 }
 
-/** The teams in the order of their phases, then of their positions: the order of the work. */
+/**
+ * The teams in the order of their phases, then of their positions: the order of the work, which
+ * the standard arrangement of a project follows.
+ */
 export function teamsInPhaseOrder(config: Pick<RoadmapConfig, 'teams'>): Team[] {
   return [...config.teams].sort(
     (a, b) =>
@@ -487,10 +526,17 @@ export function teamsInPhaseOrder(config: Pick<RoadmapConfig, 'teams'>): Team[] 
   );
 }
 
-/** The people in the table of a new project: the default member of each team, in the order of the work. */
 /**
- * Where a person falls in the order of the work: the phase and the position of their team, then
- * their own position. A person no longer in the configuration comes last.
+ * The teams in the order the members gave them in the settings: the order of the table of the
+ * days of a project and of the people of a project on the roadmap.
+ */
+export function teamsInOrder(config: Pick<RoadmapConfig, 'teams'>): Team[] {
+  return sortByPosition(config.teams);
+}
+
+/**
+ * Where a person falls in the order of the teams: the position of their team, then their own
+ * position. A person no longer in the configuration comes last.
  */
 export function workRank(
   config: Pick<RoadmapConfig, 'teams' | 'stakeholders'>,
@@ -498,7 +544,7 @@ export function workRank(
 ): [team: number, person: number] {
   const stakeholder = config.stakeholders.find((item) => item.id === stakeholderId);
   if (!stakeholder) return [Number.MAX_SAFE_INTEGER, 0];
-  const teams = teamsInPhaseOrder(config);
+  const teams = teamsInOrder(config);
   const team = teams.findIndex((item) => item.id === stakeholder.teamId);
   return [team === -1 ? teams.length : team, stakeholder.position];
 }
@@ -510,9 +556,30 @@ export function compareWorkRank(
   return a[0] - b[0] || a[1] - b[1];
 }
 
+/** The people in the table of a new project: the default members, in the order of the teams. */
 export function defaultMembers(config: RoadmapConfig): Stakeholder[] {
-  return teamsInPhaseOrder(config).flatMap((team) =>
+  return teamsInOrder(config).flatMap((team) =>
     sortByPosition(config.stakeholders.filter((item) => item.teamId === team.id && item.default)),
+  );
+}
+
+/**
+ * The items whose position changes when one of them moves to an index of their order, numbered
+ * 0, 1, 2… along the new order; none when the item is not among them or does not move.
+ */
+export function movedPositions<T extends { id: string; position: number }>(
+  items: readonly T[],
+  id: string,
+  to: number,
+): T[] {
+  const order = sortByPosition(items);
+  const from = order.findIndex((item) => item.id === id);
+  if (from === -1) return [];
+  const [moved] = order.splice(from, 1);
+  if (!moved) return [];
+  order.splice(Math.max(0, Math.min(order.length, to)), 0, moved);
+  return order.flatMap((item, index) =>
+    item.position === index ? [] : [{ ...item, position: index }],
   );
 }
 

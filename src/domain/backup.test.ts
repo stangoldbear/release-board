@@ -502,6 +502,31 @@ describe('backups of 0.6 and the roadmap of 0.7', () => {
     ]);
   });
 
+  it('keep the company closures, by start, and explain the ones without a range', () => {
+    const closures = [
+      { start: '2026-12-24', end: '2026-12-31' },
+      { start: '2026-08-10', end: '2026-08-21', reason: 'Chiusura estiva' },
+    ];
+    const withClosures = { ...valid, roadmap: { ...valid.roadmap, closures } };
+    const result = parseBackup(JSON.parse(JSON.stringify(withClosures)));
+    expect(result.ok && result.plan.roadmap.closures).toEqual([closures[1], closures[0]]);
+    expect(
+      createBackupFile(
+        { ...plan, roadmap: { ...plan.roadmap, closures } },
+        new Date('2026-10-13T10:00:00Z'),
+      ).roadmap.closures,
+    ).toEqual(closures);
+    expect(
+      errorsOf({
+        ...valid,
+        roadmap: { ...valid.roadmap, closures: [{ start: '2026-09-02', end: '2026-09-01' }] },
+      }),
+    ).toEqual(['Chiusura aziendale 1: date non valide.']);
+    expect(errorsOf({ ...valid, roadmap: { ...valid.roadmap, closures: 'agosto' } })).toEqual([
+      'Chiusure aziendali: formato non valido.',
+    ]);
+  });
+
   it('explain every problem of the configuration of the roadmap', () => {
     const { roadmap } = valid;
     expect(
@@ -516,7 +541,7 @@ describe('backups of 0.6 and the roadmap of 0.7', () => {
         },
       }),
     ).toEqual([
-      'Team 2: identificativo "server" ripetuto.',
+      'Team 2: identificativo "ba" ripetuto.',
       'Persona del team 1: team inesistente.',
       'Campo dei progetti 2: formato non valido.',
     ]);

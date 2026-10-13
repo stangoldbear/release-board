@@ -883,6 +883,16 @@ describe('configuration of the roadmap', () => {
       ),
     );
     await assertSucceeds(
+      writeConfig(
+        editor,
+        EDITOR,
+        'settings',
+        'roadmap',
+        { closures: [{ start: '2026-08-10', end: '2026-08-21', reason: 'Chiusura estiva' }] },
+        'update',
+      ),
+    );
+    await assertSucceeds(
       writeConfig(editor, EDITOR, 'stakeholders', 'qa-2', {
         ...PERSON,
         name: 'QA #2',
@@ -958,6 +968,14 @@ describe('configuration of the roadmap', () => {
     await assertFails(writeConfig(editor, EDITOR, 'settings', 'roadmap', { colors: 'free' }));
     await assertFails(
       writeConfig(editor, EDITOR, 'settings', 'roadmap', { projectColors: 'rainbow' }),
+    );
+    await assertFails(
+      writeConfig(editor, EDITOR, 'settings', 'roadmap', { closures: '2026-08-10' }),
+    );
+    await assertFails(
+      writeConfig(editor, EDITOR, 'settings', 'roadmap', {
+        closures: Array.from({ length: 101 }, () => ({ start: '2026-08-10', end: '2026-08-10' })),
+      }),
     );
     await assertFails(
       writeConfig(editor, EDITOR, 'stakeholders', 'qa-1', { ...PERSON, teamId: '' }),

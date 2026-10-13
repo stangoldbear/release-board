@@ -30,6 +30,9 @@ export type FormulaParse =
 
 const TOKEN = /\s*(?:(\d+(?:[.,]\d+)?)|([A-Za-z_][A-Za-z0-9_]*)|([-+*/()]))/y;
 
+/** A tag a formula can name: letters, digits and underscores, not starting with a digit. */
+const TAG_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 function tokenize(text: string): Token[] | string {
   const tokens: Token[] = [];
   TOKEN.lastIndex = 0;
@@ -220,4 +223,42 @@ export function formulaExample(text: string): string | null {
 /** The teams that a formula may name: those without a formula, in their order. */
 export function formulaInputTeams(config: Pick<RoadmapConfig, 'teams'>): Team[] {
   return config.teams.filter((team) => !team.formula?.trim());
+}
+
+/** A formula to copy, with what it does in words. */
+export interface FormulaSample {
+  formula: string;
+  description: string;
+}
+
+/** The tags the samples name when no team can be named yet: those of the defaults. */
+const SAMPLE_TAGS = ['ServerSide', 'iOSDev', 'AndDev'];
+
+/**
+ * Three formulas to copy, on the tags of the teams a formula may name (the defaults' when there
+ * are none): a share of the sum, an average and a fixed base with a share.
+ */
+export function formulaSamples(tags: readonly string[]): FormulaSample[] {
+  // A tag with spaces or symbols, such as "UX/UI", cannot be named in a formula.
+  const named = tags.filter((tag) => TAG_NAME.test(tag));
+  const [first = '', second, third] = named.length > 0 ? named : SAMPLE_TAGS;
+  const some = [first, second, third].filter((tag): tag is string => tag !== undefined);
+  const names = (list: readonly string[]) =>
+    list.length > 1 ? `${list.slice(0, -1).join(', ')} e ${list.at(-1) ?? ''}` : (list[0] ?? '');
+  return [
+    {
+      formula: some.length > 1 ? `0.12*(${some.join('+')})` : `0.12*${first}`,
+      description: `Il 12% dei giorni di ${names(some)}.`,
+    },
+    second
+      ? {
+          formula: `(${first}+${second})/2`,
+          description: `La media dei giorni di ${first} e ${second}.`,
+        }
+      : { formula: `${first}/2`, description: `La metà dei giorni di ${first}.` },
+    {
+      formula: `2+0.05*${some.length > 1 ? `(${some.join('+')})` : first}`,
+      description: `Due giorni fissi, più il 5% dei giorni di ${names(some)}.`,
+    },
+  ];
 }

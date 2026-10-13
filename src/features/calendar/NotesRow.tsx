@@ -1,6 +1,6 @@
 import { memo, useContext } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react';
-import { StickyNote } from 'lucide-react';
+import { ChevronsDownUp, ChevronsUpDown, StickyNote } from 'lucide-react';
 import { isNoteShown } from '../../domain/filters';
 import type { DailyNotes } from '../../domain/types';
 import {
@@ -15,6 +15,7 @@ import {
   NARROW_DAY_WIDTH,
   clampLines,
   columnEdge,
+  columnFill,
   stackingOrder,
 } from './timelineLayout';
 import type { Column } from './timelineLayout';
@@ -38,6 +39,12 @@ interface NotesRowProps {
   lines: number;
   /** The text on one line, out of its day when longer, rather than wrapped or cut. */
   overflowText: boolean;
+  /**
+   * Every note shows its whole text, wrapped in a few lines over the following days when its own
+   * is narrower, and as a list in a week. The row grows to hold the longest.
+   */
+  expanded: boolean;
+  onToggleExpanded: () => void;
   /** The note being dragged, once the pointer has moved. */
   drag: NoteDrag | null;
   /** Id of the text that explains the keyboard commands of a note. */
@@ -60,6 +67,8 @@ export const NotesRow = memo(function NotesRow({
   weekHeight,
   lines,
   overflowText,
+  expanded,
+  onToggleExpanded,
   drag,
   describedBy,
   onStartDrag,
@@ -80,8 +89,22 @@ export const NotesRow = memo(function NotesRow({
           <StickyNote className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
           Note
         </span>
-        <span className="text-xs text-fg-muted">
+        <span className="flex flex-wrap items-center justify-between gap-x-2 text-xs text-fg-muted">
           {weekColumns ? 'Per settimana' : 'Per giorno'}
+          <button
+            type="button"
+            onClick={onToggleExpanded}
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Riduci le note dei giorni' : 'Espandi le note dei giorni'}
+            className="inline-flex cursor-pointer items-center gap-0.5 rounded-sm font-semibold text-link hover:underline"
+          >
+            {expanded ? (
+              <ChevronsDownUp className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            ) : (
+              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            )}
+            {expanded ? 'Riduci' : 'Espandi'}
+          </button>
         </span>
       </div>
       {columns.map((column) => {
@@ -95,19 +118,37 @@ export const NotesRow = memo(function NotesRow({
               key={column.start}
               type="button"
               onClick={() => onShowDays(column.start)}
-              style={{ width: column.width, minHeight: weekHeight }}
+              style={
+                {
+                  width: column.width,
+                  minHeight: weekHeight,
+                  // Expanded, the notes run over the following weeks, under the nearer ones.
+                  '--z': expanded && notes.length > 0 ? stackingOrder(today, column.start) : 0,
+                } as CSSProperties
+              }
               title={
                 notes.length > 0
                   ? notes.map(([date, text]) => `${formatDate(date)}: ${text}`).join('\n')
                   : `Mostra i giorni dal ${formatDate(column.start)}`
               }
-              className={`shrink-0 cursor-pointer p-1 text-xs hover:bg-warning-soft ${columnEdge(column)} ${column.past ? 'bg-past' : ''}`}
+              className={`relative z-(--z) shrink-0 cursor-pointer p-1 text-xs hover:z-[600] hover:bg-warning-soft focus-visible:z-[600] ${columnEdge(column)} ${column.past ? 'bg-past' : ''} ${expanded ? 'flex flex-col items-start justify-start gap-1 text-left' : ''}`}
             >
-              {notes.length > 0 && (
-                <span className="rounded-sm bg-warning-soft px-1 font-semibold">
-                  {notes.length} {notes.length === 1 ? 'nota' : 'note'}
-                </span>
-              )}
+              {notes.length > 0 &&
+                (expanded ? (
+                  notes.map(([date, text]) => (
+                    <span
+                      key={date}
+                      className="w-max max-w-56 min-w-full rounded-sm border border-warning bg-warning-soft px-1 break-words hyphens-auto"
+                    >
+                      <span className="font-semibold">{formatDate(date)}</span>{' '}
+                      <Highlight text={text} />
+                    </span>
+                  ))
+                ) : (
+                  <span className="rounded-sm bg-warning-soft px-1 font-semibold">
+                    {notes.length} {notes.length === 1 ? 'nota' : 'note'}
+                  </span>
+                ))}
             </button>
           );
         }
@@ -122,17 +163,24 @@ export const NotesRow = memo(function NotesRow({
         // Where the note would land: its text, faded, in the free day under the pointer.
         const preview = isTarget && drag.allowed ? dailyNotes[drag.from] : undefined;
         const isCurrent = current === resultKey('note', date);
+        // Expanded, the whole text shows, wrapped in a few lines that run over the following
+        // days when its own is narrower. Otherwise one line out of the day, or as many lines as
+        // fit in it.
+        const oneLine = overflowText && !expanded;
+        const spills = oneLine || expanded;
         // A text that runs out of its day is drawn over the notes further from today; the note
         // under the pointer or the focus comes up.
-        const stacking = isCurrent ? 500 : overflowText && text ? stackingOrder(today, date) : 0;
+        const stacking = isCurrent ? 500 : spills && text ? stackingOrder(today, date) : 0;
         // In a narrow day the note is an icon, unless its text runs out of the day anyway.
-        const iconOnly = narrow && !overflowText;
+        const iconOnly = narrow && !spills;
         const chipClass = `rounded-xs border border-warning bg-warning-soft p-1 text-xs in-data-compact:px-1 in-data-compact:py-0.5 ${
-          overflowText
+          oneLine
             ? 'w-max max-w-none min-w-full shrink-0 whitespace-nowrap'
-            : 'w-full break-words hyphens-auto'
+            : expanded
+              ? 'w-max max-w-56 min-w-full shrink-0 break-words hyphens-auto'
+              : 'w-full break-words hyphens-auto'
         } ${iconOnly ? 'flex items-center justify-center' : ''}`;
-        const chipStyle = iconOnly || overflowText ? undefined : clampLines(lines);
+        const chipStyle = iconOnly || spills ? undefined : clampLines(lines);
         const chipContent = (words: string) =>
           iconOnly ? (
             <StickyNote className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
@@ -160,7 +208,7 @@ export const NotesRow = memo(function NotesRow({
             title={text || (hidden ? 'Nota nascosta dalla ricerca' : undefined)}
             className={`group/note relative z-(--z) flex shrink-0 p-1 text-left in-data-compact:p-0.5 hover:z-[600] focus-visible:z-[600] ${columnEdge(column)} ${
               text ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
-            } ${column.past ? 'bg-past' : column.red ? 'bg-holiday' : ''} ${
+            } ${columnFill(column)} ${
               isTarget ? `ring-2 ring-inset ${drag.allowed ? 'ring-link' : 'ring-danger'}` : ''
             } ${isCurrent ? CURRENT_RESULT : ''}`}
           >

@@ -29,7 +29,14 @@ import type { ProjectOfDay } from '../../domain/projectStatus';
 import { isGroupable, projectColorField } from '../../domain/roadmapConfig';
 import { isInRange, weekRange } from '../../domain/schedule';
 import { countByStatus } from '../../domain/stats';
-import type { MemoAuthor, Milestone, PlanSnapshot, TaskItem, TaskStatus } from '../../domain/types';
+import type {
+  Closure,
+  MemoAuthor,
+  Milestone,
+  PlanSnapshot,
+  TaskItem,
+  TaskStatus,
+} from '../../domain/types';
 import { Area } from '../../shared/ui/Area';
 import { Button } from '../../shared/ui/Button';
 import { Menu } from '../../shared/ui/Menu';
@@ -69,6 +76,9 @@ import { SectionHeader } from './SectionHeader';
 import { TimelineFrame } from './TimelineFrame';
 import { LABEL_WIDTH, oneLineTitlesOf } from './useTimelineDisplay';
 import type { TimelineDisplay, TimelineDisplayControls, TimelinePart } from './useTimelineDisplay';
+
+/** No company closures: one list, so that the columns of the days are not built again. */
+const NO_CLOSURES: readonly Closure[] = [];
 
 /** The button that adds things, where the focus goes when a task or a project is deleted. */
 export const NEW_ITEM_ID = 'new-item';
@@ -272,6 +282,7 @@ export function TimelineArea({
   };
   const exceptions = Object.keys(display.projectLevels).length;
   const groupable = plan.roadmap.fields.filter(isGroupable);
+  const closures = plan.roadmap.closures ?? NO_CLOSURES;
   const groupBy = groupable.find((field) => field.id === display.groupBy) ?? null;
   const sortField = projectColorField(plan.roadmap);
   const visibleLanes = plan.lanes.filter(
@@ -545,6 +556,7 @@ export function TimelineArea({
               noteMatches={releases.noteMatches}
               showMetrics={display.showMetrics}
               highlightWeekends={display.highlightWeekends}
+              closures={closures}
               textScale={textScale}
               compact={compact}
               visibility={display.visibility}
@@ -567,6 +579,7 @@ export function TimelineArea({
               dayWidth={dayWidth}
               today={today}
               highlightWeekends={display.highlightWeekends}
+              closures={closures}
               anchor={view.anchor}
               jump={view.jump}
               onScrolled={(first, last, settled) =>
@@ -599,18 +612,6 @@ export function TimelineArea({
                       onAdd={searching ? undefined : (date) => dialogs.addMilestone(date)}
                     />
                   )}
-                  {parts.releases && display.visibility.showNotes && (
-                    <NotesSection
-                      geometry={geometry}
-                      dailyNotes={plan.dailyNotes}
-                      noteMatches={releases.noteMatches}
-                      sizes={sizes}
-                      oneLineTitles={oneLineTitles}
-                      onSaveNote={releases.onSaveNote}
-                      onMoveNote={releases.onMoveNote}
-                    />
-                  )}
-
                   {parts.releases && (
                     <>
                       <SectionHeader
@@ -641,31 +642,48 @@ export function TimelineArea({
                           </Menu>
                         }
                       />
+                      {/* The lanes, then the notes of the days under the last of them. */}
                       <div id={releasesRowsId}>
-                        {!display.collapsed.includes('releases') &&
-                          (noLaneShown ? (
-                            <div className="sticky left-0 flex w-fit items-center gap-3 px-4 py-4 text-xs text-fg-muted">
-                              <EyeOff className="h-4 w-4 shrink-0" aria-hidden="true" />
-                              Tutte le corsie sono nascoste
-                              <Button size="sm" onClick={controls.showAllRows}>
-                                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                                Mostra tutte le righe
-                              </Button>
-                            </div>
-                          ) : (
-                            <LanesSection
-                              geometry={geometry}
-                              tasks={releases.tasks}
-                              lanes={visibleLanes}
-                              sizes={sizes}
-                              oneLineTitles={oneLineTitles}
-                              onChangeTask={releases.onChangeTask}
-                              onOpenTask={releases.onOpenTask}
-                              onDuplicateTask={releases.onDuplicateTask}
-                              onDeleteTask={releases.onDeleteTask}
-                              onAddTaskAt={releases.onAddTaskAt}
-                            />
-                          ))}
+                        {!display.collapsed.includes('releases') && (
+                          <>
+                            {noLaneShown ? (
+                              <div className="sticky left-0 flex w-fit items-center gap-3 px-4 py-4 text-xs text-fg-muted">
+                                <EyeOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                Tutte le corsie sono nascoste
+                                <Button size="sm" onClick={controls.showAllRows}>
+                                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Mostra tutte le righe
+                                </Button>
+                              </div>
+                            ) : (
+                              <LanesSection
+                                geometry={geometry}
+                                tasks={releases.tasks}
+                                lanes={visibleLanes}
+                                sizes={sizes}
+                                oneLineTitles={oneLineTitles}
+                                onChangeTask={releases.onChangeTask}
+                                onOpenTask={releases.onOpenTask}
+                                onDuplicateTask={releases.onDuplicateTask}
+                                onDeleteTask={releases.onDeleteTask}
+                                onAddTaskAt={releases.onAddTaskAt}
+                              />
+                            )}
+                            {display.visibility.showNotes && (
+                              <NotesSection
+                                geometry={geometry}
+                                dailyNotes={plan.dailyNotes}
+                                noteMatches={releases.noteMatches}
+                                sizes={sizes}
+                                oneLineTitles={oneLineTitles}
+                                expanded={display.notesExpanded}
+                                onToggleExpanded={controls.toggleNotesExpanded}
+                                onSaveNote={releases.onSaveNote}
+                                onMoveNote={releases.onMoveNote}
+                              />
+                            )}
+                          </>
+                        )}
                       </div>
                     </>
                   )}

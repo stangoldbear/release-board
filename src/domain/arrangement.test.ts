@@ -15,14 +15,22 @@ const bars = [
 
 describe('working days', () => {
   it('skip weekends and holidays', () => {
-    expect(firstWorkingDayFrom('2026-11-02')).toBe('2026-11-02');
-    expect(firstWorkingDayFrom('2026-11-07')).toBe('2026-11-09');
-    expect(nextWorkingDay('2026-11-06')).toBe('2026-11-09');
-    expect(nextWorkingDay('2026-12-07')).toBe('2026-12-09'); // the 8th is a holiday
+    expect(firstWorkingDayFrom('2026-11-02', [])).toBe('2026-11-02');
+    expect(firstWorkingDayFrom('2026-11-07', [])).toBe('2026-11-09');
+    expect(nextWorkingDay('2026-11-06', [])).toBe('2026-11-09');
+    expect(nextWorkingDay('2026-12-07', [])).toBe('2026-12-09'); // the 8th is a holiday
   });
 });
 
 describe('the arrangement of a project', () => {
+  it('starts each phase on the first working day after the company closures', () => {
+    // Closed the week from Monday the 9th of November 2026: the developments start on the 16th.
+    const closed = { ...config, closures: [{ start: '2026-11-09', end: '2026-11-13' }] };
+    const arranged = arrangeProject({ startDate: '2026-11-01' }, bars, null, closed);
+    expect(arranged.starts.ba).toBe('2026-11-02');
+    expect(arranged.starts.server).toBe('2026-11-16');
+  });
+
   it('puts the analysis first, the developments in parallel, the tests and the contingency after', () => {
     const arranged = arrangeProject({ startDate: '2026-11-01' }, bars, 3, config);
     expect(arranged.starts).toEqual({

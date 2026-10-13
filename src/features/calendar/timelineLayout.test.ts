@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TEXT_SCALES } from '../../shared/ui/textScale';
 import {
   buildColumns,
+  columnFill,
   columnTone,
   columnUnit,
   monthSpans,
@@ -13,7 +14,7 @@ describe('buildColumns', () => {
   const range = { start: '2026-09-28', end: '2026-10-04' };
 
   it('marks past days, today, holidays and the end of a month', () => {
-    const columns = buildColumns(range, 56, true, '2026-10-01');
+    const columns = buildColumns(range, 56, true, '2026-10-01', []);
     expect(columns.map((column) => column.past)).toEqual([
       true,
       true,
@@ -32,11 +33,39 @@ describe('buildColumns', () => {
   });
 
   it('greys past days before anything else, and leaves the week of today as it is', () => {
-    const [past, , , today] = buildColumns(range, 56, true, '2026-10-01');
+    const [past, , , today] = buildColumns(range, 56, true, '2026-10-01', []);
     expect(columnTone(past!)).toBe('bg-past text-fg-muted');
     expect(columnTone(today!)).toBe('bg-accent-soft text-link');
-    const [week] = buildColumns(range, 12, true, '2026-10-01');
+    const [week] = buildColumns(range, 12, true, '2026-10-01', []);
     expect(week).toMatchObject({ start: '2026-09-28', end: '2026-10-04', past: false });
+  });
+});
+
+describe('the company closures on the timeline', () => {
+  const range = { start: '2026-09-28', end: '2026-10-04' };
+  const closures = [{ start: '2026-10-02', end: '2026-10-05', reason: 'Inventario' }];
+
+  it('stripe the days they cover, with their reason, after the past days', () => {
+    const columns = buildColumns(range, 56, true, '2026-10-01', closures);
+    expect(columns.map((column) => column.closure)).toEqual([
+      null,
+      null,
+      null,
+      null,
+      'Inventario',
+      'Inventario',
+      'Inventario',
+    ]);
+    expect(columnFill(columns[4]!)).toBe('bg-closure');
+    expect(columnTone(columns[4]!)).toBe('bg-closure-band text-holiday-fg');
+    expect(columnFill(columns[6]!)).toBe('bg-closure');
+    const past = buildColumns(range, 56, true, '2026-10-10', closures)[4]!;
+    expect(columnFill(past)).toBe('bg-past');
+    expect(buildColumns(range, 12, true, '2026-10-01', closures)[0]?.closure).toBeNull();
+    expect(
+      buildColumns(range, 56, true, '2026-10-01', [{ start: '2026-10-02', end: '2026-10-02' }])[4]
+        ?.closure,
+    ).toBe('Chiusura aziendale');
   });
 });
 
@@ -71,10 +100,10 @@ describe('columnUnit', () => {
 
   it('builds columns of a day or of a week from the width alone, fractions included', () => {
     const range = { start: '2026-09-28', end: '2026-10-11' };
-    const days = buildColumns(range, 1240 / 44, true, '2026-10-01');
+    const days = buildColumns(range, 1240 / 44, true, '2026-10-01', []);
     expect(days).toHaveLength(14);
     expect(days[0]?.width).toBeCloseTo(1240 / 44);
-    const weeks = buildColumns(range, 1240 / 90, true, '2026-10-01');
+    const weeks = buildColumns(range, 1240 / 90, true, '2026-10-01', []);
     expect(weeks).toHaveLength(2);
     expect(weeks[0]?.width).toBeCloseTo((7 * 1240) / 90);
   });

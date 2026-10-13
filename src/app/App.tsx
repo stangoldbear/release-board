@@ -208,15 +208,19 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const planProjects = plan?.projects;
   const planAssignments = plan?.assignments;
   const planStakeholders = plan?.roadmap.stakeholders;
+  const planClosures = plan?.roadmap.closures;
   const spans = useMemo(
     () =>
       new Map<string, ProjectSpan>(
         (planProjects ?? []).map((project) => [
           project.id,
-          projectSpan(project, planAssignments ?? [], planStakeholders ?? []),
+          projectSpan(project, planAssignments ?? [], {
+            stakeholders: planStakeholders ?? [],
+            closures: planClosures,
+          }),
         ]),
       ),
-    [planProjects, planAssignments, planStakeholders],
+    [planProjects, planAssignments, planStakeholders, planClosures],
   );
   // The projects as the day has them: with their effective end and the state their dates give,
   // which the rows, the counts, the order and the alerts show; the windows keep the stored ones.
@@ -225,7 +229,10 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     () =>
       (planProjects ?? []).map((project) =>
         withEffectiveStatus(
-          withEffectiveEnd(project, spans.get(project.id) ?? projectSpan(project, [], [])),
+          withEffectiveEnd(
+            project,
+            spans.get(project.id) ?? projectSpan(project, [], { stakeholders: [] }),
+          ),
           today,
         ),
       ),
@@ -478,10 +485,13 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     if (!project || days === 0) return;
     const changes: ProjectChanges = { startDate: addDaysIso(project.startDate, days) };
     if (project.endDate) changes.endDate = addDaysIso(project.endDate, days);
-    if (project.contingency) changes.contingency = moveAssignment(project.contingency, days);
+    const closures = plan.roadmap.closures ?? [];
+    if (project.contingency) {
+      changes.contingency = moveAssignment(project.contingency, days, closures);
+    }
     repository.updateProject(projectId, changes);
     for (const assignment of assignmentsOfProject(plan.assignments, projectId)) {
-      const { startDate } = moveAssignment(assignment, days);
+      const { startDate } = moveAssignment(assignment, days, closures);
       if (startDate !== assignment.startDate) {
         repository.updateAssignment(assignment.id, { startDate });
       }
@@ -657,6 +667,17 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     } else if (!areas[area]) {
       setAreas((current) => ({ ...current, [area]: true }));
     }
+    // A result in a folded part of the timeline opens the part: the notes of the days fold with
+    // the releases, the notes of a project with the roadmap.
+    const part =
+      result.kind === 'task' || result.kind === 'note'
+        ? 'releases'
+        : result.kind === 'project' ||
+            (result.kind === 'milestone' &&
+              plan.milestones.some((item) => item.id === result.id && item.projectId))
+          ? 'roadmaps'
+          : null;
+    if (part && display.collapsed.includes(part)) displayControls.toggleCollapsed(part);
     let wait = 0;
     if (result.kind === 'project') {
       // The roadmap goes to the start of the project, with the past when the project is past.

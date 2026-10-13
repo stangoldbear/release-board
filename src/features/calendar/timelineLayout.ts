@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
+import { closureOn } from '../../domain/roadmapConfig';
 import { rangeColumns } from '../../domain/schedule';
+import type { Closure } from '../../domain/types';
 import { LINE_HEIGHT } from '../../shared/ui/textScale';
 import type { DateRange } from '../../domain/schedule';
 import {
@@ -143,6 +145,8 @@ export interface Column {
   /** Weekend or holiday shown in red; day columns only. */
   red: boolean;
   holidays: string[];
+  /** The company closure of the day, by its reason or in words, striped red; day columns only. */
+  closure: string | null;
   isToday: boolean;
   /** All of its days are before today. */
   past: boolean;
@@ -155,6 +159,7 @@ export function buildColumns(
   dayWidth: number,
   highlightWeekends: boolean,
   today: string,
+  closures: readonly Closure[],
 ): Column[] {
   return rangeColumns(range, columnUnit(dayWidth)).map(({ start, end }) => {
     const days = diffDays(start, end) + 1;
@@ -166,12 +171,14 @@ export function buildColumns(
       if (name) holidays.push(name);
     }
     const weekend = days === 1 && isWeekend(parseISODate(start));
+    const closure = days === 1 ? closureOn(closures, start) : null;
     return {
       start,
       end,
       width: days * dayWidth,
       red: days === 1 && (holidays.length > 0 || (highlightWeekends && weekend)),
       holidays,
+      closure: closure ? (closure.reason ?? CLOSURE_NAME) : null,
       isToday: start <= today && today <= end,
       past: end < today,
       monthEnd: days === 1 && end === endOfMonth(end),
@@ -179,11 +186,26 @@ export function buildColumns(
   });
 }
 
-/** Background and text of a day column: past days are grey, then holidays red, then today. */
+/** A company closure without a reason, in words. */
+export const CLOSURE_NAME = 'Chiusura aziendale';
+
+/**
+ * Background and text of the header of a day column: past days are grey, then the closures with
+ * a striped band, then holidays red, then today.
+ */
 export function columnTone(column: Column): string {
   if (column.past) return 'bg-past text-fg-muted';
+  if (column.closure) return 'bg-closure-band text-holiday-fg';
   if (column.red) return 'bg-holiday text-holiday-fg';
   if (column.isToday) return 'bg-accent-soft text-link';
+  return '';
+}
+
+/** Background of the days of a row: past days grey, closures striped red, holidays red. */
+export function columnFill(column: Column): string {
+  if (column.past) return 'bg-past';
+  if (column.closure) return 'bg-closure';
+  if (column.red) return 'bg-holiday';
   return '';
 }
 

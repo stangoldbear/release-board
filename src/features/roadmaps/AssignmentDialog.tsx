@@ -82,7 +82,9 @@ export function AssignmentDialog({
   const effortValid = isValidManDays(manDays);
   const stakeholder = config.stakeholders.find((item) => item.id === stakeholderId) ?? null;
   const valid = stakeholder !== null && isIsoDate(startDate) && effortValid;
-  const schedule = valid ? scheduleAssignment({ startDate, manDays }, stakeholder.absences) : null;
+  const schedule = valid
+    ? scheduleAssignment({ startDate, manDays }, stakeholder.absences, config.closures ?? [])
+    : null;
 
   const save = (event: FormEvent) => {
     event.preventDefault();

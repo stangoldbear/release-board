@@ -16,6 +16,14 @@ export const TASK_COLORS = [
   { id: 'lime', name: 'Lime' },
   { id: 'olive', name: 'Oliva' },
   { id: 'brown', name: 'Marrone' },
+  { id: 'navy', name: 'Blu' },
+  { id: 'cyan', name: 'Ciano' },
+  { id: 'petrol', name: 'Petrolio' },
+  { id: 'forest', name: 'Verde bosco' },
+  { id: 'amber', name: 'Ambra' },
+  { id: 'wine', name: 'Bordeaux' },
+  { id: 'plum', name: 'Prugna' },
+  { id: 'slate', name: 'Ardesia' },
 ] as const;
 
 export type TaskColorId = (typeof TASK_COLORS)[number]['id'];

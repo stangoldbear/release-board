@@ -2,21 +2,27 @@ import { addDaysIso } from '../utils/dateUtils';
 import { isWorkingDay, scheduleAssignment } from './assignments';
 import { arrangementOf } from './projects';
 import { TEAM_PHASES, teamsInPhaseOrder } from './roadmapConfig';
+import type { DateRange } from './schedule';
 import type { Assignment, Project, RoadmapConfig, TeamPhase } from './types';
 
 // Where the bars of a project start, by its arrangement. The length of each bar comes from its
 // days and the calendar of its person: the arrangement sets the starts only.
 
+/** How far to look for a working day: past the longest closure the company could set. */
+const WORKING_DAY_SEARCH = 400;
+
 /** The first working day on or after a day. */
-export function firstWorkingDayFrom(iso: string): string {
+export function firstWorkingDayFrom(iso: string, closures: readonly DateRange[]): string {
   let day = iso;
-  for (let guard = 0; !isWorkingDay(day) && guard < 30; guard += 1) day = addDaysIso(day, 1);
+  for (let guard = 0; !isWorkingDay(day, closures) && guard < WORKING_DAY_SEARCH; guard += 1) {
+    day = addDaysIso(day, 1);
+  }
   return day;
 }
 
 /** The first working day after a day. */
-export function nextWorkingDay(iso: string): string {
-  return firstWorkingDayFrom(addDaysIso(iso, 1));
+export function nextWorkingDay(iso: string, closures: readonly DateRange[]): string {
+  return firstWorkingDayFrom(addDaysIso(iso, 1), closures);
 }
 
 /** An assignment to place: with the id it has, or will have, and its days. */
@@ -47,12 +53,14 @@ export function arrangeProject(
   config: RoadmapConfig,
 ): ArrangedBars {
   const arrangement = arrangementOf(project);
+  const closures = config.closures ?? [];
   const absencesOf = (bar: BarToPlace) =>
     config.stakeholders.find((item) => item.id === bar.stakeholderId)?.absences ?? [];
   const endOf = (bar: BarToPlace, startDate: string) =>
-    scheduleAssignment({ startDate, manDays: bar.manDays }, absencesOf(bar)).end;
+    scheduleAssignment({ startDate, manDays: bar.manDays }, absencesOf(bar), closures).end;
+  const after = (day: string) => nextWorkingDay(day, closures);
   const starts: Record<string, string> = {};
-  const origin = firstWorkingDayFrom(project.startDate);
+  const origin = firstWorkingDayFrom(project.startDate, closures);
 
   if (arrangement === 'manual') {
     for (const bar of bars) starts[bar.id] = bar.startDate;
@@ -62,7 +70,7 @@ export function arrangeProject(
       .at(-1);
     return {
       starts,
-      contingencyStart: contingencyDays ? (lastEnd ? nextWorkingDay(lastEnd) : origin) : null,
+      contingencyStart: contingencyDays ? (lastEnd ? after(lastEnd) : origin) : null,
     };
   }
 
@@ -94,7 +102,7 @@ export function arrangeProject(
     for (const bar of ordered) {
       starts[bar.id] = cursor;
       lastEnd = endOf(bar, cursor);
-      cursor = nextWorkingDay(lastEnd);
+      cursor = after(lastEnd);
     }
   } else {
     for (const phase of [...TEAM_PHASES.filter((item) => item !== LAST_PHASE), LAST_PHASE]) {
@@ -107,11 +115,11 @@ export function arrangeProject(
         if (!groupEnd || end > groupEnd) groupEnd = end;
       }
       lastEnd = groupEnd;
-      cursor = groupEnd ? nextWorkingDay(groupEnd) : cursor;
+      cursor = groupEnd ? after(groupEnd) : cursor;
     }
   }
   return {
     starts,
-    contingencyStart: contingencyDays ? (lastEnd ? nextWorkingDay(lastEnd) : origin) : null,
+    contingencyStart: contingencyDays ? (lastEnd ? after(lastEnd) : origin) : null,
   };
 }

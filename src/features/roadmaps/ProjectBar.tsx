@@ -33,7 +33,7 @@ interface ProjectBarProps {
   /** The project, with its effective end, cut to the days the roadmap holds. */
   placed: PlacedTask<ProjectWithEnd>;
   span: ProjectSpan;
-  /** The bars of the work, in the order of the work: a lane each inside the bar. */
+  /** The bars of the work, in the order of the teams: a lane each inside the bar. */
   work: WorkItem[];
   /** The color of the bar: from the value of a field, or the project's own. */
   colorId: TaskColorId;

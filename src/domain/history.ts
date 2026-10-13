@@ -319,6 +319,7 @@ const ROADMAP_FIELDS: Partial<Record<HistoryEntity, Record<string, string>>> = {
     contingencyFormula: 'Formula della contingency',
     projectColors: 'Colori dei progetti',
     colorFieldId: 'Campo dei colori',
+    closures: 'Chiusure aziendali',
   },
 };
 
@@ -357,6 +358,9 @@ function formatField(
 ): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   if (Array.isArray(value) && field === 'options') return formatOptions(value);
+  if (Array.isArray(value) && field === 'closures') {
+    return `${value.length} ${value.length === 1 ? 'chiusura' : 'chiusure'}`;
+  }
   if (Array.isArray(value)) return `${value.length} ${value.length === 1 ? 'voce' : 'voci'}`;
   if (typeof value === 'number') return formatLocaleNumber(value, Number.isInteger(value) ? 0 : 2);
   if (typeof value === 'boolean' && field === 'private') return value ? 'Privata' : 'Condivisa';

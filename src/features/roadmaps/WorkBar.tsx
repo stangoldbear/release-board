@@ -116,7 +116,11 @@ export function WorkBar({
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
     const step = event.shiftKey ? 7 : 1;
-    const { startDate } = moveAssignment(item, event.key === 'ArrowRight' ? step : -step);
+    const { startDate } = moveAssignment(
+      item,
+      event.key === 'ArrowRight' ? step : -step,
+      item.closures,
+    );
     if (startDate !== item.startDate) onChange({ startDate });
   };
 

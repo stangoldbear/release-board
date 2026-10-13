@@ -10,6 +10,7 @@ import {
   isGroupable,
   isProjectColorsMode,
   isRoadmapId,
+  parseClosures,
   parseProjectField,
   parseStakeholder,
   parseTeam,
@@ -344,7 +345,7 @@ export const ROADMAP_SETTINGS_ID = 'roadmap';
 /** The shared settings of the roadmap: the keys that are set, and nothing else. */
 export type RoadmapSettings = Pick<
   RoadmapConfig,
-  'contingencyFormula' | 'projectColors' | 'colorFieldId'
+  'contingencyFormula' | 'projectColors' | 'colorFieldId' | 'closures'
 >;
 
 export function roadmapSettingsContent(config: RoadmapSettings): DocumentData {
@@ -352,6 +353,11 @@ export function roadmapSettingsContent(config: RoadmapSettings): DocumentData {
   if (config.contingencyFormula) data.contingencyFormula = config.contingencyFormula;
   if (config.projectColors) data.projectColors = config.projectColors;
   if (config.colorFieldId) data.colorFieldId = config.colorFieldId;
+  if (config.closures && config.closures.length > 0) {
+    data.closures = config.closures.map(({ start, end, reason }) =>
+      reason ? { start, end, reason } : { start, end },
+    );
+  }
   return data;
 }
 
@@ -363,6 +369,8 @@ export function readRoadmapSettings(data: DocumentData): RoadmapSettings {
   }
   if (isProjectColorsMode(data.projectColors)) settings.projectColors = data.projectColors;
   if (isRoadmapId(data.colorFieldId)) settings.colorFieldId = data.colorFieldId;
+  const closures = parseClosures(data.closures);
+  if (closures.length > 0) settings.closures = closures;
   return settings;
 }
 

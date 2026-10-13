@@ -1,9 +1,12 @@
 import { memo } from 'react';
 import { useFormatDate } from '../../shared/dateFormat';
-import { columnEdge } from '../calendar/timelineLayout';
+import { columnEdge, columnFill } from '../calendar/timelineLayout';
 import type { Column } from '../calendar/timelineLayout';
 
-/** The days of a row, past ones grey and holidays red: memoized, since a drag redraws only the bars. */
+/**
+ * The days of a row, past ones grey, closures striped and holidays red: memoized, since a drag
+ * redraws only the bars.
+ */
 export const RowCells = memo(function RowCells({
   columns,
   onAdd,
@@ -25,9 +28,7 @@ export const RowCells = memo(function RowCells({
           ? (addTitle?.(column.start) ?? `Nuovo progetto dal ${formatDate(column.start)}`)
           : undefined
       }
-      className={`flex shrink-0 items-center justify-center ${columnEdge(column)} ${
-        column.past ? 'bg-past' : column.red ? 'bg-holiday' : ''
-      } ${
+      className={`flex shrink-0 items-center justify-center ${columnEdge(column)} ${columnFill(column)} ${
         // The plus is drawn by CSS: one icon element per day would weigh on long roadmaps.
         onAdd
           ? "cursor-pointer text-base text-link after:opacity-0 after:content-['+'] hover:bg-accent-soft hover:after:opacity-100 pointer-coarse:after:hidden"

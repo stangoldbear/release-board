@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { ZOOM_DAY_WIDTH } from '../../domain/schedule';
 import type { DateRange } from '../../domain/schedule';
-import type { DailyMetric } from '../../domain/types';
+import type { Closure, DailyMetric } from '../../domain/types';
 import { scaledTextStyle } from '../../shared/ui/textScale';
 import type { TextScale } from '../../shared/ui/textScale';
 import { useRootHeightVar } from '../../shared/useRootHeightVar';
@@ -60,6 +60,8 @@ interface TimelineFrameProps {
   dayWidth: number;
   today: string;
   highlightWeekends: boolean;
+  /** The company closures, striped red on every row. */
+  closures: readonly Closure[];
   /** The first day in view when the timeline opens, where the user left it. */
   anchor: string;
   /** The last navigation: the timeline scrolls so that its day is at the left edge. */
@@ -100,6 +102,7 @@ export function TimelineFrame({
   dayWidth,
   today,
   highlightWeekends,
+  closures,
   anchor,
   jump,
   onScrolled,
@@ -121,8 +124,8 @@ export function TimelineFrame({
   const barRef = useRef<HTMLDivElement>(null);
   const followers = useMemo(() => [headScrollRef, barRef], []);
   const columns = useMemo(
-    () => buildColumns(range, dayWidth, highlightWeekends, today),
-    [range, dayWidth, highlightWeekends, today],
+    () => buildColumns(range, dayWidth, highlightWeekends, today, closures),
+    [range, dayWidth, highlightWeekends, today, closures],
   );
   const weekColumns = columnUnit(dayWidth) === 'week';
   const totalWidth = columns.reduce((sum, column) => sum + column.width, 0);

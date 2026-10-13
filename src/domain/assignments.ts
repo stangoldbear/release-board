@@ -64,14 +64,22 @@ export function isValidManDays(value: unknown): value is number {
   );
 }
 
-/** A day on which one works: not a weekend, not an Italian holiday. */
-export function isWorkingDay(iso: string): boolean {
+/** Whether a day falls in one of the ranges, both ends included. */
+function inRanges(ranges: readonly DateRange[], iso: string): boolean {
+  return ranges.some((range) => range.start <= iso && iso <= range.end);
+}
+
+/**
+ * A day on which one works: not a weekend, not an Italian holiday, not a day of the company
+ * closures, which count as weekends for everyone.
+ */
+export function isWorkingDay(iso: string, closures: readonly DateRange[]): boolean {
   const date = parseISODate(iso);
-  return !isWeekend(date) && getItalianHolidayName(date) === null;
+  return !isWeekend(date) && getItalianHolidayName(date) === null && !inRanges(closures, iso);
 }
 
 export function isAbsentOn(absences: readonly Absence[], iso: string): boolean {
-  return absences.some((absence) => absence.start <= iso && iso <= absence.end);
+  return inRanges(absences, iso);
 }
 
 /** How the work of an assignment falls on the calendar. */
@@ -89,13 +97,14 @@ export interface WorkSchedule {
 
 /**
  * Places the effort of an assignment on the working days from its start, skipping weekends,
- * holidays and the days the stakeholder is away. "Server #1" working three weeks from the 15th of
- * December, away from the 20th of December to the 20th of January, works until the 19th, then
- * from the 21st of January for the days that are left.
+ * holidays, the company closures and the days the stakeholder is away. "Server #1" working three
+ * weeks from the 15th of December, away from the 20th of December to the 20th of January, works
+ * until the 19th, then from the 21st of January for the days that are left.
  */
 export function scheduleAssignment(
   assignment: Pick<Assignment, 'startDate' | 'manDays'>,
   absences: readonly Absence[],
+  closures: readonly DateRange[],
 ): WorkSchedule {
   const needed = Math.max(1, Math.ceil(assignment.manDays));
   const workDays: string[] = [];
@@ -105,7 +114,7 @@ export function scheduleAssignment(
     workDays.length < needed && steps < MAX_SPAN_DAYS;
     steps += 1, day = addDaysIso(day, 1)
   ) {
-    if (isWorkingDay(day) && !isAbsentOn(absences, day)) workDays.push(day);
+    if (isWorkingDay(day, closures) && !isAbsentOn(absences, day)) workDays.push(day);
   }
   const start = workDays[0] ?? assignment.startDate;
   const end = workDays.at(-1) ?? assignment.startDate;
@@ -141,16 +150,18 @@ export function absencesWithin(absences: readonly Absence[], range: DateRange): 
 
 /**
  * The assignment moved by some days. It lands on a working day: forward when moving ahead,
- * backward when moving back, so that a step from the keyboard always shows.
+ * backward when moving back, so that a step from the keyboard always shows, across a closure of
+ * the company too.
  */
 export function moveAssignment<T extends Pick<Assignment, 'startDate'>>(
   assignment: T,
   days: number,
+  closures: readonly DateRange[],
 ): T {
   if (days === 0) return assignment;
   let startDate = addDaysIso(assignment.startDate, days);
   const step = days > 0 ? 1 : -1;
-  for (let guard = 0; !isWorkingDay(startDate) && guard < 14; guard += 1) {
+  for (let guard = 0; !isWorkingDay(startDate, closures) && guard < MAX_SPAN_DAYS; guard += 1) {
     startDate = addDaysIso(startDate, step);
   }
   return { ...assignment, startDate };
@@ -165,6 +176,7 @@ export function manDaysEndingOn(
   startDate: string,
   endDate: string,
   absences: readonly Absence[],
+  closures: readonly DateRange[],
 ): number {
   let days = 0;
   for (
@@ -172,7 +184,7 @@ export function manDaysEndingOn(
     day <= endDate && steps < MAX_SPAN_DAYS;
     day = addDaysIso(day, 1), steps += 1
   ) {
-    if (isWorkingDay(day) && !isAbsentOn(absences, day)) days += 1;
+    if (isWorkingDay(day, closures) && !isAbsentOn(absences, day)) days += 1;
   }
   return Math.max(1, Math.min(MAN_DAYS_MAX, days));
 }

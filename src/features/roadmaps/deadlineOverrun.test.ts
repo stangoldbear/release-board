@@ -22,8 +22,8 @@ const assignments: Assignment[] = [
 
 describe('deadlineOverrun', () => {
   it('tells the working days past the deadline and the bars that end after it', () => {
-    const span = projectSpan(project, assignments, config.stakeholders);
-    const overrun = deadlineOverrun(project, span, workItemsOf(project, span, config));
+    const span = projectSpan(project, assignments, config);
+    const overrun = deadlineOverrun(project, span, workItemsOf(project, span, config), []);
     // The contingency works Monday the 30th and Tuesday the 1st, after the weekend.
     expect(overrun).toMatchObject({ deadline: '2026-11-27', end: '2026-12-01', workingDays: 2 });
     expect(overrun?.late.map((item) => item.name)).toEqual(['Contingency']);
@@ -31,18 +31,16 @@ describe('deadlineOverrun', () => {
 
   it('leaves out the holidays, and is null in time or without a deadline', () => {
     const planned = { ...project, endDate: '2026-12-11', contingency: undefined };
-    const span = projectSpan(planned, assignments, config.stakeholders);
+    const span = projectSpan(planned, assignments, config);
     // From the 30th to the 11th: ten working days but the 8th of December, a holiday.
-    expect(deadlineOverrun(planned, span, workItemsOf(planned, span, config))).toMatchObject({
+    expect(deadlineOverrun(planned, span, workItemsOf(planned, span, config), [])).toMatchObject({
       workingDays: 9,
       late: [],
     });
     const inTime = { ...project, contingency: undefined };
-    const spanInTime = projectSpan(inTime, assignments, config.stakeholders);
-    expect(deadlineOverrun(inTime, spanInTime, [])).toBeNull();
+    const spanInTime = projectSpan(inTime, assignments, config);
+    expect(deadlineOverrun(inTime, spanInTime, [], [])).toBeNull();
     const free = { ...project, deadline: undefined };
-    expect(
-      deadlineOverrun(free, projectSpan(free, assignments, config.stakeholders), []),
-    ).toBeNull();
+    expect(deadlineOverrun(free, projectSpan(free, assignments, config), [], [])).toBeNull();
   });
 });

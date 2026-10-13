@@ -251,7 +251,7 @@ export interface ProjectRowProps {
   project: ProjectOfDay<ProjectWithEnd>;
   today: string;
   span: ProjectSpan;
-  /** The bars of the work of the project, in the order of the work. */
+  /** The bars of the work of the project, in the order of the teams. */
   work: WorkItem[];
   /** The assignments of the project, to open the window of one. */
   assignments: Assignment[];
@@ -381,7 +381,7 @@ export function ProjectRow({
   const tabLabel = colorField ? (sizeValue?.label ?? null) : null;
   const tabColor = colorField ? (sizeValue?.colorId ?? null) : colorId;
   const teams = teamsOf(work);
-  const overrun = deadlineOverrun(project, span, work);
+  const overrun = deadlineOverrun(project, span, work, config.closures ?? []);
   const deadlineLeft =
     project.deadline && project.deadline >= range.start && project.deadline <= range.end
       ? (diffDays(range.start, project.deadline) + 1) * dayWidth

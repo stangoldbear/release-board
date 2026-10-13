@@ -17,6 +17,7 @@ import {
 import { REMIND_DAYS_MAX } from '../../domain/projectReminders';
 import {
   ABSENCES_MAX,
+  CLOSURES_MAX,
   FIELD_DESCRIPTION_MAX,
   FIELD_LABEL_MAX,
   FIELD_OPTIONS_MAX,
@@ -123,6 +124,7 @@ describe('the security rules', () => {
     expect(block('settings', 'history')).toContain(
       `isText(data.contingencyFormula, ${FORMULA_MAX})`,
     );
+    expect(block('settings', 'history')).toContain(`data.closures.size() <= ${CLOSURES_MAX}`);
     expect(block('settings', 'history')).toContain(
       `data.projectColors in [${PROJECT_COLORS_MODES.map((mode) => `'${mode}'`).join(', ')}]`,
     );

@@ -32,7 +32,7 @@ export interface ProjectCardTools {
 interface ProjectCardProps {
   project: ProjectWithEnd & { statusChange?: StatusChange };
   span: ProjectSpan;
-  /** The bars of the work, in the order of the work. */
+  /** The bars of the work, in the order of the teams. */
   work: WorkItem[];
   config: RoadmapConfig;
   /** The field that colors the projects, whose value is the tab of the row. */

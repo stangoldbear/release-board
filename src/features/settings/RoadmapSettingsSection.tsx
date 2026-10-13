@@ -18,6 +18,12 @@ import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 import { ProjectFieldsDialog } from './ProjectFieldsDialog';
 import { TeamDialog } from './TeamDialog';
 
+/** The defaults of the repository with the company closures of the plan, which are no default. */
+function defaultsKeeping(config: RoadmapConfig): RoadmapConfig {
+  const defaults = defaultRoadmapConfig();
+  return config.closures ? { ...defaults, closures: config.closures } : defaults;
+}
+
 interface RoadmapSettingsSectionProps {
   config: RoadmapConfig;
   /** The published rules do not know the configuration yet: the section says so, and no more. */
@@ -153,7 +159,7 @@ export function RoadmapSettingsSection({
               <Button
                 size="sm"
                 variant="primary"
-                onClick={() => actions.onReplaceConfig(defaultRoadmapConfig())}
+                onClick={() => actions.onReplaceConfig(defaultsKeeping(config))}
               >
                 Carica i predefiniti
               </Button>
@@ -184,7 +190,7 @@ export function RoadmapSettingsSection({
           confirmLabel="Ripristina"
           onConfirm={() => {
             setConfirmDefaults(false);
-            actions.onReplaceConfig(defaultRoadmapConfig());
+            actions.onReplaceConfig(defaultsKeeping(config));
           }}
           onCancel={() => setConfirmDefaults(false)}
         />

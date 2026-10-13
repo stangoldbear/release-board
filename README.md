@@ -8,8 +8,8 @@ giornalieri.
 ## Funzionalità
 
 - Le note libere in cima e una sola timeline per i rilasci e i progetti, sugli stessi giorni: il
-  fatturato, le note dei giorni e le note sulla timeline, poi le corsie delle attività (Next
-  Releases) e i progetti (Roadmap), ognuno sotto un'intestazione con i conteggi per stato che si
+  fatturato e le note sulla timeline, poi le corsie delle attività con sotto le note dei giorni
+  (Next Releases) e i progetti (Roadmap), ognuno sotto un'intestazione con i conteggi per stato che si
   ripiega. Con le schede in fondo alla pagina «All» mostra tutto, «Next Releases» e «Roadmap» la
   timeline con una parte sola; oppure, a scelta nelle Impostazioni, i pulsanti nell'intestazione
   mostrano e nascondono le parti. Un solo pulsante «Nuovo» per attività, progetti e note.
@@ -25,7 +25,8 @@ giornalieri.
 - Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e
   checklist.
 - Note e valori giornalieri, per esempio il fatturato, allineati ai giorni del calendario. Le note
-  si spostano trascinandole su un altro giorno, anche da tastiera.
+  si spostano trascinandole su un altro giorno, anche da tastiera, e «Espandi» ne mostra il testo
+  intero.
 - Note libere sotto la ricerca, una dopo l'altra: titolo, testo, colore, un promemoria che compare
   il giorno scelto e un ordine che si cambia trascinandole. In un'istanza condivisa ognuno vede le
   sue, può guardare quelle di tutti, raggruppate per autore, e può tenerne alcune private.
@@ -42,8 +43,8 @@ giornalieri.
   sequenza, con la fine calcolata dal lavoro, una hard deadline segnata dove il lavoro la supera e
   un avviso qualche giorno prima; la barra mostra il lavoro come lane per persona, come fasi o da
   sola, e le note sulla timeline sono rombi su un giorno, di un progetto o liberi. Note con autore,
-  scadenza e avviso; una vista Team con una barra per persona, che salta weekend, festività e
-  assenze, allungabile dal bordo o scrivendo i giorni con un doppio clic. Progetti, barre e note si
+  scadenza e avviso; una vista Team con una barra per persona, che salta weekend, festività,
+  chiusure aziendali e assenze, allungabile dal bordo o scrivendo i giorni con un doppio clic. Progetti, barre e note si
   spostano trascinandoli, anche da tastiera.
 - Ricerca in attività, note dei giorni, note libere, progetti (anche note e campi) e note sulla
   timeline, con tutte le parole o almeno una: le parole trovate sono evidenziate e i risultati si
@@ -51,10 +52,14 @@ giornalieri.
 - Date per esteso nel formato scelto nelle Impostazioni, `gg-mm-aa` di serie.
 - Fatturato previsto importato da un foglio Google in CSV, con il semaforo dei rilasci e le
   promozioni di ogni giorno.
-- Festività italiane e weekend evidenziati.
+- Festività italiane e weekend evidenziati; chiusure aziendali a righine rosse, che per il lavoro
+  dei progetti valgono come un weekend.
+- Team e persone nelle Impostazioni: ordine dei team (quello della tabella dei giorni di ogni
+  progetto) da trascinare, colori, formule dei giorni con esempi da copiare.
 - Tema chiaro e scuro, quello del dispositivo, oppure uno dei 32 temi ispirati ai temi più usati
   di Visual Studio Code, tutti con il contrasto WCAG AA.
-- Backup e ripristino in un file JSON dalle Impostazioni.
+- Backup e ripristino in un file JSON dalle Impostazioni, e un file a parte con le sole
+  impostazioni (configurazione della roadmap, chiusure, aspetto) da esportare e reimportare.
 - Con un progetto Firebase: piano condiviso con il team in tempo reale, anche offline, con l'ora
   dell'ultima sincronizzazione; accesso con GitHub, membri invitati per username, un proprietario
   si toglie solo scrivendo il suo username; cronologia delle modifiche in una pagina con grafici e

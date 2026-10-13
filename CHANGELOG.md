@@ -6,6 +6,52 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-13
+
+Con un'istanza condivisa le regole di Firestore sono cambiate (i colori nuovi e le chiusure
+aziendali nel documento `settings/roadmap`): ripubblicale come nel passo «Pubblica le regole di
+sicurezza» della guida, prima di usare le funzioni nuove. Dopo l'aggiornamento chi ha la pagina
+aperta la ricarica: una pagina ancora della 0.13 che salva le impostazioni della roadmap (formula
+della contingency, colori dei progetti) toglierebbe le chiusure aziendali. I backup restano allo
+schema 7.
+
+### Aggiunto
+
+- Otto colori in più per attività, note, progetti, note sulla timeline, team e valori dei campi
+  (24 in tutto): Blu, Ciano, Petrolio, Verde bosco, Ambra, Bordeaux, Prugna e Ardesia, leggibili
+  in tutti i temi. Le istanze collegate a Firebase devono ripubblicare le regole di sicurezza per
+  salvarli.
+- Impostazioni → Roadmap → «Team e persone»: ogni team si riduce alla sua intestazione («Riduci
+  tutti» li chiude tutti) e si sposta trascinandolo per la maniglia o con le frecce; il colore si
+  cambia dall'intestazione; la formula dei giorni uomo si modifica subito sotto il nome del team,
+  con il suo «Salva»; in alto, tre esempi di formule da copiare, scritti con i tag dei propri team.
+- Impostazioni → «Chiusure aziendali»: i giorni in cui l'azienda è chiusa, con le date e il
+  motivo, validi per tutti. Sulla timeline sono a righine rosse (nell'intestazione una fascia a
+  righe sotto il giorno, il motivo nel suggerimento), anche nella Bacheca e nella legenda
+  dell'aiuto; per il lavoro contano come sabati e domeniche: le barre delle persone e la
+  contingency li saltano, la disposizione dei progetti e i giorni oltre la hard deadline ne
+  tengono conto. Le istanze collegate a Firebase devono ripubblicare le regole di sicurezza;
+  «Ripristina i predefiniti» le conserva, e i backup le portano con sé.
+- Impostazioni → Backup → «Impostazioni»: esporta in un file le impostazioni senza i dati (campi,
+  team e persone, colori dei progetti, formule, chiusure aziendali e l'aspetto del browser: tema,
+  formato delle date, layout, dimensione del testo) e le reimporta. L'importazione è «best
+  effort»: mostra cosa contiene il file e cosa non riesce a leggere (per esempio un file di
+  un'altra versione), lascia scegliere le parti da applicare, scarica prima una copia delle
+  impostazioni attuali e legge anche la configurazione da un backup dei dati.
+- «Espandi» nella riga delle note dei giorni: ogni nota mostra il testo intero, in poche righe
+  che, se il giorno è stretto, passano sopra i giorni seguenti; nella vista Trimestre ogni
+  settimana elenca le sue note con la data. «Riduci» torna alla riga compatta; il browser
+  ricorda la scelta.
+
+### Cambiato
+
+- Le note dei giorni stanno dentro la parte «Next Releases», subito sotto le corsie (sotto
+  «CONTENT» nel piano reale), e si ripiegano con lei; prima erano una riga a sé sopra la parte.
+- L'ordine dei team scelto nelle impostazioni è quello della tabella dei giorni di un progetto
+  nuovo o modificato e delle persone di un progetto nella roadmap (prima contava la fase); la fase
+  decide ancora dove cadono le barre nella disposizione standard. Nei predefiniti i team sono
+  nell'ordine del lavoro: Business analysis, Server side, iOS, Android, Content, QA.
+
 ## [0.13.0] - 2026-10-13
 
 ### Cambiato
@@ -785,7 +831,9 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/stangoldbear/release-board/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/stangoldbear/release-board/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/stangoldbear/release-board/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/stangoldbear/release-board/compare/v0.10.3...v0.11.1
 [0.10.3]: https://github.com/stangoldbear/release-board/compare/v0.10.2...v0.10.3

@@ -226,6 +226,15 @@ describe('documents of the notes, assignments and configuration of the roadmap',
       contingencyFormula: '0.1*QA',
     });
     expect(readRoadmapSettings({ contingencyFormula: 10 })).toEqual({});
+    const closures = [
+      { start: '2026-12-24', end: '2026-12-31' },
+      { start: '2026-08-10', end: '2026-08-21', reason: 'Chiusura estiva' },
+    ];
+    expect(roadmapSettingsContent({ closures })).toEqual({ closures });
+    expect(roadmapSettingsContent({ closures: [] })).toEqual({});
+    expect(
+      readRoadmapSettings({ closures: [...closures, { start: '2026-09-02', end: '2026-09-01' }] }),
+    ).toEqual({ closures: [closures[1], closures[0]] });
   });
 });
 

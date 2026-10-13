@@ -8,7 +8,7 @@ import type { TimelineGeometry } from '../timeline/TimelineFrame';
 import { DragHint } from './DragHint';
 import { TaskBar, taskBarId } from './TaskBar';
 import { TaskContextMenu } from './TaskContextMenu';
-import { LABEL_CELL, columnEdge, stackingOrder } from './timelineLayout';
+import { LABEL_CELL, columnEdge, columnFill, stackingOrder } from './timelineLayout';
 import type { Column, TimelineMetrics } from './timelineLayout';
 import { draggedTask, useTaskDrag } from './useTaskDrag';
 
@@ -26,9 +26,7 @@ const LaneCells = memo(function LaneCells({ columns, laneId, onAdd }: LaneCellsP
       onClick={() => onAdd(column.start, laneId)}
       style={{ width: column.width }}
       // The plus is drawn by CSS: one icon element per day would weigh on long timelines.
-      className={`flex shrink-0 cursor-pointer items-center justify-center text-base text-link after:opacity-0 after:content-['+'] hover:bg-accent-soft hover:after:opacity-100 pointer-coarse:after:hidden ${columnEdge(column)} ${
-        column.past ? 'bg-past' : column.red ? 'bg-holiday' : ''
-      }`}
+      className={`flex shrink-0 cursor-pointer items-center justify-center text-base text-link after:opacity-0 after:content-['+'] hover:bg-accent-soft hover:after:opacity-100 pointer-coarse:after:hidden ${columnEdge(column)} ${columnFill(column)}`}
     />
   ));
 });

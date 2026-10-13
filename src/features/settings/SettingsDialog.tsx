@@ -13,9 +13,11 @@ import { AccountSection } from './AccountSection';
 import { AppearanceSection } from './AppearanceSection';
 import { BackupSection } from './BackupSection';
 import { BetaSection } from './BetaSection';
+import { ClosuresSection } from './ClosuresSection';
 import { InstanceSection } from './InstanceSection';
 import { MembersSection } from './MembersSection';
 import { RoadmapSettingsSection } from './RoadmapSettingsSection';
+import { SettingsTransfer } from './SettingsTransfer';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 
 interface SettingsDialogProps {
@@ -114,13 +116,32 @@ export function SettingsDialog({
           unavailable={roadmapUnavailable}
           actions={roadmapActions}
         />
+        <ClosuresSection
+          closures={plan.roadmap.closures ?? []}
+          unavailable={roadmapUnavailable}
+          onChange={(closures) => roadmapActions.onSaveSettings({ closures })}
+        />
         <BackupSection
           plan={plan}
           onReplacePlan={(next) => {
             onReplacePlan(next);
             onClose();
           }}
-        />
+        >
+          <SettingsTransfer
+            roadmap={plan.roadmap}
+            roadmapUnavailable={roadmapUnavailable}
+            onReplaceRoadmap={roadmapActions.onReplaceConfig}
+            assignments={plan.assignments}
+            appearance={{ theme, dateFormat, layout, textScale }}
+            onChangeAppearance={(next) => {
+              if (next.theme) onChangeTheme(next.theme);
+              if (next.dateFormat) onChangeDateFormat(next.dateFormat);
+              if (next.layout) onChangeLayout(next.layout);
+              if (next.textScale) onTextScaleChange(next.textScale);
+            }}
+          />
+        </BackupSection>
         {instance.kind === 'local' && <InstanceSection onSignIn={instance.onSignIn} />}
         <AboutSection
           storage={

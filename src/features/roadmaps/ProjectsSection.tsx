@@ -198,7 +198,7 @@ export function ProjectsSection({
   const workDrag = useWorkDrag(dayWidth, changeWork);
   const [editing, setEditing] = useState<Editing | null>(null);
   const spanOf = (project: ProjectWithEnd): ProjectSpan =>
-    spans.get(project.id) ?? projectSpan(project, assignments, config.stakeholders);
+    spans.get(project.id) ?? projectSpan(project, assignments, config);
   const workOf = useMemo(
     () =>
       new Map(
@@ -206,7 +206,7 @@ export function ProjectsSection({
           project.id,
           workItemsOf(
             project,
-            spans.get(project.id) ?? projectSpan(project, assignments, config.stakeholders),
+            spans.get(project.id) ?? projectSpan(project, assignments, config),
             config,
           ),
         ]),

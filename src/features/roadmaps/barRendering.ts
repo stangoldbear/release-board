@@ -37,14 +37,16 @@ export interface WorkItem {
   /** The color of the team; null for the contingency and for a person without a team. */
   colorId: TaskColorId | null;
   absences: readonly Absence[];
+  /** The company closures the bar is scheduled around, as weekends. */
+  closures: readonly DateRange[];
   schedule: WorkSchedule;
   /** Its last day is past the hard deadline of the project. */
   late: boolean;
 }
 
 /**
- * The bars of the work of a project, in the order of the work: by the phase and the position of
- * the team, then of the person; the contingency last.
+ * The bars of the work of a project, in the order of the teams that the settings give, then of
+ * the people; the contingency last.
  */
 export function workItemsOf(
   project: Pick<Project, 'id' | 'deadline'>,
@@ -70,6 +72,7 @@ export function workItemsOf(
       tag: contingency ? CONTINGENCY_TAG : (team?.tag ?? null),
       colorId: contingency ? null : (team?.colorId ?? null),
       absences: stakeholder?.absences ?? [],
+      closures: config.closures ?? [],
       schedule: bar.schedule,
       late: project.deadline !== undefined && bar.schedule.end > project.deadline,
     };
@@ -98,7 +101,7 @@ export function fadedParts(span: ProjectSpan): DateRange[] {
   return parts;
 }
 
-/** The teams at work on a project, in the order of the work, each once; the contingency has none. */
+/** The teams at work on a project, in the order of the teams, each once; the contingency has none. */
 export function teamsOf(items: readonly WorkItem[]): Team[] {
   const teams: Team[] = [];
   for (const item of items) {

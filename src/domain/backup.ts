@@ -5,9 +5,12 @@ import { MEMO_BODY_MAX, MEMO_TITLE_MAX, sortMemos } from './memos';
 import { parseProjectNote, sortProjectNotes } from './projectNotes';
 import { parseProjectData, sortProjects } from './projects';
 import {
+  CLOSURES_MAX,
   defaultRoadmapConfig,
   isProjectColorsMode,
   isRoadmapId,
+  parseClosure,
+  sortClosures,
   parseProjectField,
   parseStakeholder,
   parseTeam,
@@ -39,7 +42,8 @@ export const BACKUP_SCHEMA_VERSION = 7;
 /**
  * Older schemas this version still reads: 3 had no free notes, 4 no projects, 5 no notes of the
  * projects, assignments or roadmap configuration, 6 no phases, formulas and default members of
- * the teams, nor the settings of the roadmap.
+ * the teams, nor the settings of the roadmap. The company closures of the 0.14 are an optional
+ * part of the roadmap of the 7: a version before them reads the backup without them.
  */
 const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, 4, 5, 6, BACKUP_SCHEMA_VERSION];
 /** Larger files are rejected before parsing: a real plan weighs a few hundred kilobytes. */
@@ -641,6 +645,18 @@ function readRoadmap(value: unknown, errors: string[]): RoadmapConfig {
   if (value.colorFieldId !== undefined) {
     if (isRoadmapId(value.colorFieldId)) config.colorFieldId = value.colorFieldId;
     else errors.push('Campo dei colori dei progetti: formato non valido.');
+  }
+  if (value.closures !== undefined) {
+    if (Array.isArray(value.closures) && value.closures.length <= CLOSURES_MAX) {
+      const closures = value.closures.flatMap((raw: unknown, index) => {
+        const closure = parseClosure(raw);
+        if (!closure) errors.push(`Chiusura aziendale ${index + 1}: date non valide.`);
+        return closure ? [closure] : [];
+      });
+      if (closures.length > 0) config.closures = sortClosures(closures);
+    } else {
+      errors.push('Chiusure aziendali: formato non valido.');
+    }
   }
   return config;
 }

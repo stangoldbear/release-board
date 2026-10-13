@@ -6,6 +6,7 @@ import type { DateRange } from '../../domain/schedule';
 import type { DailyMetric } from '../../domain/types';
 import { monthLabel } from './calendarView';
 import {
+  CLOSURE_NAME,
   LABEL_CELL,
   NARROW_DAY_WIDTH,
   columnEdge,
@@ -127,7 +128,7 @@ export const DayHeaderRow = memo(function DayHeaderRow({
           <div
             key={column.start}
             style={{ width: column.width }}
-            title={`${formatDate(column.start)}${column.isToday ? ' · Oggi' : ''}${holidayText ? ` · Festività: ${holidayText}` : ''}`}
+            title={`${formatDate(column.start)}${column.isToday ? ' · Oggi' : ''}${holidayText ? ` · Festività: ${holidayText}` : ''}${column.closure ? ` · ${column.closure === CLOSURE_NAME ? CLOSURE_NAME : `${CLOSURE_NAME}: ${column.closure}`}` : ''}`}
             className={`shrink-0 py-1 text-center in-data-compact:py-0.5 ${columnEdge(column)} ${columnTone(column)} ${column.isToday ? 'font-bold' : ''}`}
           >
             <span className="block text-xs uppercase">
@@ -140,6 +141,7 @@ export const DayHeaderRow = memo(function DayHeaderRow({
                 start.weekday
               )}
               {holidayText && <span aria-hidden="true"> •</span>}
+              {column.closure && <span className="sr-only">, chiusura aziendale</span>}
             </span>
             <span
               className={`block leading-tight font-bold ${narrow ? 'text-xs' : 'text-sm'} ${todayMark}`}
