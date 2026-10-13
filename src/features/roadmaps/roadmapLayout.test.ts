@@ -34,11 +34,11 @@ describe('projectPeriod', () => {
 
 describe('roadmapMetrics', () => {
   it('takes the width of the days from the calendar and grows with the text', () => {
-    expect(roadmapMetrics(56, 1, false).dayWidth).toBe(56);
-    expect(roadmapMetrics(28, 1, false).dayWidth).toBe(28);
-    expect(roadmapMetrics(12, 1, false).dayWidth).toBe(12);
-    const normal = roadmapMetrics(56, 1, false);
-    const bigger = roadmapMetrics(56, 1.5, false);
+    expect(roadmapMetrics(56, 1, 'large').dayWidth).toBe(56);
+    expect(roadmapMetrics(28, 1, 'large').dayWidth).toBe(28);
+    expect(roadmapMetrics(12, 1, 'large').dayWidth).toBe(12);
+    const normal = roadmapMetrics(56, 1, 'large');
+    const bigger = roadmapMetrics(56, 1.5, 'large');
     expect(bigger.barHeight).toBeGreaterThan(normal.barHeight);
     expect(bigger.assignmentHeight).toBeGreaterThan(normal.assignmentHeight);
     // The row of a person is a line of text, and its bar leaves two pixels to the next one: the
@@ -46,15 +46,31 @@ describe('roadmapMetrics', () => {
     expect(normal.personRowHeight).toBe(16);
     expect(normal.workBarHeight).toBe(14);
     expect(bigger.personRowHeight).toBeGreaterThan(normal.personRowHeight);
-    expect(roadmapMetrics(56, 1, true).rowPadding).toBeLessThan(normal.rowPadding);
+    expect(roadmapMetrics(56, 1, 'standard').rowPadding).toBeLessThan(normal.rowPadding);
   });
 
-  it('measures a line of the column with the text, tighter in compact mode', () => {
-    expect(roadmapMetrics(56, 1, false).lineHeight).toBeGreaterThan(
-      roadmapMetrics(56, 1, true).lineHeight,
+  it('measures a line of the column with the text, tighter at the tight densities', () => {
+    expect(roadmapMetrics(56, 1, 'large').lineHeight).toBeGreaterThan(
+      roadmapMetrics(56, 1, 'standard').lineHeight,
     );
-    expect(roadmapMetrics(56, 1.5, false).lineHeight).toBeGreaterThan(
-      roadmapMetrics(56, 1, false).lineHeight,
+    expect(roadmapMetrics(56, 1.5, 'large').lineHeight).toBeGreaterThan(
+      roadmapMetrics(56, 1, 'large').lineHeight,
     );
+  });
+
+  it('at «Compatta» gives the people thin bars, one against the other', () => {
+    const standard = roadmapMetrics(56, 1, 'standard');
+    const compact = roadmapMetrics(56, 1, 'compact');
+    // Standard keeps the compact mode of the 0.14: bars of 12 in rows of 14.
+    expect(standard.workBarHeight).toBe(12);
+    expect(standard.personRowHeight).toBe(14);
+    expect(standard.thinPeople).toBe(false);
+    expect(compact.workBarHeight).toBe(8);
+    expect(compact.personRowHeight).toBe(8);
+    expect(compact.thinPeople).toBe(true);
+    // Everything else is as tight as the standard density.
+    expect(compact.lineHeight).toBe(standard.lineHeight);
+    expect(compact.rowPadding).toBe(standard.rowPadding);
+    expect(roadmapMetrics(56, 1.5, 'compact').workBarHeight).toBe(12);
   });
 });

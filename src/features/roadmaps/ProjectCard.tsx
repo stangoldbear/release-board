@@ -1,4 +1,3 @@
-import type { FocusEvent, MouseEvent, PointerEvent } from 'react';
 import { CalendarRange, Clock, Flag, UserRound } from 'lucide-react';
 import type { ProjectWithEnd } from '../../domain/projects';
 import type { ProjectSpan } from '../../domain/projectSpan';
@@ -14,29 +13,14 @@ import type { WorkItem } from './barRendering';
 import { FieldValues } from './fieldUi';
 import { ProjectStatusMark } from './projectUi';
 
-/** What a row of the roadmap uses to open the card of its project. */
-export interface ProjectCardTools {
-  /** The events of the cell of the names: the mouse resting on it, a tap on it. */
-  triggerProps: (project: ProjectWithEnd) => {
-    onPointerEnter: (event: PointerEvent<HTMLElement>) => void;
-    onPointerLeave: (event: PointerEvent<HTMLElement>) => void;
-    onFocus: (event: FocusEvent<HTMLElement>) => void;
-    onBlur: () => void;
-    onClick: (event: MouseEvent<HTMLElement>) => void;
-  };
-  /** The card of a project on an element, as the focus on its bar opens it on its cell. */
-  open: (project: ProjectWithEnd, anchor: HTMLElement) => void;
-  close: () => void;
-}
-
 interface ProjectCardProps {
   project: ProjectWithEnd & { statusChange?: StatusChange };
   span: ProjectSpan;
   /** The bars of the work, in the order of the teams. */
   work: WorkItem[];
   config: RoadmapConfig;
-  /** The field that colors the projects, whose value is the tab of the row. */
-  colorField: ProjectField | null;
+  /** The field whose value tags the project beside its title. */
+  tagField: ProjectField | null;
 }
 
 /** A line of the card: an icon, a name, a value. */
@@ -65,12 +49,12 @@ function Fact({
  * the title with the state, the period with its days, the owner, the hard deadline, the
  * description, the main fields with their links, and the people at work with their days.
  */
-export function ProjectCard({ project, span, work, config, colorField }: ProjectCardProps) {
+export function ProjectCard({ project, span, work, config, tagField }: ProjectCardProps) {
   const formatDate = useFormatDate();
   const colorId = projectColorOf(project, config);
-  const sizeValue = colorField ? coloredValueOf(project, colorField) : null;
+  const sizeValue = tagField ? coloredValueOf(project, tagField) : null;
   // The main fields, but the one of the tab, which the header says.
-  const mainFields = config.fields.filter((field) => field.main && field.id !== colorField?.id);
+  const mainFields = config.fields.filter((field) => field.main && field.id !== tagField?.id);
   return (
     <div className="space-y-2.5 text-sm">
       <div className="flex items-start gap-2">
@@ -89,9 +73,9 @@ export function ProjectCard({ project, span, work, config, colorField }: Project
                 confermare)
               </span>
             )}
-            {sizeValue && colorField && (
+            {sizeValue && tagField && (
               <span>
-                {colorField.label}: {sizeValue.label}
+                {tagField.label}: {sizeValue.label}
               </span>
             )}
           </p>

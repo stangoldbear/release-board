@@ -20,8 +20,9 @@ giornalieri.
   settimanale delle attività. Tre livelli di dettaglio per tutte le righe: «Solo titoli», con i
   titoli interi su una riga, «Info principali» e «Team». I comandi stanno in alto, con un
   suggerimento al passaggio, e «?» apre l'aiuto con gesti, tasti e legenda.
-- Testo di note e calendari regolabile con le lenti, dal 75% al 175%, e vista compatta che mostra
-  più testo in ogni casella.
+- Testo di note e calendari regolabile con le lenti, dal 75% al 175%, e tre densità: «Large»,
+  «Standard», che mostra più testo in ogni casella, e «Compatta», che stringe anche le barre delle
+  persone dei progetti.
 - Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e
   checklist.
 - Note e valori giornalieri, per esempio il fatturato, allineati ai giorni del calendario. Le note
@@ -31,12 +32,13 @@ giornalieri.
   il giorno scelto e un ordine che si cambia trascinandole. In un'istanza condivisa ognuno vede le
   sue, può guardare quelle di tutti, raggruppate per autore, e può tenerne alcune private.
 - Roadmap: i progetti passati, in corso e futuri, una riga ciascuno con il titolo, lo stato come
-  forma, i team al lavoro e una linguetta con la dimensione; tutto il resto, periodo, giorni uomo,
+  forma, i team al lavoro e l'etichetta della dimensione; tutto il resto, periodo, giorni uomo,
   responsabile, hard deadline, descrizione, campi personalizzati (link a Jira, Figma e Confluence,
-  stime…) e persone con i giorni, in una scheda che si apre fermando il mouse sulla riga. Lo stato
-  segue la data di oggi: un progetto pianificato di cui arriva il giorno è in corso, uno di cui
-  passa la fine è completato, e un triangolo sulla colonna di oggi chiede di confermare. La barra
-  di un progetto prende il colore della sua dimensione, o un colore libero a scelta nelle
+  stime…) e persone con i giorni, in una finestra spostabile che si apre dal pulsante «i» della
+  riga. Un clic su un giorno dice in fondo alla pagina i giorni uomo di ogni team in quel giorno.
+  Lo stato segue la data di oggi: un progetto pianificato di cui arriva il giorno è in corso, uno
+  di cui passa la fine è completato, e un triangolo sulla colonna di oggi chiede di confermare. La
+  barra di un progetto prende il colore della sua dimensione, o un colore libero a scelta nelle
   Impostazioni, e i progetti si raggruppano per un campo e si ordinano a mano o per inizio, fine,
   deadline, stato o titolo. Ogni progetto ha il suo team: le persone con i giorni uomo in una tabella che le formule
   dei team (analisi, test, contingency) riempiono da sole, disposte nel Gantt in parallelo o in

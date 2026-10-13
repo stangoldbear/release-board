@@ -60,3 +60,37 @@ export function placePopup(
 
   return { top, left, above };
 }
+
+/**
+ * Where a panel moved by hand stays: inside the window, away from its edges by the margin, or from
+ * the top and the left when it is bigger than the window, so that its bar can always be taken again.
+ */
+export function keepInView(
+  place: { top: number; left: number },
+  panel: Size,
+  viewport: Size,
+  margin = 8,
+): { top: number; left: number } {
+  const clamp = (value: number, max: number) => Math.max(margin, Math.min(value, max));
+  return {
+    top: clamp(place.top, viewport.height - Math.min(panel.height, viewport.height) - margin),
+    left: clamp(place.left, viewport.width - Math.min(panel.width, viewport.width) - margin),
+  };
+}
+
+/**
+ * The place of a small window opened from a control: beside it, on its right or else on its left,
+ * its top at the control's and kept in the window, so that it covers neither the control nor its
+ * row; under or over it as a popup when the window is too narrow for either side.
+ */
+export function placeBeside(trigger: Box, panel: Size, viewport: Size, gap = 8, margin = 8) {
+  const right = trigger.left + trigger.width + gap;
+  const left = trigger.left - gap - panel.width;
+  const side =
+    right + panel.width <= viewport.width - margin ? right : left >= margin ? left : null;
+  if (side === null) {
+    const { top, left: below } = placePopup(trigger, panel, viewport, { align: 'end', margin });
+    return { top, left: below };
+  }
+  return keepInView({ top: trigger.top - gap, left: side }, panel, viewport, margin);
+}

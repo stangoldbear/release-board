@@ -129,9 +129,12 @@ export function RoadmapSettingsSection({
                   </label>
                 );
               })}
-              {projectColors === 'field' && coloring.length > 1 && (
+              {/* The field tags the projects with either mode: it colors the bars with the first. */}
+              {coloring.length > 1 && (
                 <label className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="font-semibold">Campo</span>
+                  <span className="font-semibold">
+                    {projectColors === 'field' ? 'Campo' : 'Campo dell’etichetta'}
+                  </span>
                   <select
                     value={colorField?.id ?? ''}
                     onChange={(event) =>

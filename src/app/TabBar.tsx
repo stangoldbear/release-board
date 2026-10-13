@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import type { ReactNode } from 'react';
 import { useRootHeightVar } from '../shared/useRootHeightVar';
 import { VersionStamp } from '../shared/ui/VersionStamp';
 import { AREA_ICONS } from './areaIcons';
@@ -14,14 +15,16 @@ interface TabBarProps {
   areas: readonly Area[];
   tab: PageTab;
   onSelect: (tab: PageTab) => void;
+  /** What the bar says before the version, such as the effort of the day chosen. */
+  status?: ReactNode;
 }
 
 /**
  * The tabs at the bottom of the window, as the sheets of a spreadsheet: «All» shows every area
  * one under the other, the other tabs one area alone. Version and commit stay in view at its
- * right; on phones they stay at the bottom of the page.
+ * right, after what the page has to say there; on phones they stay at the bottom of the page.
  */
-export function TabBar({ areas, tab, onSelect }: TabBarProps) {
+export function TabBar({ areas, tab, onSelect, status }: TabBarProps) {
   const ref = useRef<HTMLElement>(null);
   useRootHeightVar(ref, TAB_BAR_HEIGHT_VAR);
   return (
@@ -52,7 +55,10 @@ export function TabBar({ areas, tab, onSelect }: TabBarProps) {
             </button>
           );
         })}
-        <VersionStamp className="ml-auto hidden self-center px-4 sm:block" />
+        <div className="ml-auto hidden min-w-0 items-center gap-4 self-center px-4 sm:flex">
+          {status}
+          <VersionStamp className="shrink-0" />
+        </div>
       </div>
     </nav>
   );

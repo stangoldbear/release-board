@@ -40,6 +40,7 @@ import {
 import { projectSpan, withEffectiveEnd } from '../domain/projectSpan';
 import { withEffectiveStatus } from '../domain/projectStatus';
 import type { ProjectSpan } from '../domain/projectSpan';
+import { teamEffortOn } from '../domain/dayEffort';
 import { projectColorField } from '../domain/roadmapConfig';
 import type { TeamPlan } from '../domain/teamPlan';
 import type { RoadmapSettingsChanges } from '../domain/roadmapConfig';
@@ -85,6 +86,7 @@ import { areaTitleId } from '../shared/ui/Area';
 import { Button } from '../shared/ui/Button';
 import { TEXT_SCALES } from '../shared/ui/textScale';
 import { useToast } from '../shared/ui/Toast';
+import { DEFAULT_DENSITY, DENSITY_IDS, isTight } from '../shared/ui/density';
 import { VersionStamp } from '../shared/ui/VersionStamp';
 import { addDaysIso, parseISODate, todayIso } from '../utils/dateUtils';
 import {
@@ -114,6 +116,7 @@ import {
 } from './layout';
 import type { PageTab } from './layout';
 import { TAB_BAR_HEIGHT_VAR, TabBar } from './TabBar';
+import { DayEffortLine } from './DayEffortLine';
 import { useThemeSetting } from './ThemeProvider';
 import { useHashPage } from './useHashPage';
 import { useSyncState } from './useSyncState';
@@ -186,9 +189,11 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const shownAreas = availableAreas(betaFeatures);
   const hiddenParts = betaFeatures ? [] : BETA_PARTS;
   const [display, displayControls] = useTimelineDisplay();
-  // Older names: the text size and compact mode began with the calendar, and browsers keep them.
+  // An older name: the text size began with the calendar, and browsers keep it. The density took
+  // the place of compact mode in the 0.15, with the compact look of then as the standard one.
   const [textScale, setTextScale] = usePreference('calendar-text-scale', oneOf(TEXT_SCALES), 1);
-  const [compact, setCompact] = usePreference('calendar-compact', isBoolean, false);
+  const [density, setDensity] = usePreference('density', oneOf(DENSITY_IDS), DEFAULT_DENSITY);
+  const compact = isTight(density);
   const [memosExpanded, setMemosExpanded] = usePreference('memos-expanded', isBoolean, false);
   const [memoScope, setMemoScope] = usePreference('memos-scope', oneOf(MEMO_SCOPES), 'mine');
   const [memosGrouped, setMemosGrouped] = usePreference('memos-grouped', isBoolean, false);
@@ -237,6 +242,20 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
         ),
       ),
     [planProjects, spans, today],
+  );
+  // The day chosen in the row of the days: the footer says the effort of every team on it.
+  const [effortDay, setEffortDay] = useState<string | null>(null);
+  const planRoadmap = plan?.roadmap;
+  const dayEffort = useMemo(
+    () =>
+      effortDay && planRoadmap
+        ? teamEffortOn(
+            effortDay,
+            [...spans.values()].flatMap((span) => span.bars),
+            planRoadmap,
+          )
+        : null,
+    [effortDay, spans, planRoadmap],
   );
   const [seenProjectReminders, setSeenProjectReminders] = usePreference(
     'project-reminders-seen',
@@ -724,14 +743,26 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     }, wait);
   };
 
+  const effortLine = (wrap: boolean) =>
+    effortDay &&
+    dayEffort && (
+      <DayEffortLine
+        day={effortDay}
+        efforts={dayEffort}
+        onClear={() => setEffortDay(null)}
+        wrap={wrap}
+        className="max-w-full"
+      />
+    );
+
   return (
     <SearchHighlightContext value={highlight}>
       <div className="flex min-h-screen flex-col bg-canvas font-sans text-fg selection:bg-accent selection:text-on-accent">
         <Header
           textScale={textScale}
           onTextScaleChange={setTextScale}
-          compact={compact}
-          onToggleCompact={() => setCompact((value) => !value)}
+          density={density}
+          onDensityChange={setDensity}
           areaToggles={
             layout === 'classic'
               ? { areas: shownAreas, visibility: areas, onToggle: handleToggleArea }
@@ -855,7 +886,9 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
               controls={displayControls}
               today={today}
               textScale={textScale}
-              compact={compact}
+              density={density}
+              selectedDay={effortDay}
+              onSelectDay={setEffortDay}
               searching={searching}
               releases={{
                 tasks: filteredTasks,
@@ -919,11 +952,24 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           )}
         </main>
 
-        {/* With the tabs, version and commit are in their bar from 640 px, and here on phones. */}
-        <footer className={`w-full px-4 pb-5 sm:px-6 ${layout === 'tabs' ? 'sm:hidden' : ''}`}>
+        {/*
+          With the tabs, the effort of the day chosen, version and commit are in their bar from
+          640 px, and here on phones.
+        */}
+        <footer
+          className={`flex w-full flex-col items-center gap-1 px-4 pb-5 sm:px-6 ${layout === 'tabs' ? 'sm:hidden' : ''}`}
+        >
+          {effortLine(true)}
           <VersionStamp />
         </footer>
-        {layout === 'tabs' && <TabBar areas={shownAreas} tab={tab} onSelect={handleSelectTab} />}
+        {layout === 'tabs' && (
+          <TabBar
+            areas={shownAreas}
+            tab={tab}
+            onSelect={handleSelectTab}
+            status={effortLine(false)}
+          />
+        )}
 
         {dialog?.kind === 'task' && (
           <TaskDialog

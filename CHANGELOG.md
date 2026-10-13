@@ -6,6 +6,57 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-13
+
+Le regole di Firestore e i backup non cambiano: un'istanza si aggiorna al tag senza ripubblicare
+le regole.
+
+### Aggiunto
+
+- Tre densità di note e calendari, dal menu nell'intestazione che prende il posto di «Compatta»:
+  «Large» (l'aspetto senza la modalità compatta), «Standard» (la modalità compatta di prima, ora
+  quella di serie) e «Compatta», che al livello Team fa le barre delle persone alte 8 px e una
+  attaccata all'altra, così ogni progetto occupa meno spazio in altezza; nella colonna nome, team e
+  giorni di ogni persona sono scritti più piccoli, quanto basta per entrare nella riga, e interi nel
+  suggerimento della riga e della barra. Il browser ricorda la scelta; quella della vecchia «Compatta» non si legge
+  più.
+- Un clic su un giorno della riga «Giorno» dice in fondo alla pagina, prima della versione, i
+  giorni uomo che ogni team spende in quel giorno su tutti i progetti, con i tag dei team e il
+  totale (per esempio «BA:1, SSide:3, iOS:4 · totale 8»); un altro clic, o la X accanto, lo toglie.
+  Le frecce scorrono i giorni, Invio sceglie.
+- Il pulsante «i», primo tra i comandi della riga di un progetto, apre le sue informazioni in una
+  piccola finestra accanto alla colonna, che si sposta trascinandone la barra e si chiude con la X
+  o con Esc.
+
+### Cambiato
+
+- La colonna dei progetti ha a ogni livello l'aspetto del livello Team: la righina verticale nel
+  colore del progetto e l'etichetta della dimensione accanto al titolo, al posto della linguetta
+  verticale.
+- L'etichetta della dimensione resta anche con «Colori dei progetti» su «Liberi», sempre nel
+  colore del suo valore; il campo dell'etichetta si sceglie nelle impostazioni con tutte e due le
+  modalità.
+- Le informazioni del progetto non compaiono più fermando il mouse sul titolo o portando il focus
+  sulla barra: si aprono solo dal pulsante «i».
+- Nella finestra di un progetto il campo della dimensione è subito sotto il titolo, nella vista
+  Standard e in quella Avanzata.
+- Le barre delle persone non hanno più il contorno: solo il colore del team, con la barretta del
+  bordo destro che dice dove si trascinano i giorni.
+- Le righine oblique sui giorni di un progetto senza lavoro sono più leggere.
+- Il colore Ghiaccio ha un riempimento azzurro-grigio leggero invece di essere quasi bianco.
+- Il testo di una nota dei giorni non esce più dal suo rettangolo, così le note di giorni vicini non
+  si sovrappongono: a «Solo titoli» è una riga con i puntini, con «Espandi» qualche riga in più,
+  sempre dentro il giorno, e nei giorni stretti un'icona. Una nota che non ci sta intera si legge
+  nella scheda che si apre fermandoci sopra il mouse o portandoci il focus, e nella finestra che si
+  apre con un clic; nella vista Trimestre la scheda elenca le note della settimana.
+
+### Corretto
+
+- Al livello Team un progetto colorava tutta la sua riga, anche i giorni prima dell'inizio e dopo
+  la fine: ora il colore è solo nella sua barra.
+- Impostazioni → Roadmap → «Campi dei progetti»: i valori di una lista si possono rinominare; la
+  chiave resta la stessa, così i progetti che li hanno scelti li conservano.
+
 ## [0.14.0] - 2026-10-13
 
 Con un'istanza condivisa le regole di Firestore sono cambiate (i colori nuovi e le chiusure

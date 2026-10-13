@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { Check, FoldVertical, ZoomIn, ZoomOut } from 'lucide-react';
+import { FoldVertical, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '../../shared/ui/Button';
+import { DENSITIES } from '../../shared/ui/density';
+import type { Density } from '../../shared/ui/density';
+import { Menu } from '../../shared/ui/Menu';
 import { TEXT_SCALES } from '../../shared/ui/textScale';
 import type { TextScale } from '../../shared/ui/textScale';
 
@@ -72,25 +75,33 @@ export function TextSizeControls({ textScale, onChange }: TextSizeControlsProps)
 }
 
 /**
- * Compact mode on and off: less space around the boxes and tighter lines, for more text in each.
- * When on it shows a check, not only another color.
+ * The density of the notes and the calendars, a menu of three: the button names the current one,
+ * the menu marks it, and each line says what it changes.
  */
-export function CompactToggle({ compact, onToggle }: { compact: boolean; onToggle: () => void }) {
+export function DensityMenu({
+  density,
+  onChange,
+}: {
+  density: Density;
+  onChange: (density: Density) => void;
+}) {
+  const current = DENSITIES.find((item) => item.id === density) ?? DENSITIES[0]!;
   return (
-    <button
-      type="button"
-      aria-pressed={compact}
-      onClick={onToggle}
-      title="Meno spazio intorno alle caselle e righe più strette: si legge più testo in ognuna"
-      className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
-        compact
-          ? 'border-link bg-accent-soft text-fg'
-          : 'border-line bg-surface-strong text-fg-muted hover:text-fg'
-      }`}
+    <Menu
+      label="Densità"
+      title="Densità di note e calendari"
+      items={DENSITIES.map((item) => ({
+        kind: 'radio' as const,
+        label: item.label,
+        hint: item.description,
+        checked: item.id === density,
+        onSelect: () => onChange(item.id),
+      }))}
+      className="rounded-xl"
     >
-      {compact && <Check className="h-4 w-4" aria-hidden="true" />}
       <FoldVertical className="h-4 w-4" aria-hidden="true" />
-      Compatta
-    </button>
+      <span className="sr-only">Densità: </span>
+      {current.label}
+    </Menu>
   );
 }

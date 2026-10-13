@@ -57,15 +57,23 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
           <li>Un clic su un giorno vuoto aggiunge lì; un clic su una barra la apre.</li>
           {releases && (
             <li>
-              Le note dei giorni stanno sotto le corsie di Next Releases: «Espandi», nella loro
-              riga, mostra il testo intero di ogni nota.
+              Le note dei giorni stanno sotto le corsie di Next Releases e restano dentro il loro
+              giorno: «Espandi», nella loro riga, ne mostra più righe; una nota che non ci sta
+              intera si legge nella scheda che si apre fermandoci sopra il mouse, o con un clic.
             </li>
           )}
           {projects && <li>Doppio clic su una barra del lavoro per scrivere i giorni uomo.</li>}
           {projects && (
             <li>
-              Sulla riga di un progetto, sotto il mouse: le righe da mostrare e, al livello Team,
-              «Aggiungi una persona».
+              Clic su un giorno della riga «Giorno»: in fondo alla pagina, prima della versione, i
+              giorni uomo di ogni team in quel giorno su tutti i progetti; un altro clic li toglie.
+            </li>
+          )}
+          {projects && (
+            <li>
+              Sulla riga di un progetto, sotto il mouse: «i» apre le informazioni del progetto in
+              una finestra che si sposta dalla sua barra e si chiude con la X, poi al livello Team
+              «Aggiungi una persona» e le righe da mostrare.
             </li>
           )}
           <li>

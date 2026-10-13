@@ -1,5 +1,5 @@
 import { memo, useContext } from 'react';
-import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react';
+import type { FocusEvent, KeyboardEvent, PointerEvent } from 'react';
 import { ChevronsDownUp, ChevronsUpDown, StickyNote } from 'lucide-react';
 import { isNoteShown } from '../../domain/filters';
 import type { DailyNotes } from '../../domain/types';
@@ -9,15 +9,9 @@ import {
   SearchHighlightContext,
   resultKey,
 } from '../../shared/ui/Highlight';
+import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
 import { todayIso } from '../../utils/dateUtils';
-import {
-  LABEL_CELL,
-  NARROW_DAY_WIDTH,
-  clampLines,
-  columnEdge,
-  columnFill,
-  stackingOrder,
-} from './timelineLayout';
+import { LABEL_CELL, NARROW_DAY_WIDTH, clampLines, columnEdge, columnFill } from './timelineLayout';
 import type { Column } from './timelineLayout';
 import type { NoteDrag } from './useNoteDrag';
 import { useFormatDate } from '../..//shared/dateFormat';
@@ -37,11 +31,11 @@ interface NotesRowProps {
   dayHeight: number;
   weekHeight: number;
   lines: number;
-  /** The text on one line, out of its day when longer, rather than wrapped or cut. */
-  overflowText: boolean;
+  /** The text on one line, cut with an ellipsis, rather than on a few lines. */
+  oneLine: boolean;
   /**
-   * Every note shows its whole text, wrapped in a few lines over the following days when its own
-   * is narrower, and as a list in a week. The row grows to hold the longest.
+   * Every note shows more of its text, on more lines inside its day, and a week lists its notes.
+   * The row grows to hold the tallest.
    */
   expanded: boolean;
   onToggleExpanded: () => void;
@@ -57,7 +51,30 @@ interface NotesRowProps {
   onShowDays: (date: string) => void;
 }
 
-/** One note per day, or the count of notes in each week. */
+/** The lines a note shows when the notes are expanded, inside its day. */
+export const EXPANDED_NOTE_LINES = 8;
+/** The lines of each note that a week lists when the notes are expanded. */
+const WEEK_NOTE_LINES = 2;
+
+/** The notes of a day or of a week, as the card shows them whole. */
+type NoteEntries = [date: string, text: string][];
+
+/**
+ * Whether the text of a note fits in its rectangle: an icon in a narrow day does not, nor a text
+ * cut by its lines or its ellipsis.
+ */
+function fitsInItsBox(cell: HTMLElement): boolean {
+  const chip = cell.firstElementChild;
+  if (!(chip instanceof HTMLElement) || chip.querySelector('svg')) return false;
+  return chip.scrollHeight <= chip.clientHeight + 1 && chip.scrollWidth <= chip.clientWidth + 1;
+}
+
+/**
+ * One note per day, or the notes of each week. A text never goes out of its rectangle, so that the
+ * notes of days in a row do not run over each other: what does not fit is cut, or is an icon in a
+ * narrow day, and the whole note is in a card that opens on the mouse and the focus (only when the
+ * note does not fit) and in the window that a click opens.
+ */
 export const NotesRow = memo(function NotesRow({
   columns,
   dailyNotes,
@@ -66,7 +83,7 @@ export const NotesRow = memo(function NotesRow({
   dayHeight,
   weekHeight,
   lines,
-  overflowText,
+  oneLine: oneLineText,
   expanded,
   onToggleExpanded,
   drag,
@@ -82,6 +99,21 @@ export const NotesRow = memo(function NotesRow({
   const today = todayIso();
   const entry = columns.some((column) => column.start === today) ? today : columns[0]?.start;
   const { current } = useContext(SearchHighlightContext);
+  const { card, triggerProps, cardProps, close } = useHoverCard<NoteEntries>();
+  // The card of a note that does not fit, on the mouse and the focus; the click opens the window.
+  const cardOf = (entries: NoteEntries, always: boolean) => {
+    const trigger = triggerProps(entries);
+    return {
+      onPointerEnter: (event: PointerEvent<HTMLElement>) => {
+        if (always || !fitsInItsBox(event.currentTarget)) trigger.onPointerEnter(event);
+      },
+      onPointerLeave: trigger.onPointerLeave,
+      onFocus: (event: FocusEvent<HTMLElement>) => {
+        if (always || !fitsInItsBox(event.currentTarget)) trigger.onFocus(event);
+      },
+      onBlur: trigger.onBlur,
+    };
+  };
   return (
     <div className="flex border-t-2 border-warning">
       <div className={`${LABEL_CELL} flex flex-col justify-center bg-warning-soft`}>
@@ -118,27 +150,25 @@ export const NotesRow = memo(function NotesRow({
               key={column.start}
               type="button"
               onClick={() => onShowDays(column.start)}
-              style={
-                {
-                  width: column.width,
-                  minHeight: weekHeight,
-                  // Expanded, the notes run over the following weeks, under the nearer ones.
-                  '--z': expanded && notes.length > 0 ? stackingOrder(today, column.start) : 0,
-                } as CSSProperties
-              }
-              title={
+              {...(notes.length > 0 ? cardOf(notes, true) : {})}
+              aria-label={
                 notes.length > 0
-                  ? notes.map(([date, text]) => `${formatDate(date)}: ${text}`).join('\n')
-                  : `Mostra i giorni dal ${formatDate(column.start)}`
+                  ? `${notes.map(([date, text]) => `${formatDate(date)}: ${text}`).join('; ')}. Mostra i giorni`
+                  : undefined
               }
-              className={`relative z-(--z) shrink-0 cursor-pointer p-1 text-xs hover:z-[600] hover:bg-warning-soft focus-visible:z-[600] ${columnEdge(column)} ${column.past ? 'bg-past' : ''} ${expanded ? 'flex flex-col items-start justify-start gap-1 text-left' : ''}`}
+              style={{ width: column.width, minHeight: weekHeight }}
+              title={
+                notes.length > 0 ? undefined : `Mostra i giorni dal ${formatDate(column.start)}`
+              }
+              className={`relative min-w-0 shrink-0 cursor-pointer overflow-hidden p-1 text-xs hover:bg-warning-soft ${columnEdge(column)} ${column.past ? 'bg-past' : ''} ${expanded ? 'flex flex-col items-stretch justify-start gap-1 text-left' : ''}`}
             >
               {notes.length > 0 &&
                 (expanded ? (
                   notes.map(([date, text]) => (
                     <span
                       key={date}
-                      className="w-max max-w-56 min-w-full rounded-sm border border-warning bg-warning-soft px-1 break-words hyphens-auto"
+                      style={clampLines(WEEK_NOTE_LINES)}
+                      className="w-full rounded-sm border border-warning bg-warning-soft px-1 break-words hyphens-auto"
                     >
                       <span className="font-semibold">{formatDate(date)}</span>{' '}
                       <Highlight text={text} />
@@ -163,24 +193,15 @@ export const NotesRow = memo(function NotesRow({
         // Where the note would land: its text, faded, in the free day under the pointer.
         const preview = isTarget && drag.allowed ? dailyNotes[drag.from] : undefined;
         const isCurrent = current === resultKey('note', date);
-        // Expanded, the whole text shows, wrapped in a few lines that run over the following
-        // days when its own is narrower. Otherwise one line out of the day, or as many lines as
-        // fit in it.
-        const oneLine = overflowText && !expanded;
-        const spills = oneLine || expanded;
-        // A text that runs out of its day is drawn over the notes further from today; the note
-        // under the pointer or the focus comes up.
-        const stacking = isCurrent ? 500 : spills && text ? stackingOrder(today, date) : 0;
-        // In a narrow day the note is an icon, unless its text runs out of the day anyway.
-        const iconOnly = narrow && !spills;
-        const chipClass = `rounded-xs border border-warning bg-warning-soft p-1 text-xs in-data-compact:px-1 in-data-compact:py-0.5 ${
-          oneLine
-            ? 'w-max max-w-none min-w-full shrink-0 whitespace-nowrap'
-            : expanded
-              ? 'w-max max-w-56 min-w-full shrink-0 break-words hyphens-auto'
-              : 'w-full break-words hyphens-auto'
+        // Inside its day, always: one line cut with an ellipsis, or a few lines, more when the
+        // notes are expanded. In a narrow day the note is an icon.
+        const oneLine = oneLineText && !expanded;
+        const iconOnly = narrow;
+        const chipClass = `w-full min-w-0 rounded-xs border border-warning bg-warning-soft p-1 text-xs in-data-compact:px-1 in-data-compact:py-0.5 ${
+          oneLine ? 'truncate' : 'break-words hyphens-auto'
         } ${iconOnly ? 'flex items-center justify-center' : ''}`;
-        const chipStyle = iconOnly || spills ? undefined : clampLines(lines);
+        const chipStyle =
+          iconOnly || oneLine ? undefined : clampLines(expanded ? EXPANDED_NOTE_LINES : lines);
         const chipContent = (words: string) =>
           iconOnly ? (
             <StickyNote className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
@@ -192,11 +213,19 @@ export const NotesRow = memo(function NotesRow({
             key={date}
             id={noteCellId(date)}
             type="button"
-            onPointerDown={text ? (event) => onStartDrag(event, date) : undefined}
+            {...(text ? cardOf([[date, text]], false) : {})}
+            onPointerDown={
+              text
+                ? (event) => {
+                    close();
+                    onStartDrag(event, date);
+                  }
+                : undefined
+            }
             onClick={() => onOpen(date)}
             onKeyDown={text ? (event) => onKeyDown(event, date) : undefined}
             tabIndex={text || date === entry ? 0 : -1}
-            style={{ width: column.width, minHeight: dayHeight, '--z': stacking } as CSSProperties}
+            style={{ width: column.width, minHeight: dayHeight }}
             aria-label={
               text
                 ? `Nota del ${formatDate(date)}: ${text}`
@@ -205,8 +234,8 @@ export const NotesRow = memo(function NotesRow({
                   : `Aggiungi una nota per il ${formatDate(date)}`
             }
             aria-describedby={text ? describedBy : undefined}
-            title={text || (hidden ? 'Nota nascosta dalla ricerca' : undefined)}
-            className={`group/note relative z-(--z) flex shrink-0 p-1 text-left in-data-compact:p-0.5 hover:z-[600] focus-visible:z-[600] ${columnEdge(column)} ${
+            title={hidden ? 'Nota nascosta dalla ricerca' : undefined}
+            className={`group/note relative flex min-w-0 shrink-0 p-1 text-left in-data-compact:p-0.5 ${isCurrent ? 'z-[500]' : ''} ${columnEdge(column)} ${
               text ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
             } ${columnFill(column)} ${
               isTarget ? `ring-2 ring-inset ${drag.allowed ? 'ring-link' : 'ring-danger'}` : ''
@@ -230,6 +259,26 @@ export const NotesRow = memo(function NotesRow({
           </button>
         );
       })}
+
+      {card && (
+        <HoverCard
+          anchor={card.anchor}
+          cardRef={cardProps.cardRef}
+          onPointerEnter={cardProps.onPointerEnter}
+          onPointerLeave={cardProps.onPointerLeave}
+        >
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {card.item.map(([date, text]) => (
+              <li key={date}>
+                <span className="block text-xs font-semibold text-fg-muted">
+                  Nota del {formatDate(date)}
+                </span>
+                <span className="block break-words whitespace-pre-line">{text}</span>
+              </li>
+            ))}
+          </ul>
+        </HoverCard>
+      )}
     </div>
   );
 });

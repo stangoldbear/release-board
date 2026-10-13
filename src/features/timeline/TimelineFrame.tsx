@@ -74,6 +74,9 @@ interface TimelineFrameProps {
   onZoom: (step: -1 | 1) => void;
   /** Shows the days of a week, from the quarter view. */
   onShowDays: (date: string) => void;
+  /** The day chosen at the top, whose effort the footer shows; null for none. */
+  selectedDay: string | null;
+  onSelectDay: (date: string | null) => void;
   /** The column of the names: its width as a CSS length, and in pixels for the scroll. */
   labelWidth: string;
   labelWidthPx: number;
@@ -109,6 +112,8 @@ export function TimelineFrame({
   onResized,
   onZoom,
   onShowDays,
+  selectedDay,
+  onSelectDay,
   labelWidth,
   labelWidthPx,
   labelResize,
@@ -134,6 +139,7 @@ export function TimelineFrame({
       ? (diffDays(range.start, today) + 0.5) * dayWidth
       : null;
   const showDays = useStableCallback(onShowDays);
+  const selectDay = useStableCallback(onSelectDay);
   const { digitWidth } = timelineMetrics(dayWidth, textScale, compact);
 
   // The rows lead: the days at the top and the scroll bar follow them, and lead them in turn.
@@ -199,6 +205,8 @@ export function TimelineFrame({
               weekColumns={weekColumns}
               showMonth={dayWidth >= ZOOM_DAY_WIDTH.detail}
               onShowDays={showDays}
+              selectedDay={selectedDay}
+              onSelectDay={selectDay}
             />
           </div>
         </div>

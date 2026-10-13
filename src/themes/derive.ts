@@ -130,8 +130,8 @@ export function deriveTheme(seed: ThemeSeed): Theme {
     ['slate', mix(seed.fgMuted, seed.blue, 0.3)],
   ];
   for (const [id, hue] of hues) {
-    // Ice is the palest of all, close to the surface.
-    const bg = id === 'ice' ? tint(hue, 0.06, 0.1) : tint(hue, 0.16, 0.24);
+    // Ice is the palest of all, close to the surface but filled: a bar of it is not blank.
+    const bg = id === 'ice' ? tint(hue, 0.1, 0.12) : tint(hue, 0.16, 0.24);
     tasks[id] = { bg, border: hue, fg: readable(mix(hue, ink, 0.6), [bg]) };
   }
   for (const [id, base] of deepHues) {

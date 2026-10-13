@@ -45,8 +45,8 @@ import { SEGMENT, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from '../../shared/ui/seg
 import { taskColorStyle } from '../../themes';
 import { isIsoDate } from '../../utils/dateUtils';
 import { draftsFrom, valuesFrom } from './fieldDrafts';
-import type { FieldDrafts } from './fieldDrafts';
-import { ProjectFieldsEditor } from './ProjectFieldsEditor';
+import type { FieldDraft, FieldDrafts } from './fieldDrafts';
+import { FieldEditor, ProjectFieldsEditor } from './ProjectFieldsEditor';
 import { ProjectNotesPanel } from './ProjectNotesPanel';
 import { ProjectStatusMark } from './projectUi';
 import type { NoteActions } from './roadmapActions';
@@ -134,7 +134,10 @@ export function ProjectDialog({
   onOpenAssignment,
 }: ProjectDialogProps) {
   const formatDate = useFormatDate();
-  const fields = sortByPosition(config.fields);
+  // The field of the tag of the project, as «Dimensione», comes right after the title in both
+  // views; the other fields follow the view.
+  const sizeField = projectColorField(config);
+  const fields = sortByPosition(config.fields).filter((field) => field.id !== sizeField?.id);
   const quickFields = fields.filter((field) => field.quick);
   const [view, setView] = usePreference<DialogView>(
     'project-dialog-view',
@@ -163,14 +166,14 @@ export function ProjectDialog({
   const [owner, setOwner] = useState(project?.owner ?? '');
   const [description, setDescription] = useState(project?.description ?? '');
   const [drafts, setDrafts] = useState<FieldDrafts>(() =>
-    draftsFrom(fields, project?.fields ?? {}),
+    draftsFrom(config.fields, project?.fields ?? {}),
   );
   // The field that colors the projects, when the colors come from a field: the window shows the
   // color it gives rather than asking for one.
   const colorField =
     (config.projectColors ?? DEFAULT_PROJECT_COLORS) === 'field' ? projectColorField(config) : null;
   const shownColorId = colorField
-    ? projectColorOf({ colorId, fields: valuesFrom(fields, drafts).values }, config)
+    ? projectColorOf({ colorId, fields: valuesFrom(config.fields, drafts).values }, config)
     : colorId;
   const [rows, setRows] = useState<EffortRow[]>(() => initialRows(project, assignments, config));
   const [problems, setProblems] = useState<Record<string, string>>({});
@@ -251,6 +254,15 @@ export function ProjectDialog({
     deadline,
   ]);
 
+  const changeDraft = (fieldId: string, draft: FieldDraft) => {
+    setDrafts((current) => ({ ...current, [fieldId]: draft }));
+    setProblems((current) => {
+      if (!(fieldId in current)) return current;
+      const { [fieldId]: _gone, ...rest } = current;
+      return rest;
+    });
+  };
+
   const canSave =
     title.trim() !== '' &&
     startValid &&
@@ -263,12 +275,14 @@ export function ProjectDialog({
   const save = (event: FormEvent) => {
     event.preventDefault();
     if (!canSave || !preview) return;
-    const { values, problems: found } = valuesFrom(fields, drafts);
+    const { values, problems: found } = valuesFrom(config.fields, drafts);
     if (Object.keys(found).length > 0) {
       setProblems(found);
       setTab('project');
       // The field with the problem may be in the advanced view only.
-      if (!quickFields.some((field) => field.id in found)) setView('advanced');
+      if (!sizeField || !(sizeField.id in found)) {
+        if (!quickFields.some((field) => field.id in found)) setView('advanced');
+      }
       return;
     }
     const content: ProjectContent = { title: title.trim(), startDate, colorId, status };
@@ -505,6 +519,15 @@ export function ProjectDialog({
               />
             </div>
 
+            {sizeField && (
+              <FieldEditor
+                field={sizeField}
+                drafts={drafts}
+                problems={problems}
+                onChange={changeDraft}
+              />
+            )}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {dateField(startId, 'Data inizio lavori del team', startDate, setStartDate, {
                 required: true,
@@ -657,9 +680,8 @@ export function ProjectDialog({
 
             {colorField ? (
               <p className="text-xs text-fg-muted">
-                Il colore della barra viene dal campo «{colorField.label}»
-                {advanced ? '' : ', qui sotto o nella vista avanzata'}: lo cambia Impostazioni →
-                Roadmap → «Colori dei progetti».
+                Il colore della barra viene dal campo «{colorField.label}», sotto il titolo: lo
+                cambia Impostazioni → Roadmap → «Colori dei progetti».
               </p>
             ) : (
               <fieldset>
@@ -754,14 +776,7 @@ export function ProjectDialog({
               fields={advanced ? fields : quickFields}
               drafts={drafts}
               problems={problems}
-              onChange={(fieldId, draft) => {
-                setDrafts((current) => ({ ...current, [fieldId]: draft }));
-                setProblems((current) => {
-                  if (!(fieldId in current)) return current;
-                  const { [fieldId]: _gone, ...rest } = current;
-                  return rest;
-                });
-              }}
+              onChange={changeDraft}
             />
             {!advanced && fields.length > quickFields.length && (
               <p className="text-xs text-fg-muted">

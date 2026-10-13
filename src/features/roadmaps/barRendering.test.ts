@@ -89,7 +89,7 @@ describe('the bars of the work of a project', () => {
   });
 
   it('give every row of the titles alone the same tight height, bars or not', () => {
-    const metrics = roadmapMetrics(56, 1, false);
+    const metrics = roadmapMetrics(56, 1, 'large');
     const none = projectRowGeometry('titles', 0, metrics);
     const four = projectRowGeometry('titles', 4, metrics);
     expect(none).toMatchObject({ titleHeight: 24, lanes: null, barHeight: 32, rowHeight: 38 });
@@ -98,7 +98,7 @@ describe('the bars of the work of a project', () => {
   });
 
   it('give the main information a lane a line of text tall for each bar, with its name', () => {
-    const metrics = roadmapMetrics(56, 1, false);
+    const metrics = roadmapMetrics(56, 1, 'large');
     expect(metrics.laneHeight).toBeGreaterThanOrEqual(10);
     const one = projectRowGeometry('main', 1, metrics);
     const four = projectRowGeometry('main', 4, metrics);
@@ -110,11 +110,11 @@ describe('the bars of the work of a project', () => {
     // Without work, the two lines of the column set the height.
     expect(projectRowGeometry('main', 0, metrics)).toMatchObject({ lanes: null, rowHeight: 48 });
     // Even the smallest text keeps the lanes at least 10 pixels tall.
-    expect(roadmapMetrics(56, 0.75, true).laneHeight).toBeGreaterThanOrEqual(10);
+    expect(roadmapMetrics(56, 0.75, 'standard').laneHeight).toBeGreaterThanOrEqual(10);
   });
 
   it('leave the bar alone at the Team level, where the people have rows', () => {
-    const geometry = projectRowGeometry('team', 4, roadmapMetrics(56, 1, false));
+    const geometry = projectRowGeometry('team', 4, roadmapMetrics(56, 1, 'large'));
     // The column has the title alone: the people are listed in their rows.
     expect(geometry).toMatchObject({ titleHeight: 24, lanes: null, barHeight: 24, rowHeight: 26 });
   });

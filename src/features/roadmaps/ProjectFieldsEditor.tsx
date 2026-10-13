@@ -229,63 +229,81 @@ function OpenLinks({ text }: { text: string }) {
   );
 }
 
+interface FieldEditorProps {
+  field: ProjectField;
+  drafts: FieldDrafts;
+  /** What does not fit, by field, after a failed save. */
+  problems: Record<string, string>;
+  onChange: (fieldId: string, draft: FieldDraft) => void;
+}
+
 /**
- * The custom fields of a project, as Settings → Roadmap defines them: a label, what the field is
- * for, and the control that fits its type. A problem found at saving shows under its field.
+ * One custom field of a project: its label, what it is for, and the control that fits its type. A
+ * problem found at saving shows under it.
  */
+export function FieldEditor({ field, drafts, problems, onChange }: FieldEditorProps) {
+  const controlId = `${useId()}-${field.id}`;
+  const descriptionId = field.description ? `${controlId}-description` : undefined;
+  const problem = problems[field.id];
+  const problemId = problem ? `${controlId}-problem` : undefined;
+  const describedBy = [descriptionId, problemId].filter(Boolean).join(' ') || undefined;
+  const draft = drafts[field.id] ?? emptyDraft(field);
+  const labelsGroup = draft.kind === 'choice';
+  return (
+    <div>
+      {labelsGroup ? (
+        <span id={`${controlId}-label`} className={LABEL_CLASS}>
+          {field.label}
+          {field.required && ' *'}
+        </span>
+      ) : (
+        <label htmlFor={controlId} className={LABEL_CLASS}>
+          {field.label}
+          {field.required && ' *'}
+        </label>
+      )}
+      {field.description && (
+        <p id={descriptionId} className="mb-1.5 -mt-1 text-xs text-fg-muted">
+          {field.description}
+        </p>
+      )}
+      <FieldControl
+        field={field}
+        draft={draft}
+        problem={problem}
+        controlId={controlId}
+        describedBy={describedBy}
+        onChange={(next) => onChange(field.id, next)}
+      />
+      {problem && (
+        <p id={problemId} role="alert" className="mt-1 text-xs font-medium text-danger">
+          {problem}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The custom fields of a project, as Settings → Roadmap defines them, in their order. */
 export function ProjectFieldsEditor({
   fields,
   drafts,
   problems,
   onChange,
 }: ProjectFieldsEditorProps) {
-  const prefix = useId();
   if (fields.length === 0) return null;
   return (
     <fieldset className="space-y-4 border-t border-line pt-4">
       <legend className={LABEL_CLASS}>Campi personalizzati</legend>
-      {fields.map((field) => {
-        const controlId = `${prefix}-${field.id}`;
-        const descriptionId = field.description ? `${controlId}-description` : undefined;
-        const problem = problems[field.id];
-        const problemId = problem ? `${controlId}-problem` : undefined;
-        const describedBy = [descriptionId, problemId].filter(Boolean).join(' ') || undefined;
-        const draft = drafts[field.id] ?? emptyDraft(field);
-        const labelsGroup = draft.kind === 'choice';
-        return (
-          <div key={field.id}>
-            {labelsGroup ? (
-              <span id={`${controlId}-label`} className={LABEL_CLASS}>
-                {field.label}
-                {field.required && ' *'}
-              </span>
-            ) : (
-              <label htmlFor={controlId} className={LABEL_CLASS}>
-                {field.label}
-                {field.required && ' *'}
-              </label>
-            )}
-            {field.description && (
-              <p id={descriptionId} className="mb-1.5 -mt-1 text-xs text-fg-muted">
-                {field.description}
-              </p>
-            )}
-            <FieldControl
-              field={field}
-              draft={draft}
-              problem={problem}
-              controlId={controlId}
-              describedBy={describedBy}
-              onChange={(next) => onChange(field.id, next)}
-            />
-            {problem && (
-              <p id={problemId} role="alert" className="mt-1 text-xs font-medium text-danger">
-                {problem}
-              </p>
-            )}
-          </div>
-        );
-      })}
+      {fields.map((field) => (
+        <FieldEditor
+          key={field.id}
+          field={field}
+          drafts={drafts}
+          problems={problems}
+          onChange={onChange}
+        />
+      ))}
     </fieldset>
   );
 }

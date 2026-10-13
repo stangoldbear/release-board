@@ -1,4 +1,6 @@
 import type { DateRange } from '../../domain/schedule';
+import { isTight } from '../../shared/ui/density';
+import type { Density } from '../../shared/ui/density';
 import { LINE_HEIGHT } from '../../shared/ui/textScale';
 import { ITALIAN_MONTHS_SHORT, addDaysIso, addMonthsIso, startOfWeek } from '../../utils/dateUtils';
 
@@ -48,10 +50,12 @@ export interface RoadmapMetrics {
   tightBarHeight: number;
   /** One line of text and room around it: the rows of the notes on the timeline and of a group. */
   assignmentHeight: number;
-  /** The row of a person under the project's, at the Team level: one line of text, no more. */
+  /** The row of a person under the project's, at the Team level: one line of text, or its bar. */
   personRowHeight: number;
   /** The bar of the work of a person in that row, almost as tall: the bars of a team nearly touch. */
   workBarHeight: number;
+  /** The rows of the people are as thin as their bars, their words shrunk to fit («Compatta»). */
+  thinPeople: boolean;
   /** A lane of the work inside the bar of a project with the name of its person: a line of text. */
   laneHeight: number;
   /** Space above and below the bars of a row. */
@@ -62,25 +66,32 @@ export interface RoadmapMetrics {
   cellPadding: number;
 }
 
+/** The bars of the people at «Compatta», at the normal size of the text: they touch each other. */
+export const THIN_WORK_BAR = 8;
+
 /**
  * The days are as wide as the view sets them, as in the calendar; bigger text makes the bars
- * taller, smaller text brings the rows closer, as compact mode does. The column of the names is
- * the timeline's, which the user sizes.
+ * taller, smaller text brings the rows closer, as the tight densities do. At «Compatta» the people
+ * of a project have thin bars, one against the other, and the words beside them shrink to fit. The
+ * column of the names is the timeline's, which the user sizes.
  */
 export function roadmapMetrics(
   dayWidth: number,
   textScale: number,
-  compact: boolean,
+  density: Density,
 ): RoadmapMetrics {
+  const compact = isTight(density);
   const spacing = Math.min(1, textScale);
   const line = 12 * textScale * (compact ? LINE_HEIGHT.compact : LINE_HEIGHT.normal);
+  const thin = density === 'compact' ? Math.round(THIN_WORK_BAR * textScale) : null;
   return {
     dayWidth,
     barHeight: Math.round(24 * textScale) + 4,
     tightBarHeight: Math.round(20 * textScale) + 4,
     assignmentHeight: Math.round(line) + 8,
-    personRowHeight: Math.round(line),
-    workBarHeight: Math.round(line) - 2,
+    personRowHeight: thin ?? Math.round(line),
+    workBarHeight: thin ?? Math.round(line) - 2,
+    thinPeople: thin !== null,
     laneHeight: Math.round(12 * textScale) + (compact ? 2 : 4),
     rowPadding: Math.round((compact ? 3 : 6) * spacing),
     lineHeight: Math.round(line),

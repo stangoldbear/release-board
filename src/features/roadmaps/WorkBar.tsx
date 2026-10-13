@@ -124,13 +124,10 @@ export function WorkBar({
     if (startDate !== item.startDate) onChange({ startDate });
   };
 
-  // The color of the team fills the bar, and its text color draws the edge, which keeps the bar
-  // in sight on the surface in every theme.
+  // The color of the team fills the bar, with no edge around it (the owner's choice): the name of
+  // the person is beside it in the column and over it in the tip, and the grip marks its end.
   const fill = item.colorId
-    ? {
-        backgroundColor: `var(--rb-task-${item.colorId}-border)`,
-        borderColor: `var(--rb-task-${item.colorId}-fg)`,
-      }
+    ? { backgroundColor: `var(--rb-task-${item.colorId}-border)` }
     : undefined;
 
   return (
@@ -160,14 +157,14 @@ export function WorkBar({
         <span
           aria-hidden="true"
           style={{ ...fill, height: barHeight }}
-          className={`absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-clip border ${
-            item.colorId ? '' : 'border-fg-muted bg-line-strong'
-          } ${continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'} ${
-            continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'
+          className={`absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-clip ${
+            item.colorId ? '' : 'bg-line-strong'
+          } ${continuesBefore ? 'rounded-l-none' : 'rounded-l-xs'} ${
+            continuesAfter ? 'rounded-r-none' : 'rounded-r-xs'
           } ${
             dragging
               ? 'opacity-90 shadow-xl ring-2 ring-fg'
-              : 'shadow-xs group-hover/work:ring-2 group-hover/work:ring-link/40'
+              : 'group-hover/work:ring-2 group-hover/work:ring-link/40'
           }`}
         >
           {schedule.absences.map((absence) => {
@@ -179,7 +176,7 @@ export function WorkBar({
                 title={`Assente dal ${formatDate(absence.start)} al ${formatDate(absence.end)}`}
                 style={{
                   ...ABSENCE_STRIPES,
-                  left: (from - first) * dayWidth - 1,
+                  left: (from - first) * dayWidth,
                   width: (to - from + 1) * dayWidth,
                 }}
                 className="absolute inset-y-0"
@@ -194,7 +191,10 @@ export function WorkBar({
             className="absolute inset-y-0 right-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center rounded-xs hover:bg-current/15"
           >
             {/* The grip that says the edge can be dragged, stronger under the mouse. */}
-            <span className="h-2.5 w-0.5 rounded-full bg-current opacity-50 group-hover/work:opacity-100" />
+            <span
+              style={{ height: Math.min(10, barHeight - 2) }}
+              className="w-0.5 rounded-full bg-current opacity-50 group-hover/work:opacity-100"
+            />
           </span>
         )}
       </button>

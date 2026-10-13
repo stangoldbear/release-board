@@ -32,6 +32,7 @@ import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { Dialog } from '../../shared/ui/Dialog';
 import { FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
+import { taskColorStyle } from '../../themes';
 import { FieldTag } from '../roadmaps/fieldUi';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 
@@ -90,7 +91,9 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
   const optionId = useId();
   const { card, triggerProps, cardProps } = useHoverCard<Explained>();
   const id = field?.id ?? uniqueId(label, config.fields);
-  const valid = label.trim() !== '' && (type !== 'choice' || options.length > 0);
+  // A value renamed keeps its key: the projects that chose it keep their choice.
+  const optionsValid = options.length > 0 && options.every((option) => option.label.trim() !== '');
+  const valid = label.trim() !== '' && (type !== 'choice' || optionsValid);
   // Only a list of exclusive values groups: each project then belongs to one group.
   const canGroup = type === 'choice' && !multiple;
 
@@ -114,7 +117,9 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
       position: field?.position ?? nextPosition(config.fields),
     };
     if (description.trim()) saved.description = description.trim();
-    if (type === 'choice') saved.options = options;
+    if (type === 'choice') {
+      saved.options = options.map((option) => ({ ...option, label: option.label.trim() }));
+    }
     if (group && canGroup) saved.group = true;
     if (quick) saved.quick = true;
     onSave(saved);
@@ -285,19 +290,37 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
             <legend className={LABEL_CLASS}>Valori della lista *</legend>
             <p className="-mt-1 text-xs text-fg-muted">
               Ogni valore può avere un colore: nella roadmap e nella finestra del progetto compare
-              come un&apos;etichetta colorata, con il suo nome.
+              come un&apos;etichetta colorata, con il suo nome. Il nome si cambia scrivendolo qui: i
+              progetti che hanno quel valore lo tengono, perché la chiave resta la stessa.
             </p>
             {options.length > 0 && (
               <ul className="space-y-1.5">
-                {options.map((option) => (
+                {options.map((option, index) => (
                   <li
                     key={option.id}
                     className="flex flex-wrap items-center gap-2 rounded-md border border-line bg-surface-muted px-2.5 py-1.5 text-sm"
                   >
-                    <span className="flex min-w-0 flex-1">
-                      <FieldTag colorId={option.colorId}>{option.label}</FieldTag>
-                    </span>
-                    <code className="text-xs text-fg-muted">{option.id}</code>
+                    {/* The name, written in the colors of its tag: the field is its own preview. */}
+                    <input
+                      type="text"
+                      required
+                      aria-label={`Nome del valore ${index + 1}`}
+                      aria-invalid={option.label.trim() === '' || undefined}
+                      maxLength={FIELD_OPTION_LABEL_MAX}
+                      value={option.label}
+                      onChange={(event) =>
+                        setOptions(
+                          options.map((item) =>
+                            item.id === option.id ? { ...item, label: event.target.value } : item,
+                          ),
+                        )
+                      }
+                      style={option.colorId ? taskColorStyle(option.colorId) : undefined}
+                      className="min-w-32 flex-1 rounded-md border border-line-strong bg-surface px-2 py-1 text-xs font-medium text-fg aria-invalid:border-2 aria-invalid:border-danger"
+                    />
+                    <code className="text-xs text-fg-muted" title="Chiave del valore">
+                      {option.id}
+                    </code>
                     <select
                       aria-label={`Colore di «${option.label}»`}
                       value={option.colorId ?? ''}
@@ -322,7 +345,7 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
                       size="icon"
                       className="p-1"
                       onClick={() => setOptions(options.filter((item) => item.id !== option.id))}
-                      aria-label={`Rimuovi ${option.label}`}
+                      aria-label={`Rimuovi ${option.label.trim() || `il valore ${index + 1}`}`}
                     >
                       <X className="h-4 w-4" aria-hidden="true" />
                     </Button>

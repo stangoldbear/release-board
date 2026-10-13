@@ -79,7 +79,7 @@ export function NotesSection({
         dayHeight={sizes.noteHeight}
         weekHeight={sizes.weekNoteHeight}
         lines={sizes.noteLines}
-        overflowText={oneLineTitles}
+        oneLine={oneLineTitles}
         expanded={expanded}
         onToggleExpanded={toggleExpanded}
         drag={noteDrag.drag}

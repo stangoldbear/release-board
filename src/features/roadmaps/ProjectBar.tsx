@@ -27,7 +27,7 @@ export function projectBarId(projectId: string): string {
 
 /** Oblique dashes over the days of a project without work, so that the fading is not the only cue. */
 export const FADED_STRIPES =
-  'repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, currentColor 35%, transparent) 6px 8px)';
+  'repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, currentColor 22%, transparent) 6px 7.5px)';
 
 interface ProjectBarProps {
   /** The project, with its effective end, cut to the days the roadmap holds. */

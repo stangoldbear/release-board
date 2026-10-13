@@ -160,7 +160,7 @@ export const PROJECT_COLORS_INFO: Record<
   free: {
     label: 'Liberi',
     description:
-      'Ogni progetto ha il colore scelto nella sua finestra; un progetto nuovo prende il colore dopo quello dell’ultimo.',
+      'Ogni progetto ha il colore scelto nella sua finestra; un progetto nuovo prende il colore dopo quello dell’ultimo. L’etichetta del campo, come «Dimensione», resta accanto al titolo nel colore del suo valore.',
   },
 };
 
@@ -194,7 +194,11 @@ export function applyRoadmapSettings(
   return next;
 }
 
-/** The field whose values color the projects: the one chosen, or the first that can; null without. */
+/**
+ * The field whose colored values tag the projects beside their titles, and color their bars when
+ * the colors come from a field: the one chosen, or the first that can; null without. With free
+ * colors it still tags them.
+ */
 export function projectColorField(
   config: Pick<RoadmapConfig, 'fields' | 'colorFieldId'>,
 ): ProjectField | null {

@@ -1,10 +1,11 @@
 import { useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Search, Settings } from 'lucide-react';
-import { CompactToggle, TextSizeControls } from '../features/calendar/DisplayControls';
+import { DensityMenu, TextSizeControls } from '../features/calendar/DisplayControls';
 import { useRootHeightVar } from '../shared/useRootHeightVar';
 import { AppLogo } from '../shared/ui/AppLogo';
 import { Button } from '../shared/ui/Button';
+import type { Density } from '../shared/ui/density';
 import type { TextScale } from '../shared/ui/textScale';
 import { ToggleChip } from '../shared/ui/ToggleChip';
 import { AREA_ICONS } from './areaIcons';
@@ -22,9 +23,9 @@ interface HeaderProps {
   /** Size of the text of the notes and the calendars. */
   textScale: TextScale;
   onTextScaleChange: (scale: TextScale) => void;
-  /** Compact mode of the notes and the calendars. */
-  compact: boolean;
-  onToggleCompact: () => void;
+  /** How close together the notes and the calendars are. */
+  density: Density;
+  onDensityChange: (density: Density) => void;
   /** The buttons of the areas; absent in the layout with the tabs at the bottom. */
   areaToggles?: AreaToggles;
   /** The text searched in every area. */
@@ -54,8 +55,8 @@ const SEARCH_LABEL = 'Cerca in note, attività e progetti';
 export function Header({
   textScale,
   onTextScaleChange,
-  compact,
-  onToggleCompact,
+  density,
+  onDensityChange,
   areaToggles,
   search,
   onSearchChange,
@@ -91,7 +92,7 @@ export function Header({
           <div className="max-sm:hidden">
             <TextSizeControls textScale={textScale} onChange={onTextScaleChange} />
           </div>
-          <CompactToggle compact={compact} onToggle={onToggleCompact} />
+          <DensityMenu density={density} onChange={onDensityChange} />
         </div>
 
         {areaToggles && (

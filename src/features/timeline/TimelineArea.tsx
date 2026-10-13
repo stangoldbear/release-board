@@ -45,6 +45,8 @@ import { Popover } from '../../shared/ui/Popover';
 import { RulesNotice } from '../../shared/ui/RulesNotice';
 import { SEGMENT, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from '../../shared/ui/segmented';
 import type { TextScale } from '../../shared/ui/textScale';
+import { isTight } from '../../shared/ui/density';
+import type { Density } from '../../shared/ui/density';
 import { ToggleChip } from '../../shared/ui/ToggleChip';
 import { Tooltip } from '../../shared/ui/Tooltip';
 import { startOfMonth, startOfWeek } from '../../utils/dateUtils';
@@ -138,7 +140,11 @@ interface TimelineAreaProps {
   controls: TimelineDisplayControls;
   today: string;
   textScale: TextScale;
-  compact: boolean;
+  /** How close together the rows are: tight lines, and at «Compatta» thin bars of the people. */
+  density: Density;
+  /** The day chosen in the row of the days, whose effort the footer shows; null for none. */
+  selectedDay: string | null;
+  onSelectDay: (date: string | null) => void;
   searching: boolean;
   releases: ReleasesProps;
   roadmap: RoadmapProps;
@@ -212,7 +218,9 @@ export function TimelineArea({
   controls,
   today,
   textScale,
-  compact,
+  density,
+  selectedDay,
+  onSelectDay,
   searching,
   releases,
   roadmap,
@@ -223,10 +231,11 @@ export function TimelineArea({
   const roadmapRowsId = useId();
   const oneLineTitles = oneLineTitlesOf(display);
   const dayWidth = dayWidthOf(view);
+  const compact = isTight(density);
   const sizes = timelineMetrics(dayWidth, textScale, compact, oneLineTitles);
   const level =
     roadmap.detailsUnavailable && display.level === 'team' ? ('main' as const) : display.level;
-  const metrics = roadmapMetrics(dayWidth, textScale, compact);
+  const metrics = roadmapMetrics(dayWidth, textScale, density);
   // One column of names for the whole timeline, as wide as the user made it, with the text; on
   // phones at most two fifths of the screen.
   const labelWidthPx = Math.round(display.labelWidth * textScale);
@@ -588,6 +597,8 @@ export function TimelineArea({
               onResized={(viewport) => onViewAction({ type: 'resized', viewport })}
               onZoom={(step) => onViewAction({ type: 'zoomBy', step })}
               onShowDays={(date) => onViewAction({ type: 'goTo', date, zoom: 'detail' })}
+              selectedDay={selectedDay}
+              onSelectDay={onSelectDay}
               labelWidth={labelWidth}
               labelWidthPx={labelWidthPx}
               labelResize={{

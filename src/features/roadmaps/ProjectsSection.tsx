@@ -20,7 +20,7 @@ import type {
   Stakeholder,
 } from '../../domain/types';
 import { useFormatDate } from '../../shared/dateFormat';
-import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
+import { FloatingPanel } from '../../shared/ui/FloatingPanel';
 import { useListDrag } from '../../shared/useListDrag';
 import { useStableCallback } from '../../shared/useStableCallback';
 import { DragHint } from '../calendar/DragHint';
@@ -215,11 +215,18 @@ export function ProjectsSection({
   );
 
   const addAt = useStableCallback(onAddAt);
-  // The card with everything about a project, on the cell of its names: one for every row.
-  const card = useHoverCard<ProjectWithEnd>();
-  const cardTools = { triggerProps: card.triggerProps, open: card.open, close: card.close };
-  const colorField =
-    (config.projectColors ?? 'field') === 'free' ? null : projectColorField(config);
+  // The small window with everything about a project, from the button of its row: one for every
+  // row, which stays where it was moved while it shows another project.
+  const [info, setInfo] = useState<{
+    projectId: string;
+    anchor: HTMLElement;
+    beside: HTMLElement;
+  } | null>(null);
+  const infoProject = info ? projects.find((project) => project.id === info.projectId) : undefined;
+  const showInfo = (projectId: string, anchor: HTMLElement, beside: HTMLElement) =>
+    setInfo((current) => (current?.projectId === projectId ? null : { projectId, anchor, beside }));
+  // The field whose value tags every project, beside its title, whatever colors the bars.
+  const tagField = projectColorField(config);
   // The rows follow the start of their projects: a move from the keyboard can change the row, and
   // the focus follows the bar there.
   const [announcement, setAnnouncement] = useState('');
@@ -329,8 +336,9 @@ export function ProjectsSection({
                   metrics={metrics}
                   searching={searching}
                   config={config}
-                  colorField={colorField}
-                  card={cardTools}
+                  tagField={tagField}
+                  infoOpen={info?.projectId === project.id}
+                  onShowInfo={(button, tools) => showInfo(project.id, button, tools)}
                   projectDrag={drag}
                   workDrag={workDrag.drag}
                   editing={editing}
@@ -390,22 +398,21 @@ export function ProjectsSection({
         )}
       </div>
 
-      {card.card && (
-        <HoverCard
-          anchor={card.card.anchor}
-          cardRef={card.cardProps.cardRef}
-          onPointerEnter={card.cardProps.onPointerEnter}
-          onPointerLeave={card.cardProps.onPointerLeave}
-          widthClass="w-80"
+      {info && infoProject && (
+        <FloatingPanel
+          title="Informazioni sul progetto"
+          anchor={info.anchor}
+          beside={info.beside}
+          onClose={() => setInfo(null)}
         >
           <ProjectCard
-            project={card.card.item}
-            span={spanOf(card.card.item)}
-            work={workOf.get(card.card.item.id) ?? []}
+            project={infoProject}
+            span={spanOf(infoProject)}
+            work={workOf.get(infoProject.id) ?? []}
             config={config}
-            colorField={colorField}
+            tagField={tagField}
           />
-        </HoverCard>
+        </FloatingPanel>
       )}
       {drag && (
         <DragHint>

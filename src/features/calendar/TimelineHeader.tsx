@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import type { KeyboardEvent } from 'react';
 import { sumInRange } from '../../domain/metrics';
 import { formatLocaleNumber } from '../../domain/numberFormat';
 import { DAILY_METRIC } from '../../domain/plan';
@@ -62,6 +63,22 @@ interface DayHeaderRowProps {
   showMonth: boolean;
   /** Shows the days of a week column. */
   onShowDays: (date: string) => void;
+  /** The day whose effort the footer shows; null for none. */
+  selectedDay: string | null;
+  /** Chooses a day, or none with the day already chosen. Stable. */
+  onSelectDay: (date: string | null) => void;
+}
+
+/** The arrows move the focus from day to day along the row, as one stop of the Tab key. */
+function moveAlongDays(event: KeyboardEvent<HTMLButtonElement>) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  const next =
+    event.key === 'ArrowLeft'
+      ? event.currentTarget.previousElementSibling
+      : event.currentTarget.nextElementSibling;
+  if (!(next instanceof HTMLButtonElement)) return;
+  event.preventDefault();
+  next.focus();
 }
 
 /** A column at least this wide has room for the chip of today under its number. */
@@ -76,14 +93,25 @@ function TodayChip() {
   );
 }
 
-/** The days, or the weeks, of the timeline. Today is underlined, with «Oggi» under its number. */
+/**
+ * The days, or the weeks, of the timeline. Today is underlined, with «Oggi» under its number. A
+ * click on a day chooses it, and the footer says the effort of the teams on it; the arrows move
+ * along the days, Enter or Space chooses.
+ */
 export const DayHeaderRow = memo(function DayHeaderRow({
   columns,
   weekColumns,
   showMonth,
   onShowDays,
+  selectedDay,
+  onSelectDay,
 }: DayHeaderRowProps) {
   const formatDate = useFormatDate();
+  // One stop of the Tab key: the chosen day, or today, or the first day.
+  const stop =
+    columns.find((column) => column.start === selectedDay)?.start ??
+    columns.find((column) => column.isToday)?.start ??
+    columns[0]?.start;
   return (
     <div className="flex border-b border-line-strong">
       <div className={`${LABEL_CELL} flex items-center bg-surface text-xs font-bold uppercase`}>
@@ -124,12 +152,20 @@ export const DayHeaderRow = memo(function DayHeaderRow({
         }
         // A narrow day has room for the initial of the weekday and a smaller number.
         const narrow = column.width < NARROW_DAY_WIDTH;
+        const selected = column.start === selectedDay;
         return (
-          <div
+          <button
             key={column.start}
+            type="button"
+            aria-pressed={selected}
+            tabIndex={column.start === stop ? 0 : -1}
+            onClick={() => onSelectDay(selected ? null : column.start)}
+            onKeyDown={moveAlongDays}
             style={{ width: column.width }}
-            title={`${formatDate(column.start)}${column.isToday ? ' · Oggi' : ''}${holidayText ? ` · Festività: ${holidayText}` : ''}${column.closure ? ` · ${column.closure === CLOSURE_NAME ? CLOSURE_NAME : `${CLOSURE_NAME}: ${column.closure}`}` : ''}`}
-            className={`shrink-0 py-1 text-center in-data-compact:py-0.5 ${columnEdge(column)} ${columnTone(column)} ${column.isToday ? 'font-bold' : ''}`}
+            title={`${formatDate(column.start)}${column.isToday ? ' · Oggi' : ''}${holidayText ? ` · Festività: ${holidayText}` : ''}${column.closure ? ` · ${column.closure === CLOSURE_NAME ? CLOSURE_NAME : `${CLOSURE_NAME}: ${column.closure}`}` : ''} · ${selected ? 'Clic per togliere l’effort del giorno' : 'Clic per l’effort dei team in questo giorno'}`}
+            className={`shrink-0 cursor-pointer py-1 text-center hover:bg-surface-strong focus-visible:-outline-offset-2 in-data-compact:py-0.5 ${columnEdge(column)} ${
+              selected ? 'bg-accent-soft ring-2 ring-link ring-inset' : columnTone(column)
+            } ${column.isToday ? 'font-bold' : ''}`}
           >
             <span className="block text-xs uppercase">
               {narrow ? (
@@ -155,7 +191,7 @@ export const DayHeaderRow = memo(function DayHeaderRow({
               ) : (
                 <span className="sr-only">, oggi</span>
               ))}
-          </div>
+          </button>
         );
       })}
     </div>

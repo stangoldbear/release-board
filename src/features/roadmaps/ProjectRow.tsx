@@ -1,6 +1,5 @@
-import { useRef } from 'react';
-import type { CSSProperties, DragEvent, FocusEvent, PointerEvent } from 'react';
-import { GripVertical, UserPlus } from 'lucide-react';
+import type { CSSProperties, DragEvent, PointerEvent } from 'react';
+import { GripVertical, Info, UserPlus } from 'lucide-react';
 import type { TaskColorId } from '../../domain/colors';
 import type { ProjectChanges, ProjectWithEnd } from '../../domain/projects';
 import type { ProjectSpan } from '../../domain/projectSpan';
@@ -19,7 +18,6 @@ import { prefersReducedMotion } from '../../shared/motion';
 import { useFormatDate } from '../../shared/dateFormat';
 import { Highlight } from '../../shared/ui/Highlight';
 import { useStableCallback } from '../../shared/useStableCallback';
-import { taskColorStyle } from '../../themes';
 import { diffDays } from '../../utils/dateUtils';
 import { LABEL_CELL } from '../calendar/timelineLayout';
 import type { Column } from '../calendar/timelineLayout';
@@ -33,7 +31,6 @@ import { deadlineOverrun } from './deadlineOverrun';
 import { MilestoneLayer } from './MilestoneDiamond';
 import type { MilestoneTools } from './MilestoneDiamond';
 import { ProjectBar, projectBarId } from './ProjectBar';
-import type { ProjectCardTools } from './ProjectCard';
 import { DETAIL_LEVELS, ProjectStatusMark } from './projectUi';
 import type { DetailLevel } from './projectUi';
 import type { RoadmapMetrics } from './roadmapLayout';
@@ -67,40 +64,6 @@ function showBar(projectId: string): void {
   });
 }
 
-/**
- * The tab on the left edge of the row: the value of the field that colors the projects, written
- * upwards in the color of the value, cut with an ellipsis when the row is too short for it; with
- * free colors, the color of the project alone. The words are in the title and in the card. In
- * the short rows of the titles alone the words are smaller (the owner's choice), so that more of
- * them fit.
- */
-function SizeTab({
-  label,
-  colorId,
-  small,
-}: {
-  label: string | null;
-  colorId: TaskColorId | null;
-  small: boolean;
-}) {
-  return (
-    <span
-      aria-hidden="true"
-      title={label ?? undefined}
-      style={{
-        ...(colorId ? taskColorStyle(colorId) : undefined),
-        writingMode: 'vertical-rl',
-        transform: 'rotate(180deg)',
-      }}
-      className={`absolute top-1 bottom-1 left-4 block w-4 overflow-hidden rounded-xs border text-center leading-4 font-bold text-ellipsis whitespace-nowrap ${
-        small ? 'text-[length:calc(var(--text-xs)*0.8333)]' : 'text-xs'
-      } ${colorId ? '' : 'border-line-strong bg-surface'}`}
-    >
-      {label}
-    </span>
-  );
-}
-
 /** Where a piece of the rail of a project is: alone, at the top, in the middle or at the end. */
 type RailPart = 'only' | 'first' | 'middle' | 'last';
 
@@ -113,24 +76,24 @@ const RAIL_PART: Record<RailPart, string> = {
 };
 
 /**
- * At the Team level, the piece of the rail of a project in one cell of the column: the cells of
- * its title and of its people draw it down the left edge, from the title to the last person, in
- * the color that colors the project, so that the block reads as one. The words are the tag of
- * the title.
+ * The piece of the rail of a project in one cell of the column, in the color of its bar: alone in
+ * the cell of the title, or at the Team level down the left edge from the title to the last person,
+ * so that the block reads as one. The words are the tag beside the title.
  */
-function RailPiece({ colorId, part }: { colorId: TaskColorId | null; part: RailPart }) {
+function RailPiece({ colorId, part }: { colorId: TaskColorId; part: RailPart }) {
   return (
     <span
       aria-hidden="true"
-      style={colorId ? { backgroundColor: `var(--rb-task-${colorId}-border)` } : undefined}
-      className={`absolute left-4 w-1 ${colorId ? '' : 'bg-line-strong'} ${RAIL_PART[part]}`}
+      style={{ backgroundColor: `var(--rb-task-${colorId}-border)` }}
+      className={`absolute left-4 w-1 ${RAIL_PART[part]}`}
     />
   );
 }
 
 /**
- * At the Team level the whole block of a project, names and days, is a rectangle: the color of its
- * bar at a quarter over the surface below, with an edge in the color of the bar.
+ * At the Team level the names of a project are a rectangle: the color of its bar at a quarter over
+ * the surface below, with an edge in the color of the bar. Over the days only the bar has the
+ * color of the project: the days before its start and after its end stay as the grid draws them.
  */
 function blockTint(colorId: TaskColorId, over: string): string {
   return `color-mix(in srgb, var(--rb-task-${colorId}-bg) 25%, ${over})`;
@@ -176,17 +139,24 @@ function TreeBranch({ last }: { last: boolean }) {
   );
 }
 
+/** "Server #1 ServerSide · 20 gg": a person at work on a project, in words. */
+function personLine(item: WorkItem, manDays: number): string {
+  return `${item.name}${item.tag ? ` ${item.tag}` : ''} · ${formatManDays(manDays)}`;
+}
+
 /**
- * The tools of the row of a project, under the mouse and the focus: at the Team level a button that
- * adds a person, then the rows of the project, one, two or three, the same choice as
- * «Informazioni visibili» at the top, for this project alone. The choice of the timeline is not an
- * exception.
+ * The tools of the row of a project, under the mouse and the focus: first the button that shows
+ * everything about the project in a small window, then at the Team level a button that adds a
+ * person, then the rows of the project, one, two or three, the same choice as «Informazioni
+ * visibili» at the top, for this project alone. The choice of the timeline is not an exception.
  */
 function LevelButtons({
   title,
   level,
   defaultLevel,
   teamLevelAvailable,
+  infoOpen,
+  onShowInfo,
   onSetLevel,
   onAddPerson,
 }: {
@@ -194,12 +164,36 @@ function LevelButtons({
   level: DetailLevel;
   defaultLevel: DetailLevel;
   teamLevelAvailable: boolean;
+  /** The window with the details of this project is open. */
+  infoOpen: boolean;
+  /** Opens or closes the window with the details, beside the tools of the row. */
+  onShowInfo: (button: HTMLElement, tools: HTMLElement) => void;
   onSetLevel: (level: DetailLevel | null) => void;
   /** Adds a person to the project; absent where the people are not shown. */
   onAddPerson?: () => void;
 }) {
   return (
-    <span className="absolute top-0.5 right-1 flex items-center gap-0.5 rounded-md border border-line bg-surface p-px opacity-0 transition-opacity group-hover/row:opacity-100 hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-70">
+    <span
+      className={`absolute top-0.5 right-1 flex items-center gap-0.5 rounded-md border border-line bg-surface p-px transition-opacity group-hover/row:opacity-100 hover:opacity-100 focus-within:opacity-100 ${
+        infoOpen ? 'opacity-100' : 'opacity-0 pointer-coarse:opacity-70'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={(event) => {
+          const tools = event.currentTarget.parentElement;
+          if (tools) onShowInfo(event.currentTarget, tools);
+        }}
+        aria-label={`Informazioni su «${title}»`}
+        aria-expanded={infoOpen}
+        title="Informazioni sul progetto"
+        className={`flex h-5 w-5 cursor-pointer items-center justify-center rounded-sm text-link hover:bg-accent-soft ${
+          infoOpen ? 'bg-accent-soft' : ''
+        }`}
+      >
+        <Info className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+      <span aria-hidden="true" className="mx-0.5 h-4 w-px bg-line" />
       {onAddPerson && (
         <>
           <button
@@ -267,10 +261,12 @@ export interface ProjectRowProps {
   metrics: RoadmapMetrics;
   searching: boolean;
   config: RoadmapConfig;
-  /** The field that colors the projects: its value is the tab of the row; null with free colors. */
-  colorField: ProjectField | null;
-  /** The card with everything about the project, on the cell of the names. */
-  card: ProjectCardTools;
+  /** The field whose value tags the project beside its title, whatever colors the bars; null without one. */
+  tagField: ProjectField | null;
+  /** The window with everything about the project is open on this row. */
+  infoOpen: boolean;
+  /** Opens or closes that window, beside the tools of the row, from the button that asks for it. */
+  onShowInfo: (button: HTMLElement, tools: HTMLElement) => void;
   projectDrag: ProjectDrag | null;
   workDrag: WorkDrag | null;
   editing: Editing | null;
@@ -308,9 +304,9 @@ export interface ProjectRowProps {
 }
 
 /**
- * The row of a project: in the column, the tab with its size, the shape of its state and its
- * title, and under them the teams at work, two lines and no more, every row of a level the same
- * height, with everything else in the card that opens on the cell; its bar over the days, with
+ * The row of a project: in the column, the rail in the color of its bar, the shape of its state,
+ * its title and the tag of its size, and under them the teams at work, two lines and no more,
+ * with everything else in the card; its bar over the days, with
  * the hard deadline as a dashed red line; at the "Team" level a row for each bar of the work,
  * the people in the color of their team and the contingency in grey, with a row that adds a person.
  */
@@ -331,8 +327,9 @@ export function ProjectRow({
   metrics,
   searching,
   config,
-  colorField,
-  card,
+  tagField,
+  infoOpen,
+  onShowInfo,
   projectDrag,
   workDrag,
   editing,
@@ -362,13 +359,14 @@ export function ProjectRow({
   onAddMilestone,
 }: ProjectRowProps) {
   const formatDate = useFormatDate();
-  const cellRef = useRef<HTMLDivElement>(null);
   // Stable, so that the memoized cells of the row are not redrawn by every drag.
   const addNoteAt = useStableCallback((date: string) => onAddMilestone?.(date));
   const noteTitle = useStableCallback(
     (date: string) => `Nuova nota sulla timeline il ${formatDate(date)}`,
   );
-  const { personRowHeight, workBarHeight } = metrics;
+  const { personRowHeight, workBarHeight, thinPeople } = metrics;
+  // The field that types the days of a person: a line of text tall, over a thin row as well.
+  const editorHeight = Math.max(personRowHeight, metrics.lineHeight + 4);
   const shown = projectDrag?.project.id === project.id ? draggedProject(projectDrag) : project;
   const placed = placeTasks([shown], range).placed[0];
   const people = level === 'team' ? work : [];
@@ -377,9 +375,8 @@ export function ProjectRow({
   const geometry = projectRowGeometry(level, work.length, metrics);
   const projectRowHeight = geometry.rowHeight;
   const colorId = projectColorOf(project, config);
-  const sizeValue = colorField ? coloredValueOf(project, colorField) : null;
-  const tabLabel = colorField ? (sizeValue?.label ?? null) : null;
-  const tabColor = colorField ? (sizeValue?.colorId ?? null) : colorId;
+  // The tag keeps the color of its value, also when the colors of the bars are free.
+  const sizeValue = tagField ? coloredValueOf(project, tagField) : null;
   const teams = teamsOf(work);
   const overrun = deadlineOverrun(project, span, work, config.closures ?? []);
   const deadlineLeft =
@@ -391,24 +388,12 @@ export function ProjectRow({
   const isDragged = (item: WorkItem) =>
     workDrag?.item.id === item.id && workDrag.item.kind === item.kind;
   const isEdited = (item: WorkItem) => editing?.kind === item.kind && editing.id === item.id;
-  const trigger = card.triggerProps(project);
-  const isBar = (target: EventTarget) =>
-    target instanceof HTMLElement && target.id === projectBarId(project.id);
 
   const dropLine = dropBefore ? 'top-0' : dropAfter ? 'bottom-0' : null;
   // The bar of the project: at the Team level it reaches down around its people, so that the bars
   // of the projects nearly touch; elsewhere it is in the row of its title.
   const encloses = people.length > 0;
   const rowHeightOf = (last: boolean) => personRowHeight + (last ? ROOM_UNDER_THE_PEOPLE : 0);
-  // The focus on the bar opens the card on the cell of the names, as the mouse does.
-  const barFocus = {
-    onFocus: (event: FocusEvent) => {
-      if (isBar(event.target) && cellRef.current) card.open(project, cellRef.current);
-    },
-    onBlur: (event: FocusEvent) => {
-      if (isBar(event.target)) card.close();
-    },
-  };
   const projectBar = placed && (
     <ProjectBar
       placed={placed}
@@ -457,17 +442,6 @@ export function ProjectRow({
           onAdd={onAddMilestone ? addNoteAt : undefined}
           addTitle={noteTitle}
         />
-        {/* At the Team level the block of the project, a rectangle tinted with its color. */}
-        {level === 'team' && (
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 border-y"
-            style={{
-              backgroundColor: blockTint(colorId, 'transparent'),
-              borderColor: blockEdge(colorId),
-            }}
-          />
-        )}
         {/* The row under the mouse, name and days, so that a bar is matched to its project. */}
         <div
           aria-hidden="true"
@@ -490,14 +464,11 @@ export function ProjectRow({
         )}
       </div>
 
-      {/* The cell of the names: the mouse resting on it, or a tap on its background, opens the card. */}
+      {/* The cell of the names: the details of the project open from the first of its buttons. */}
       <div
-        ref={cellRef}
-        // The grip and the tab take the left of the cell at every density.
-        className={`${LABEL_CELL} flex flex-col justify-center overflow-hidden pr-2 transition-colors group-hover/row:bg-surface-strong ${
-          level === 'team'
-            ? 'bg-(--block-tint) py-1! pl-7 in-data-compact:pl-7'
-            : 'bg-surface-muted pl-9 in-data-compact:pl-9'
+        // The grip and the rail take the left of the cell at every density.
+        className={`${LABEL_CELL} flex flex-col justify-center overflow-hidden pr-2 pl-7 transition-colors group-hover/row:bg-surface-strong in-data-compact:pl-7 ${
+          level === 'team' ? 'bg-(--block-tint) py-1!' : 'bg-surface-muted'
         }`}
         style={{
           gridColumn: 1,
@@ -507,11 +478,6 @@ export function ProjectRow({
         }}
         draggable
         {...dragSource}
-        onPointerEnter={trigger.onPointerEnter}
-        onPointerLeave={trigger.onPointerLeave}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) trigger.onClick(event);
-        }}
       >
         {/* The grip says the row can be dragged; the keys and the window move it as well. */}
         <span
@@ -521,15 +487,9 @@ export function ProjectRow({
         >
           <GripVertical className="h-3.5 w-3.5" />
         </span>
-        {level === 'team' ? (
-          <>
-            <RailPiece colorId={tabColor} part={people.length > 0 ? 'first' : 'only'} />
-            {people.length > 0 && (
-              <span aria-hidden="true" className={`${TREE_LINE} top-[calc(50%+7px)] bottom-0`} />
-            )}
-          </>
-        ) : (
-          <SizeTab label={tabLabel} colorId={tabColor} small={level === 'titles'} />
+        <RailPiece colorId={colorId} part={people.length > 0 ? 'first' : 'only'} />
+        {people.length > 0 && (
+          <span aria-hidden="true" className={`${TREE_LINE} top-[calc(50%+7px)] bottom-0`} />
         )}
         {/*
           Out of the tab order: the bar is the project for the keyboard. A click opens the
@@ -543,25 +503,22 @@ export function ProjectRow({
             showBar(project.id);
             onOpen();
           }}
-          title="Apri il progetto"
-          className={`flex max-w-full min-w-0 cursor-pointer items-center gap-1 text-left text-xs leading-snug font-bold hover:underline ${
-            // At the Team level the tag takes the right, under the buttons of the rows.
-            level === 'team' ? 'w-full' : 'sm:pr-[72px]'
-          }`}
+          // The tag takes the right, under the buttons of the rows.
+          className="flex w-full max-w-full min-w-0 cursor-pointer items-center gap-1 text-left text-xs leading-snug font-bold hover:underline"
         >
           <ProjectStatusMark status={project.status} iconOnly />
           <span className="truncate">
             <Highlight text={project.title} />
           </span>
-          {/* At the Team level the value is a tag beside the title, as the rail has no words. */}
-          {level === 'team' && sizeValue && (
+          {/* The value is a tag beside the title, as the rail has no words. */}
+          {sizeValue && (
             <span aria-hidden="true" className="ml-auto flex max-w-[45%] shrink-0 pl-1 font-medium">
               <FieldTag colorId={sizeValue.colorId}>{sizeValue.label}</FieldTag>
             </span>
           )}
-          {colorField && sizeValue && (
+          {tagField && sizeValue && (
             <span className="sr-only">
-              , {colorField.label} {sizeValue.label}
+              , {tagField.label} {sizeValue.label}
             </span>
           )}
         </button>
@@ -594,6 +551,8 @@ export function ProjectRow({
           level={level}
           defaultLevel={defaultLevel}
           teamLevelAvailable={teamLevelAvailable}
+          infoOpen={infoOpen}
+          onShowInfo={onShowInfo}
           onSetLevel={onSetLevel}
           onAddPerson={level === 'team' && !searching ? onAddAssignment : undefined}
         />
@@ -603,7 +562,6 @@ export function ProjectRow({
         <div
           className="pointer-events-none relative"
           style={{ gridColumn: 2, gridRow: `1 / span ${rows}` }}
-          {...barFocus}
         >
           {projectBar}
         </div>
@@ -611,7 +569,6 @@ export function ProjectRow({
       <div
         className="pointer-events-none relative"
         style={{ gridColumn: 2, gridRow: 1, height: projectRowHeight }}
-        {...(encloses ? {} : barFocus)}
       >
         {!encloses && projectBar}
         <MilestoneLayer
@@ -669,21 +626,36 @@ export function ProjectRow({
         const last = index === people.length - 1;
         return (
           <div key={`${item.kind}-${item.id}`} className="contents">
-            {/* One line, under the title and in its rail: the person, the team and the days. */}
+            {/*
+              One line, under the title and in its rail: the person, the team and the days. At
+              «Compatta» the row is as thin as the bar, and the words shrink until they fit in it
+              (the owner's choice), whole in the tip of the row.
+            */}
             <div
-              className={`${LABEL_CELL} flex items-center gap-1.5 border-t border-line/60 bg-(--block-tint) py-0! pl-11! text-xs`}
+              className={`${LABEL_CELL} flex items-center bg-(--block-tint) py-0! pl-11! text-xs ${
+                thinPeople ? 'gap-1 overflow-hidden' : 'gap-1.5 border-t border-line/60'
+              }`}
               style={{
                 gridColumn: 1,
                 gridRow,
-                minHeight: rowHeightOf(last),
+                ...(thinPeople
+                  ? {
+                      height: rowHeightOf(last),
+                      fontSize: personRowHeight,
+                      lineHeight: `${personRowHeight}px`,
+                    }
+                  : { minHeight: rowHeightOf(last) }),
                 ...blockCellStyle(colorId, false, last),
               }}
+              title={thinPeople ? personLine(item, moving.manDays) : undefined}
             >
-              <RailPiece colorId={tabColor} part={last ? 'last' : 'middle'} />
+              <RailPiece colorId={colorId} part={last ? 'last' : 'middle'} />
               <TreeBranch last={last} />
               <span
                 aria-hidden="true"
-                className="h-2 w-2 shrink-0 rounded-full border border-line-strong"
+                className={`shrink-0 rounded-full border border-line-strong ${
+                  thinPeople ? 'h-1.5 w-1.5' : 'h-2 w-2'
+                }`}
                 style={{
                   backgroundColor: item.colorId
                     ? `var(--rb-task-${item.colorId}-border)`
@@ -750,8 +722,8 @@ export function ProjectRow({
                   label={`Giorni uomo di ${item.name}`}
                   style={{
                     left: Math.max(0, diffDays(range.start, item.schedule.start)) * dayWidth + 1,
-                    top: `calc(50% - ${personRowHeight / 2}px)`,
-                    height: personRowHeight,
+                    top: `calc(50% - ${editorHeight / 2}px)`,
+                    height: editorHeight,
                     minWidth: EDITOR_MIN_WIDTH,
                   }}
                   onSave={(manDays) => {
