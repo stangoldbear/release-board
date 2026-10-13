@@ -16,6 +16,7 @@ import {
   PHASE_STRIP_HEIGHT,
   fadedParts,
   formatManDays,
+  laneLayout,
   phaseSegmentsOf,
 } from './barRendering';
 import type { BarRendering, WorkItem } from './barRendering';
@@ -33,7 +34,7 @@ export function projectBarId(projectId: string): string {
 }
 
 /** Oblique dashes over the days of a project without work, so that the fading is not the only cue. */
-const FADED_STRIPES =
+export const FADED_STRIPES =
   'repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, currentColor 35%, transparent) 6px 8px)';
 
 interface ProjectBarProps {
@@ -52,7 +53,8 @@ interface ProjectBarProps {
   /** The line of the title, and the whole bar: taller with the lanes or the phases inside. */
   titleHeight: number;
   height: number;
-  laneHeight: number;
+  /** The band under the title that the lanes share, or the strip of the phases fills; 0 for none. */
+  band: number;
   /** The start can be dragged: only when no bar of the team sets where the work begins. */
   resizableStart: boolean;
   /** The title on one line, out of the bar when longer, rather than cut. */
@@ -91,7 +93,7 @@ export function ProjectBar({
   top,
   titleHeight,
   height,
-  laneHeight,
+  band,
   resizableStart,
   overflowTitle,
   dragging,
@@ -114,7 +116,8 @@ export function ProjectBar({
   // Inside the bar, from its left border: a day of the roadmap to pixels.
   const offset = (day: string) => (diffDays(range.start, day) - first) * dayWidth - 1;
   const spanWidth = (start: string, end: string) => (diffDays(start, end) + 1) * dayWidth - 2;
-  const inside = rendering !== 'rows' && work.length > 0 ? rendering : null;
+  const inside = rendering !== 'rows' && work.length > 0 && band > 0 ? rendering : null;
+  const lanes = laneLayout(band, work.length);
   const people = work.map((item) => `${item.name} · ${formatManDays(item.manDays)}`);
 
   const handleKeyDown = (event: KeyboardEvent) => {
@@ -233,8 +236,8 @@ export function ProjectBar({
               ...(item.colorId ? taskColorStyle(item.colorId) : undefined),
               left: offset(item.schedule.start),
               width: spanWidth(item.schedule.start, item.schedule.end),
-              top: titleHeight - 2 + index * (laneHeight + LANE_GAP),
-              height: laneHeight,
+              top: titleHeight - 2 + index * (lanes.height + lanes.gap),
+              height: lanes.height,
             }}
             className={`pointer-events-auto absolute z-[1] rounded-[2px] border ${
               item.colorId ? '' : 'border-line-strong bg-surface-strong'
@@ -256,15 +259,17 @@ export function ProjectBar({
               left: offset(segment.start),
               width: spanWidth(segment.start, segment.end),
               top: titleHeight - 2 + LANE_GAP,
-              height: PHASE_STRIP_HEIGHT,
+              height: band,
             }}
             className={`pointer-events-auto absolute z-[1] flex items-start overflow-clip rounded-[2px] border px-1 text-xs leading-none font-semibold whitespace-nowrap ${
               segment.colorId ? '' : 'border-line-strong bg-surface-strong text-fg'
             }`}
           >
-            <span className="sticky left-[calc(var(--gantt-label-width)+4px)] mt-px">
-              {segment.label} {formatManDays(segment.manDays)}
-            </span>
+            {band >= PHASE_STRIP_HEIGHT && (
+              <span className="sticky left-[calc(var(--gantt-label-width)+4px)] mt-px">
+                {segment.label} {formatManDays(segment.manDays)}
+              </span>
+            )}
             {/* More bars in the phase: a thin line each at the bottom says who finishes first. */}
             {segment.items.length > 1 &&
               segment.items.map((item, index) => (

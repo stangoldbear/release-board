@@ -63,7 +63,19 @@ interface DayHeaderRowProps {
   onShowDays: (date: string) => void;
 }
 
-/** The days, or the weeks, of the timeline. Today is underlined. */
+/** A column at least this wide has room for the chip of today under its number. */
+const TODAY_CHIP_WIDTH = 48;
+
+/** The word «Oggi» under the number of today, so that the line of today has a name at its top. */
+function TodayChip() {
+  return (
+    <span className="mx-auto mt-0.5 block w-fit rounded-sm bg-link px-1 text-xs leading-4 font-bold text-on-accent uppercase">
+      Oggi
+    </span>
+  );
+}
+
+/** The days, or the weeks, of the timeline. Today is underlined, with «Oggi» under its number. */
 export const DayHeaderRow = memo(function DayHeaderRow({
   columns,
   weekColumns,
@@ -105,6 +117,7 @@ export const DayHeaderRow = memo(function DayHeaderRow({
               <span className="block text-fg-muted">
                 – {end.day} {end.month}
               </span>
+              {column.isToday && <TodayChip />}
             </button>
           );
         }
@@ -134,7 +147,12 @@ export const DayHeaderRow = memo(function DayHeaderRow({
               {start.day}
               {showMonth && ` ${start.month}`}
             </span>
-            {column.isToday && <span className="sr-only">, oggi</span>}
+            {column.isToday &&
+              (column.width >= TODAY_CHIP_WIDTH ? (
+                <TodayChip />
+              ) : (
+                <span className="sr-only">, oggi</span>
+              ))}
           </div>
         );
       })}

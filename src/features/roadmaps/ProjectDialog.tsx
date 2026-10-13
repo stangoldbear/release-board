@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
-import { Milestone, Trash, UserRound } from 'lucide-react';
+import { Milestone, Trash, UserRound, TriangleAlert } from 'lucide-react';
 import { TASK_COLORS } from '../../domain/colors';
 import type { TaskColorId } from '../../domain/colors';
 import { formatLocaleNumber } from '../../domain/numberFormat';
@@ -16,6 +16,7 @@ import {
   arrangementOf,
 } from '../../domain/projects';
 import type { ProjectContent } from '../../domain/projects';
+import type { StatusChange } from '../../domain/projectStatus';
 import {
   DEFAULT_PROJECT_COLORS,
   projectColorField,
@@ -81,6 +82,8 @@ interface ProjectDialogProps {
   me: MemoAuthor | null;
   nameOf: (author: MemoAuthor) => string;
   today: string;
+  /** The state the dates give the project, when it differs from the stored one: proposed, saving confirms it. */
+  statusChange?: StatusChange | null;
   initialTab?: ProjectTab;
   /** Saves the project, new or edited, and returns its id. */
   onSubmit: (content: ProjectContent) => string;
@@ -119,6 +122,7 @@ export function ProjectDialog({
   me,
   nameOf,
   today,
+  statusChange = null,
   initialTab = 'project',
   onSubmit,
   onDelete,
@@ -152,7 +156,9 @@ export function ProjectDialog({
   const [arrangement, setArrangement] = useState<ProjectArrangement>(
     project ? arrangementOf(project) : 'standard',
   );
-  const [status, setStatus] = useState<ProjectStatus>(project?.status ?? 'planned');
+  const [status, setStatus] = useState<ProjectStatus>(
+    statusChange?.to ?? project?.status ?? 'planned',
+  );
   const [colorId, setColorId] = useState<TaskColorId>(project?.colorId ?? defaultColorId);
   const [owner, setOwner] = useState(project?.owner ?? '');
   const [description, setDescription] = useState(project?.description ?? '');
@@ -469,6 +475,19 @@ export function ProjectDialog({
           hidden={tab !== 'project'}
         >
           <form id={formId} onSubmit={save} className="space-y-4">
+            {statusChange && status === statusChange.to && (
+              <p className="flex items-start gap-2 rounded-lg border border-warning bg-warning-soft px-3 py-2 text-xs">
+                <TriangleAlert
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning"
+                  aria-hidden="true"
+                />
+                <span>
+                  Le date dicono «{PROJECT_STATUS_LABELS[statusChange.to]}» (era «
+                  {PROJECT_STATUS_LABELS[statusChange.from]}»): salvando confermi il nuovo stato. Lo
+                  stato si cambia nella vista avanzata.
+                </span>
+              </p>
+            )}
             <div>
               <label htmlFor={titleId} className={LABEL_CLASS}>
                 Titolo *
@@ -609,6 +628,11 @@ export function ProjectDialog({
                       </option>
                     ))}
                   </select>
+                  {statusChange && (
+                    <p className="mt-1 text-xs text-fg-muted">
+                      Suggerito dalle date: era «{PROJECT_STATUS_LABELS[statusChange.from]}».
+                    </p>
+                  )}
                 </div>
               )}
             </div>

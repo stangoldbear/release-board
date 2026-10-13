@@ -100,12 +100,12 @@ export function filterMemos(
  * The projects of the roadmap with the searched words in title, owner or description, or in the
  * other texts `moreTexts` gives for a project: its notes, the values of its fields.
  */
-export function filterProjects(
-  projects: readonly Project[],
+export function filterProjects<T extends Project>(
+  projects: readonly T[],
   search: string,
   mode: SearchMode = 'all',
   moreTexts: (project: Project) => readonly (string | undefined)[] = () => [],
-): Project[] {
+): T[] {
   return projects.filter((project) =>
     matches(
       [project.title, project.owner, project.description, ...moreTexts(project)],

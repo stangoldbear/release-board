@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ComponentProps } from 'react';
 
 const VARIANTS = {
   primary: 'bg-accent text-on-accent hover:bg-accent/90',
@@ -15,12 +15,12 @@ const SIZES = {
   icon: 'p-2',
 } as const;
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ComponentProps<'button'> {
   variant?: keyof typeof VARIANTS;
   size?: keyof typeof SIZES;
 }
 
-/** A button in one of the app's styles. It is type="button" unless told otherwise. */
+/** A button in one of the app's styles. It is type="button" unless told otherwise; `ref` reaches the element. */
 export function Button({
   variant = 'secondary',
   size = 'md',

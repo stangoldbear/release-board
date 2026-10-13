@@ -37,14 +37,14 @@ import {
   renumberProjects,
   sortProjectsBy,
 } from '../domain/projectOrder';
-import { projectSpan } from '../domain/projectSpan';
+import { projectSpan, withEffectiveEnd } from '../domain/projectSpan';
+import { withEffectiveStatus } from '../domain/projectStatus';
 import type { ProjectSpan } from '../domain/projectSpan';
 import { projectColorField } from '../domain/roadmapConfig';
 import type { TeamPlan } from '../domain/teamPlan';
 import type { RoadmapSettingsChanges } from '../domain/roadmapConfig';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
 import { buildSamplePlan } from '../domain/sample';
-import { isInRange, weekRange } from '../domain/schedule';
 import type {
   DailyMetric,
   Memo,
@@ -58,11 +58,9 @@ import type {
   Team,
 } from '../domain/types';
 import { noteCellId } from '../features/calendar/NotesRow';
-import { NEW_TASK_ID, ReleasesArea } from '../features/calendar/ReleasesArea';
+import { NEW_ITEM_ID, TimelineArea } from '../features/timeline/TimelineArea';
 import { taskBarId } from '../features/calendar/TaskBar';
-import { useCalendarDisplay } from '../features/calendar/useCalendarDisplay';
-import { dayWidthOf } from '../features/calendar/calendarView';
-import { columnUnit } from '../features/calendar/timelineLayout';
+import { useTimelineDisplay } from '../features/timeline/useTimelineDisplay';
 import { useCalendarView } from '../features/calendar/useCalendarView';
 import { HistoryPage } from '../features/history/HistoryPage';
 import { MemoDialog } from '../features/memos/MemoDialog';
@@ -76,8 +74,6 @@ import { fieldSearchTexts } from '../features/roadmaps/fieldUi';
 import { ProjectNoteReminders } from '../features/roadmaps/ProjectNoteReminders';
 import { ProjectReminders } from '../features/roadmaps/ProjectReminders';
 import { rememberProjectReminders } from '../domain/projectReminders';
-import { NEW_PROJECT_ID, RoadmapArea } from '../features/roadmaps/RoadmapArea';
-import { useRoadmapDisplay } from '../features/roadmaps/useRoadmapDisplay';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { TaskDialog } from '../features/tasks/TaskDialog';
 import { isBoolean, oneOf, usePreference } from '../infra/preferences';
@@ -90,7 +86,7 @@ import { Button } from '../shared/ui/Button';
 import { TEXT_SCALES } from '../shared/ui/textScale';
 import { useToast } from '../shared/ui/Toast';
 import { VersionStamp } from '../shared/ui/VersionStamp';
-import { addDaysIso, parseISODate, startOfMonth, startOfWeek, todayIso } from '../utils/dateUtils';
+import { addDaysIso, parseISODate, todayIso } from '../utils/dateUtils';
 import {
   ALL_AREAS_VISIBLE,
   BETA_FEATURES_PREFERENCE,
@@ -189,7 +185,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const [betaFeatures, setBetaFeatures] = usePreference(BETA_FEATURES_PREFERENCE, isBoolean, false);
   const shownAreas = availableAreas(betaFeatures);
   const hiddenParts = betaFeatures ? [] : BETA_PARTS;
-  const [display, displayControls] = useCalendarDisplay();
+  const [display, displayControls] = useTimelineDisplay();
   // Older names: the text size and compact mode began with the calendar, and browsers keep them.
   const [textScale, setTextScale] = usePreference('calendar-text-scale', oneOf(TEXT_SCALES), 1);
   const [compact, setCompact] = usePreference('calendar-compact', isBoolean, false);
@@ -205,10 +201,8 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const { theme, setTheme } = useThemeSetting();
   const { dateFormat, setDateFormat } = useDateFormatSetting();
 
+  // One view for the whole timeline: the releases and the projects share period, zoom and days.
   const [view, dispatchView] = useCalendarView();
-  // The roadmap has a view of its own, over the same kinds of days, and its own display choices.
-  const [roadmapView, dispatchRoadmapView] = useCalendarView('roadmap-', 'quarter');
-  const [roadmapDisplay, roadmapControls] = useRoadmapDisplay();
   // Where each project falls, from its data and the work of its team: the roadmap, the order and
   // the search use it. Before the plan loads, nothing.
   const planProjects = plan?.projects;
@@ -223,6 +217,19 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
         ]),
       ),
     [planProjects, planAssignments, planStakeholders],
+  );
+  // The projects as the day has them: with their effective end and the state their dates give,
+  // which the rows, the counts, the order and the alerts show; the windows keep the stored ones.
+  const today = todayIso();
+  const projectsOfDay = useMemo(
+    () =>
+      (planProjects ?? []).map((project) =>
+        withEffectiveStatus(
+          withEffectiveEnd(project, spans.get(project.id) ?? projectSpan(project, [], [])),
+          today,
+        ),
+      ),
+    [planProjects, spans, today],
   );
   const [seenProjectReminders, setSeenProjectReminders] = usePreference(
     'project-reminders-seen',
@@ -294,15 +301,6 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       )
     : scopedMemos;
 
-  // Without the past, the timeline starts today, or on the Monday of this week in weekly columns.
-  const today = todayIso();
-  const firstShownDay = columnUnit(dayWidthOf(view)) === 'week' ? startOfWeek(today) : today;
-  const timelineStart = display.hidePastDays ? firstShownDay : view.range.start;
-  const timelineRange = useMemo(
-    () => ({ start: timelineStart, end: view.range.end }),
-    [timelineStart, view.range.end],
-  );
-
   if (!plan) return null;
 
   if (page === 'history') {
@@ -315,7 +313,6 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     );
   }
 
-  const week = weekRange(view.anchor);
   const anchorDate = parseISODate(view.anchor);
 
   // Tasks
@@ -336,7 +333,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const handleDeleteTask = (taskId: string) => {
     repository.deleteTask(taskId);
     showToast('Attività eliminata');
-    focusAfterClosing(NEW_TASK_ID);
+    focusAfterClosing(NEW_ITEM_ID);
   };
 
   const handleDuplicateTask = (task: TaskItem) => {
@@ -348,19 +345,6 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
 
   const handleAddTaskAt = (date: string, laneId: string) => {
     setDialog({ kind: 'task', task: null, date, laneId });
-  };
-
-  // A new task starts today when today is in view, otherwise on the first day in view.
-  const handleNewTask = () => {
-    const date =
-      view.mode === 'week'
-        ? isInRange(today, week)
-          ? today
-          : week.start
-        : startOfMonth(view.anchor) === startOfMonth(today)
-          ? today
-          : view.anchor;
-    handleAddTaskAt(date, plan.lanes[0]?.id ?? '');
   };
 
   const handleSaveMetrics = (changes: MetricValueChange[]) => {
@@ -465,7 +449,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   // the rows follow a criterion, which then becomes the order of the members.
   const handleReorderProject = (projectId: string, beforeId: string | null) => {
     let moves: Map<string, number>;
-    if (roadmapDisplay.sort === 'custom') {
+    if (display.sort === 'custom') {
       moves = projectMoves(plan.projects, projectId, beforeId);
     } else {
       const moved = orderedProjects.find((project) => project.id === projectId);
@@ -474,7 +458,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       const to = beforeId === null ? others.length : others.findIndex((p) => p.id === beforeId);
       if (to < 0) return;
       moves = renumberProjects([...others.slice(0, to), moved, ...others.slice(to)]);
-      roadmapControls.setSort('custom');
+      displayControls.setSort('custom');
     }
     for (const [id, position] of moves) repository.updateProject(id, { position });
   };
@@ -513,7 +497,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const handleDeleteProject = (project: Project) => {
     repository.deleteProject(project.id);
     showToast('Progetto eliminato');
-    focusAfterClosing(NEW_PROJECT_ID);
+    focusAfterClosing(NEW_ITEM_ID);
   };
 
   // The notes of the projects, who works on them, and the people themselves.
@@ -604,7 +588,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     ...fieldSearchTexts(project, plan.roadmap.fields),
   ];
   // In the order of the roadmap, so that the results of the search follow the page.
-  const orderedProjects = sortProjectsBy(plan.projects, roadmapDisplay.sort, {
+  const orderedProjects = sortProjectsBy(projectsOfDay, display.sort, {
     today,
     endOf: (project) => spans.get(project.id)?.end ?? project.startDate,
     field: projectColorField(plan.roadmap),
@@ -679,18 +663,18 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       const project = plan.projects.find((item) => item.id === result.id);
       if (project) {
         if (
-          roadmapDisplay.hidePastDays &&
+          display.hidePastDays &&
           (spans.get(project.id)?.end ?? project.endDate ?? project.startDate) < today
         ) {
-          roadmapControls.togglePastDays();
+          displayControls.togglePastDays();
         }
-        dispatchRoadmapView({ type: 'goTo', date: project.startDate });
+        dispatchView({ type: 'goTo', date: project.startDate });
         if (!prefersReducedMotion()) wait = SCROLL_DURATION_MS + 50;
       }
     } else if (result.kind === 'milestone' && result.date) {
       // The roadmap goes to the day of the note, with the past when the day is past.
-      if (roadmapDisplay.hidePastDays && result.date < today) roadmapControls.togglePastDays();
-      dispatchRoadmapView({ type: 'goTo', date: result.date });
+      if (display.hidePastDays && result.date < today) displayControls.togglePastDays();
+      dispatchView({ type: 'goTo', date: result.date });
       if (!prefersReducedMotion()) wait = SCROLL_DURATION_MS + 50;
     } else if (result.date) {
       // The result is drawn only on the timeline, with its day, its lane and the notes row.
@@ -840,68 +824,57 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             />
           )}
 
-          {isShown('releases') && (
-            <ReleasesArea
-              id={areaElementId('releases')}
+          {(isShown('releases') || isShown('roadmaps')) && (
+            <TimelineArea
+              parts={{ releases: isShown('releases'), roadmaps: isShown('roadmaps') }}
               plan={plan}
-              tasks={filteredTasks}
-              noteMatches={noteMatches}
-              status={filters.status}
-              onStatusChange={(status) => setFilters({ ...filters, status })}
               view={view}
               onViewAction={dispatchView}
-              timelineRange={timelineRange}
-              week={week}
               display={display}
-              displayControls={displayControls}
-              textScale={textScale}
-              compact={compact}
-              onNewTask={handleNewTask}
-              onOpenTask={openTask}
-              onChangeTask={handleChangeTask}
-              onDuplicateTask={handleDuplicateTask}
-              onDeleteTask={handleDeleteTask}
-              onAddTaskAt={handleAddTaskAt}
-              onSaveNote={(date, text) => repository.setNote(date, text)}
-              onMoveNote={(from, to, text) => repository.moveNote(from, to, text)}
-              onEditMetrics={() => setDialog({ kind: 'metrics' })}
-              onImportMetrics={() => setDialog({ kind: 'import' })}
-            />
-          )}
-
-          {isShown('roadmaps') && (
-            <RoadmapArea
-              id={areaElementId('roadmaps')}
-              unavailable={sync.missing.includes('projects')}
-              detailsUnavailable={sync.missing.includes('roadmap')}
-              plan={plan}
-              shown={shownProjects}
-              spans={spans}
-              milestones={shownMilestones}
-              milestoneActions={milestoneActions}
-              openRequest={projectToOpen}
-              searching={searching}
-              view={roadmapView}
-              onViewAction={dispatchRoadmapView}
-              display={roadmapDisplay}
-              displayControls={roadmapControls}
+              controls={displayControls}
               today={today}
               textScale={textScale}
               compact={compact}
-              me={me}
-              nameOf={nameOf}
-              projectActions={{
-                onCreate: handleCreateProject,
-                onUpdate: (projectId, changes) => repository.updateProject(projectId, changes),
-                onMove: handleMoveProject,
-                onSaveTeam: handleSaveTeam,
-                onReorder: handleReorderProject,
-                onSave: handleSaveProject,
-                onDelete: handleDeleteProject,
+              searching={searching}
+              releases={{
+                tasks: filteredTasks,
+                noteMatches,
+                status: filters.status,
+                onStatusChange: (status) => setFilters({ ...filters, status }),
+                onOpenTask: openTask,
+                onChangeTask: handleChangeTask,
+                onDuplicateTask: handleDuplicateTask,
+                onDeleteTask: handleDeleteTask,
+                onAddTaskAt: handleAddTaskAt,
+                onSaveNote: (date, text) => repository.setNote(date, text),
+                onMoveNote: (from, to, text) => repository.moveNote(from, to, text),
+                onEditMetrics: () => setDialog({ kind: 'metrics' }),
+                onImportMetrics: () => setDialog({ kind: 'import' }),
               }}
-              noteActions={noteActions}
-              assignmentActions={assignmentActions}
-              stakeholderActions={stakeholderActions}
+              roadmap={{
+                projects: projectsOfDay,
+                shown: shownProjects,
+                spans,
+                milestones: shownMilestones,
+                milestoneActions,
+                openRequest: projectToOpen,
+                unavailable: sync.missing.includes('projects'),
+                detailsUnavailable: sync.missing.includes('roadmap'),
+                me,
+                nameOf,
+                projectActions: {
+                  onCreate: handleCreateProject,
+                  onUpdate: (projectId, changes) => repository.updateProject(projectId, changes),
+                  onMove: handleMoveProject,
+                  onSaveTeam: handleSaveTeam,
+                  onReorder: handleReorderProject,
+                  onSave: handleSaveProject,
+                  onDelete: handleDeleteProject,
+                },
+                noteActions,
+                assignmentActions,
+                stakeholderActions,
+              }}
             />
           )}
 
@@ -966,7 +939,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
         />
 
         <ProjectReminders
-          projects={plan.projects}
+          projects={projectsOfDay}
           milestones={plan.milestones}
           seenMilestones={seenMilestoneReminders}
           onSeenMilestones={(shown) =>
@@ -1029,8 +1002,8 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             onToggleBetaFeatures={setBetaFeatures}
             roadmapUnavailable={sync.missing.includes('roadmap')}
             roadmapActions={configActions}
-            barRendering={roadmapDisplay.barRendering}
-            onChangeBarRendering={roadmapControls.setBarRendering}
+            barRendering={display.barRendering}
+            onChangeBarRendering={displayControls.setBarRendering}
             theme={theme}
             onChangeTheme={setTheme}
             dateFormat={dateFormat}

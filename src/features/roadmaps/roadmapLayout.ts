@@ -1,7 +1,6 @@
 import type { DateRange } from '../../domain/schedule';
 import { LINE_HEIGHT } from '../../shared/ui/textScale';
 import { ITALIAN_MONTHS_SHORT, addDaysIso, addMonthsIso, startOfWeek } from '../../utils/dateUtils';
-import type { DetailLevel } from './projectUi';
 
 /** Months of room before the first project and after the last one, to move them further. */
 const MARGIN_MONTHS = 1;
@@ -51,21 +50,21 @@ export interface RoadmapMetrics {
   laneHeight: number;
   /** Space above and below the bars of a row. */
   rowPadding: number;
-  /** Width of the column with the projects, before the phone's limit: wider with more to show. */
-  labelWidth: number;
-  /** Lines of a description that the column shows. */
-  descriptionLines: number;
+  /** One line of the text of the column, for the height of the rows. */
+  lineHeight: number;
+  /** The padding of a cell of the column, as LABEL_CELL draws it: less in compact mode. */
+  cellPadding: number;
 }
 
 /**
- * The days are as wide as the view sets them, as in the calendar; bigger text makes bars and the
- * column of the projects bigger, smaller text brings the rows closer, as compact mode does.
+ * The days are as wide as the view sets them, as in the calendar; bigger text makes the bars
+ * taller, smaller text brings the rows closer, as compact mode does. The column of the names is
+ * the timeline's, which the user sizes.
  */
 export function roadmapMetrics(
   dayWidth: number,
   textScale: number,
   compact: boolean,
-  level: DetailLevel = 'main',
 ): RoadmapMetrics {
   const spacing = Math.min(1, textScale);
   const line = 12 * textScale * (compact ? LINE_HEIGHT.compact : LINE_HEIGHT.normal);
@@ -75,7 +74,7 @@ export function roadmapMetrics(
     assignmentHeight: Math.round(line) + 8,
     laneHeight: compact ? 6 : 8,
     rowPadding: Math.round((compact ? 3 : 6) * spacing),
-    labelWidth: Math.round((level === 'titles' ? 220 : 260) * textScale),
-    descriptionLines: compact ? 1 : 2,
+    lineHeight: Math.round(line),
+    cellPadding: compact ? 4 : 8,
   };
 }

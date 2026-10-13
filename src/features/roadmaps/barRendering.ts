@@ -180,22 +180,43 @@ export function phaseSegmentsOf(items: readonly WorkItem[]): PhaseSegment[] {
   });
 }
 
+/** The teams at work on a project, in the order of the work, each once; the contingency has none. */
+export function teamsOf(items: readonly WorkItem[]): Team[] {
+  const teams: Team[] = [];
+  for (const item of items) {
+    if (item.team && !teams.some((team) => team.id === item.team?.id)) teams.push(item.team);
+  }
+  return teams;
+}
+
 /** Space between the lanes of a bar, and around them. */
 export const LANE_GAP = 2;
-/** The strip of the phases under the title: one line of small text. */
+/** The strip of the phases with its words: one line of small text. A thinner band has no words. */
 export const PHASE_STRIP_HEIGHT = 16;
 
 /**
- * The height of the bar of a project: its line of text and, under it, a lane for each bar of the
- * work or the strip of the phases, when the rendering draws them and there are bars.
+ * The band under the title of a project for the lanes or the strip of the phases, by the rows of
+ * the project: a sliver with the titles alone, a strip with the main information, none with the
+ * people in rows of their own. Fixed, so that every row of a level is the same height.
+ */
+export const WORK_BAND = { titles: 6, main: 16, team: 0 } as const;
+
+/**
+ * The height of the bar of a project: its line of text and, under it, the band of the lanes or of
+ * the phases, when the rendering draws them and the rows leave a band; the same with or without
+ * bars, so that every row of a level is the same height.
  */
 export function projectBarHeight(
   rendering: BarRendering,
   titleHeight: number,
-  laneHeight: number,
-  bars: number,
+  band: number,
 ): number {
-  if (bars === 0 || rendering === 'rows') return titleHeight;
-  if (rendering === 'lanes') return titleHeight + bars * (laneHeight + LANE_GAP) + LANE_GAP;
-  return titleHeight + PHASE_STRIP_HEIGHT + LANE_GAP * 2;
+  if (rendering === 'rows' || band === 0) return titleHeight;
+  return titleHeight + band + LANE_GAP;
+}
+
+/** The lanes of a bar share its band: thinner with more of them, never under a pixel. */
+export function laneLayout(band: number, bars: number): { height: number; gap: number } {
+  const gap = bars > 4 ? 1 : LANE_GAP;
+  return { height: Math.max(1, Math.floor((band - (bars - 1) * gap) / bars)), gap };
 }

@@ -98,7 +98,15 @@ export function useHoverCard<T>() {
     },
   };
 
-  return { card, triggerProps, cardProps };
+  /** Opens the card of an item on an element that is not the trigger, as the focus on a bar does. */
+  const open = (item: T, anchor: HTMLElement, pinned = false) => {
+    if (!card?.pinned) show({ item, anchor, pinned });
+  };
+  const close = () => {
+    if (!card?.pinned) show(null);
+  };
+
+  return { card, triggerProps, cardProps, open, close };
 }
 
 interface HoverCardProps {
@@ -107,6 +115,8 @@ interface HoverCardProps {
   cardRef: RefObject<HTMLDivElement | null>;
   onPointerEnter: () => void;
   onPointerLeave: () => void;
+  /** The width of the card, as a class; a fixed width, so that it can be placed before it shows. */
+  widthClass?: string;
 }
 
 /**
@@ -120,6 +130,7 @@ export function HoverCard({
   cardRef,
   onPointerEnter,
   onPointerLeave,
+  widthClass = 'w-72',
 }: HoverCardProps) {
   // On every render: the content may change the card's size.
   useLayoutEffect(() => {
@@ -146,7 +157,7 @@ export function HoverCard({
       role="tooltip"
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
-      className="fixed top-0 left-0 z-50 w-72 max-w-[calc(100vw-16px)] rounded-xl border border-line bg-surface p-3 text-fg shadow-2xl transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] starting:scale-[0.97] starting:opacity-0 motion-reduce:starting:scale-100"
+      className={`fixed top-0 left-0 z-50 ${widthClass} max-w-[calc(100vw-16px)] rounded-xl border border-line bg-surface p-3 text-fg shadow-2xl transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] starting:scale-[0.97] starting:opacity-0 motion-reduce:starting:scale-100`}
     >
       {children}
     </div>,

@@ -6,6 +6,57 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-12
+
+### Aggiunto
+
+- Lo stato di un progetto segue la data di oggi: un progetto pianificato con oggi tra inizio e
+  fine effettiva è in corso, uno pianificato o in corso con oggi oltre la fine è completato; idee,
+  progetti in pausa e completati restano come sono. La timeline, i conteggi e l'ordine mostrano lo
+  stato di oggi; sulla colonna di oggi il progetto porta un triangolo che apre un pannello con lo
+  stato di prima e quello di ora, il perché, «Conferma», che salva lo stato per tutti con il nome
+  di chi conferma nella cronologia, e «Apri il progetto»; la finestra del progetto propone lo
+  stato nuovo e salvando lo conferma; la scheda del progetto dice che è da confermare. Nessuna
+  scrittura automatica: lo stato salvato cambia solo con una conferma.
+- Una sola timeline per Next Releases e Roadmap, sugli stessi giorni: un solo periodo e zoom, un
+  solo livello di dettaglio («Solo titoli» mette anche i titoli delle attività su una riga, al
+  posto del chip «Titoli su una riga»), una sola colonna dei nomi, il fatturato in cima, le note
+  dei giorni e le note sulla timeline vicine, poi le corsie delle attività e i progetti, ognuno
+  sotto un'intestazione con i conteggi per stato, che è anche la legenda, e una freccia che
+  ripiega la parte. Le schede in fondo restano quattro: «Next Releases» e «Roadmap» mostrano la
+  timeline con la sola parte corrispondente, «All» entrambe; nel layout «Pulsanti in alto» i due
+  pulsanti mostrano e nascondono le parti. Un solo pulsante «Nuovo» con un menu: attività,
+  progetto o nota sulla timeline. La Bacheca resta una vista delle attività.
+- La timeline scorre dentro la finestra: mesi, fatturato e giorni restano in alto e i nomi a
+  sinistra mentre si scorrono le righe, e un elemento portato in vista non finisce sotto di loro.
+  Il bordo della colonna dei nomi, nelle righe in alto, si trascina per cambiarne la larghezza
+  (anche con le frecce, Home e End; doppio clic per quella di serie); il browser la ricorda.
+- Le righe dei progetti a «Info principali» hanno due righe: l'icona dello stato e il titolo,
+  troncato, e sotto i team al lavoro; sul bordo sinistro una linguetta con il valore del campo
+  che colora i progetti (di serie «Dimensione»), scritto dal basso in alto nel suo colore. Ogni
+  riga di un livello ha la stessa altezza: la barra è alta quanto la riga, con una fascia fissa
+  sotto il titolo che le lane si dividono o la striscia delle fasi riempie. Periodo, giorni uomo,
+  responsabile, hard deadline, descrizione, campi principali con i link e persone con i giorni
+  stanno in una scheda che si apre fermando il mouse sulla cella, al focus della barra o con un
+  tocco. Nella finestra, accanto a un campo link c'è il pulsante che lo apre, e un campo di più
+  link li elenca.
+- I comandi della timeline stanno tutti in alto: «Righe» (fatturato, note, corsie, parti),
+  «Ordina», «Raggruppa» e «Fatturato» sono menu, i livelli una fila di tre icone, festivi e giorni
+  passati due icone, tutti con un suggerimento al passaggio e al focus; «?» apre l'aiuto con i
+  gesti, i tasti e la legenda degli stati e dei segni; i paragrafi di istruzioni escono dalla
+  pagina. La colonna di oggi porta «Oggi» sotto il numero e la riga sotto il mouse si illumina,
+  nome e giorni.
+
+### Cambiato
+
+- Le preferenze della roadmap `roadmap-zoom`, `roadmap-fit-days`, `roadmap-highlight-weekends`,
+  `roadmap-past-days-hidden` e `roadmap-titles-one-line`, e `titles-one-line` del calendario,
+  non si leggono più: valgono quelle del calendario per tutta la timeline, con i giorni passati
+  nascosti di serie anche per i progetti. `roadmap-detail-level`, `roadmap-project-levels`,
+  `roadmap-bars`, `roadmap-sort` e `roadmap-group-by` restano; nuove `label-width`,
+  `timeline-collapsed` e `show-timeline-notes`.
+- Le icone dei livelli sono righe (una, due, tre) al posto dei tratti.
+
 ## [0.11.1] - 2026-10-12
 
 La 0.11.0 non è stata pubblicata: le sue modifiche escono con questa versione.
@@ -687,7 +738,8 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/stangoldbear/release-board/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/stangoldbear/release-board/compare/v0.10.3...v0.11.1
 [0.10.3]: https://github.com/stangoldbear/release-board/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/stangoldbear/release-board/compare/v0.10.1...v0.10.2

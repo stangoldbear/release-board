@@ -3,10 +3,10 @@ import {
   CircleDashed,
   CircleDot,
   CirclePause,
-  Equal,
   Lightbulb,
-  Menu,
-  Minus,
+  Rows2,
+  Rows3,
+  Rows4,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PROJECT_STATUS_LABELS } from '../../domain/projects';
@@ -65,14 +65,14 @@ export const DETAIL_LEVELS: readonly {
     id: 'titles',
     label: 'Solo titoli',
     title: 'Il titolo di ogni progetto, e nulla più',
-    icon: Minus,
+    icon: Rows2,
     rows: 1,
   },
   {
     id: 'main',
     label: 'Info principali',
     title: 'Sotto il titolo: descrizione, stato, responsabile e i campi principali',
-    icon: Equal,
+    icon: Rows3,
     rows: 2,
   },
   {
@@ -80,7 +80,7 @@ export const DETAIL_LEVELS: readonly {
     label: 'Team',
     title:
       'Le informazioni principali e una riga per ogni persona che lavora al progetto, e per la contingency',
-    icon: Menu,
+    icon: Rows4,
     rows: 3,
   },
 ];

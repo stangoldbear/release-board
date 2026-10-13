@@ -41,16 +41,15 @@ describe('roadmapMetrics', () => {
     const bigger = roadmapMetrics(56, 1.5, false);
     expect(bigger.barHeight).toBeGreaterThan(normal.barHeight);
     expect(bigger.assignmentHeight).toBeGreaterThan(normal.assignmentHeight);
-    expect(bigger.labelWidth).toBe(390);
     expect(roadmapMetrics(56, 1, true).rowPadding).toBeLessThan(normal.rowPadding);
   });
 
-  it('gives the column of the projects more room when it shows more than the titles', () => {
-    expect(roadmapMetrics(56, 1, false, 'titles').labelWidth).toBe(220);
-    expect(roadmapMetrics(56, 1, false, 'main').labelWidth).toBe(260);
-    expect(roadmapMetrics(56, 1, false, 'team').labelWidth).toBe(260);
-    // Two lines of description, one in compact mode: the window has the whole text.
-    expect(roadmapMetrics(56, 1, false).descriptionLines).toBe(2);
-    expect(roadmapMetrics(56, 1, true).descriptionLines).toBe(1);
+  it('measures a line of the column with the text, tighter in compact mode', () => {
+    expect(roadmapMetrics(56, 1, false).lineHeight).toBeGreaterThan(
+      roadmapMetrics(56, 1, true).lineHeight,
+    );
+    expect(roadmapMetrics(56, 1.5, false).lineHeight).toBeGreaterThan(
+      roadmapMetrics(56, 1, false).lineHeight,
+    );
   });
 });

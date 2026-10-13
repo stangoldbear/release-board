@@ -5,8 +5,10 @@ import type { Assignment, Project } from '../../domain/types';
 import {
   fadedParts,
   formatManDays,
+  laneLayout,
   phaseSegmentsOf,
   projectBarHeight,
+  teamsOf,
   workItemsOf,
 } from './barRendering';
 
@@ -112,11 +114,27 @@ describe('the bars of the work of a project', () => {
     expect(segments.map((segment) => segment.late)).toEqual([false, false, false, true]);
   });
 
-  it('give the bar its height from the rendering and the bars', () => {
-    expect(projectBarHeight('rows', 28, 8, 5)).toBe(28);
-    expect(projectBarHeight('lanes', 28, 8, 0)).toBe(28);
-    expect(projectBarHeight('lanes', 28, 8, 5)).toBe(28 + 5 * 10 + 2);
-    expect(projectBarHeight('phases', 28, 8, 5)).toBe(28 + 16 + 4);
+  it('give the bar its height from the rendering and the band of the rows, bars or not', () => {
+    expect(projectBarHeight('rows', 28, 16)).toBe(28);
+    expect(projectBarHeight('lanes', 28, 0)).toBe(28);
+    expect(projectBarHeight('lanes', 28, 16)).toBe(28 + 16 + 2);
+    expect(projectBarHeight('phases', 28, 6)).toBe(28 + 6 + 2);
+  });
+
+  it('share the band among the lanes, thinner with more of them', () => {
+    expect(laneLayout(16, 1)).toEqual({ height: 16, gap: 2 });
+    expect(laneLayout(16, 3)).toEqual({ height: 4, gap: 2 });
+    expect(laneLayout(16, 8)).toEqual({ height: 1, gap: 1 });
+    expect(laneLayout(6, 4)).toEqual({ height: 1, gap: 2 });
+  });
+
+  it('name the teams at work once each, in the order of the work', () => {
+    const items = workItemsOf(
+      project,
+      projectSpan(project, assignments, config.stakeholders),
+      config,
+    );
+    expect(teamsOf(items).map((team) => team.tag)).toEqual(['BA', 'ServerSide', 'iOSDev', 'QA']);
   });
 
   it('write the days as the bars show them', () => {

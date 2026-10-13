@@ -30,7 +30,7 @@ export const LABEL_CELL_SELECTOR = '.sticky.left-0';
  * names stack among themselves, under the page's header.
  */
 export const TIMELINE_SCROLLER =
-  'relative isolate w-full touch-pan-x touch-pan-y overflow-x-auto [overflow-anchor:none]';
+  'relative isolate w-full touch-pan-x touch-pan-y overflow-x-auto overflow-y-auto [overflow-anchor:none]';
 
 /** Height of a task bar with text of the normal size: two lines over days, one over weeks. */
 const BAR_HEIGHT = { day: 46, week: 28 };

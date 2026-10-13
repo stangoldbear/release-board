@@ -1,8 +1,11 @@
+import { useRef } from 'react';
 import type { DragEvent, PointerEvent } from 'react';
-import { CalendarRange, GripVertical, Plus, TriangleAlert, UserRound } from 'lucide-react';
+import { GripVertical, Plus, TriangleAlert } from 'lucide-react';
+import type { TaskColorId } from '../../domain/colors';
 import type { ProjectChanges, ProjectWithEnd } from '../../domain/projects';
 import type { ProjectSpan } from '../../domain/projectSpan';
-import { projectColorOf } from '../../domain/roadmapConfig';
+import type { ProjectOfDay } from '../../domain/projectStatus';
+import { coloredValueOf, projectColorOf } from '../../domain/roadmapConfig';
 import { placeTasks } from '../../domain/schedule';
 import type { DateRange } from '../../domain/schedule';
 import type {
@@ -15,28 +18,29 @@ import type {
 import { prefersReducedMotion } from '../../shared/motion';
 import { useFormatDate } from '../../shared/dateFormat';
 import { Highlight } from '../../shared/ui/Highlight';
+import { useStableCallback } from '../../shared/useStableCallback';
+import { taskColorStyle } from '../../themes';
 import { diffDays } from '../../utils/dateUtils';
-import { LABEL_CELL, clampLines } from '../calendar/timelineLayout';
+import { LABEL_CELL } from '../calendar/timelineLayout';
 import type { Column } from '../calendar/timelineLayout';
 import type { DragKind } from '../calendar/useTaskDrag';
-import { projectBarHeight } from './barRendering';
+import { WORK_BAND, projectBarHeight, teamsOf } from './barRendering';
 import type { BarRendering, WorkItem } from './barRendering';
 import { DaysEditor } from './DaysEditor';
-import { FieldValues } from './fieldUi';
+import { MilestoneLayer } from './MilestoneDiamond';
+import type { MilestoneTools } from './MilestoneDiamond';
 import { ProjectBar, projectBarId } from './ProjectBar';
+import type { ProjectCardTools } from './ProjectCard';
 import { DETAIL_LEVELS, ProjectStatusMark } from './projectUi';
 import type { DetailLevel } from './projectUi';
-import { projectPeriod } from './roadmapLayout';
 import type { RoadmapMetrics } from './roadmapLayout';
 import { RowCells } from './RowCells';
+import { StatusChangeSign } from './StatusChangeSign';
 import { draggedProject } from './useProjectDrag';
 import type { ProjectDrag } from './useProjectDrag';
 import { draggedWork } from './useWorkDrag';
 import type { WorkChanges, WorkDrag, WorkDragKind } from './useWorkDrag';
 import { WorkBar, workBarId } from './WorkBar';
-import { MilestoneLayer } from './MilestoneDiamond';
-import type { MilestoneTools } from './MilestoneDiamond';
-import { useStableCallback } from '../../shared/useStableCallback';
 
 /** The bar whose days are being typed: the project itself, or a bar of its work. */
 export interface Editing {
@@ -59,93 +63,32 @@ function showBar(projectId: string): void {
 }
 
 /**
- * The title of a project and, from the "Info principali" level on, what describes it: a line in
- * grey with state, months and owner, each with its icon, the description cut short, and, set
- * apart, the main fields.
+ * The tab on the left edge of the row: the value of the field that colors the projects, written
+ * upwards in the color of the value, cut with an ellipsis when the row is too short for it; with
+ * free colors, the color of the project alone. The words are in the title and in the card.
  */
-function ProjectInfo({
-  project,
-  level,
-  fields,
-  hiddenFieldId,
-  descriptionLines,
-  onOpen,
-}: {
-  project: ProjectWithEnd;
-  level: DetailLevel;
-  fields: readonly ProjectField[];
-  /** The field the rows are grouped by: the header of the group already says its value. */
-  hiddenFieldId: string | undefined;
-  descriptionLines: number;
-  onOpen: () => void;
-}) {
-  const formatDate = useFormatDate();
-  const mainFields = fields.filter((field) => field.main && field.id !== hiddenFieldId);
+function SizeTab({ label, colorId }: { label: string | null; colorId: TaskColorId | null }) {
   return (
-    <>
-      {/*
-        Out of the tab order: the bar is the project for the keyboard. A click opens the project,
-        as on the bar, and brings the bar into view behind the window: it may be far in the past
-        or in the future. The room on the right is for the buttons of the rows.
-      */}
-      <button
-        type="button"
-        tabIndex={-1}
-        onClick={() => {
-          showBar(project.id);
-          onOpen();
-        }}
-        title="Apri il progetto"
-        className="cursor-pointer text-left text-xs leading-snug font-bold wrap-break-word hyphens-auto hover:underline sm:pr-[72px]"
-      >
-        <Highlight text={project.title} />
-      </button>
-      {level !== 'titles' && (
-        <>
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-fg-muted">
-            <ProjectStatusMark status={project.status} />
-            <span
-              className="inline-flex items-center gap-1 whitespace-nowrap"
-              title={`${formatDate(project.startDate)} → ${formatDate(project.endDate)}`}
-            >
-              <CalendarRange className="h-3 w-3 shrink-0" aria-hidden="true" />
-              {projectPeriod(project)}
-            </span>
-            {project.owner && (
-              <span className="flex min-w-0 items-center gap-1">
-                <UserRound className="h-3 w-3 shrink-0" aria-hidden="true" />
-                <span className="sr-only">responsabile </span>
-                <span className="truncate">
-                  <Highlight text={project.owner} />
-                </span>
-              </span>
-            )}
-          </span>
-          {project.description && (
-            <span
-              style={clampLines(descriptionLines)}
-              className="text-xs whitespace-pre-line text-fg-muted"
-              title={project.description}
-            >
-              <Highlight text={project.description} />
-            </span>
-          )}
-          {mainFields.length > 0 && (
-            <span className="mt-1 flex flex-col gap-1">
-              {mainFields.map((field) => (
-                <FieldValues key={field.id} project={project} field={field} />
-              ))}
-            </span>
-          )}
-        </>
-      )}
-    </>
+    <span
+      aria-hidden="true"
+      title={label ?? undefined}
+      style={{
+        ...(colorId ? taskColorStyle(colorId) : undefined),
+        writingMode: 'vertical-rl',
+        transform: 'rotate(180deg)',
+      }}
+      className={`absolute top-1 bottom-1 left-4 block w-4 overflow-hidden rounded-xs border text-center text-xs leading-4 font-bold text-ellipsis whitespace-nowrap ${
+        colorId ? '' : 'border-line-strong bg-surface'
+      }`}
+    >
+      {label}
+    </span>
   );
 }
 
 /**
  * The rows of one project, one, two or three: the same choice as «Informazioni visibili» at the
- * bottom, for this project alone. The choice of the roadmap is not an exception.
+ * top, for this project alone. The choice of the timeline is not an exception.
  */
 function LevelButtons({
   title,
@@ -164,8 +107,7 @@ function LevelButtons({
     <span
       role="group"
       aria-label={`Righe di «${title}»`}
-      // On a phone the column is narrow: the buttons follow the title instead of floating beside it.
-      className="mt-0.5 flex items-center gap-0.5 self-end rounded-md border border-line bg-surface p-px opacity-70 transition-opacity group-hover/row:opacity-100 hover:opacity-100 focus-within:opacity-100 sm:absolute sm:top-1 sm:right-1 sm:mt-0"
+      className="absolute top-1 right-1 flex items-center gap-0.5 rounded-md border border-line bg-surface p-px opacity-0 transition-opacity group-hover/row:opacity-100 hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-70"
     >
       {DETAIL_LEVELS.map((option) => {
         const Icon = option.icon;
@@ -199,13 +141,14 @@ function LevelButtons({
 }
 
 export interface ProjectRowProps {
-  project: ProjectWithEnd;
+  project: ProjectOfDay<ProjectWithEnd>;
+  today: string;
   span: ProjectSpan;
   /** The bars of the work of the project, in the order of the work. */
   work: WorkItem[];
   /** The assignments of the project, to open the window of one. */
   assignments: Assignment[];
-  /** How much this row shows, and what the roadmap shows: the buttons of the row mark its own choice. */
+  /** How much this row shows, and what the timeline shows: the buttons of the row mark its own choice. */
   level: DetailLevel;
   defaultLevel: DetailLevel;
   teamLevelAvailable: boolean;
@@ -219,7 +162,10 @@ export interface ProjectRowProps {
   oneLineTitles: boolean;
   searching: boolean;
   config: RoadmapConfig;
-  groupBy: ProjectField | null;
+  /** The field that colors the projects: its value is the tab of the row; null with free colors. */
+  colorField: ProjectField | null;
+  /** The card with everything about the project, on the cell of the names. */
+  card: ProjectCardTools;
   projectDrag: ProjectDrag | null;
   workDrag: WorkDrag | null;
   editing: Editing | null;
@@ -257,13 +203,15 @@ export interface ProjectRowProps {
 }
 
 /**
- * The row of a project: its name and what describes it in the column, its bar over the days with
- * the hard deadline as a dashed red line, and at the "Team" level a row for each bar of the work,
- * the people in the color of their team and the contingency in grey, with a row that adds a
- * person.
+ * The row of a project: in the column, the tab with its size, the shape of its state and its
+ * title, and under them the teams at work, two lines and no more, every row of a level the same
+ * height, with everything else in the card that opens on the cell; its bar over the days, with
+ * the hard deadline as a dashed red line; at the "Team" level a row for each bar of the work,
+ * the people in the color of their team and the contingency in grey, with a row that adds a person.
  */
 export function ProjectRow({
   project,
+  today,
   span,
   work,
   assignments,
@@ -280,7 +228,8 @@ export function ProjectRow({
   oneLineTitles,
   searching,
   config,
-  groupBy,
+  colorField,
+  card,
   projectDrag,
   workDrag,
   editing,
@@ -310,20 +259,29 @@ export function ProjectRow({
   onAddMilestone,
 }: ProjectRowProps) {
   const formatDate = useFormatDate();
+  const cellRef = useRef<HTMLDivElement>(null);
   // Stable, so that the memoized cells of the row are not redrawn by every drag.
   const addNoteAt = useStableCallback((date: string) => onAddMilestone?.(date));
   const noteTitle = useStableCallback(
     (date: string) => `Nuova nota sulla timeline il ${formatDate(date)}`,
   );
-  const { barHeight, assignmentHeight, rowPadding, laneHeight } = metrics;
+  const { barHeight, assignmentHeight, rowPadding, cellPadding, lineHeight } = metrics;
   const shown = projectDrag?.project.id === project.id ? draggedProject(projectDrag) : project;
   const placed = placeTasks([shown], range).placed[0];
   const people = level === 'team' ? work : [];
   const rows = 1 + people.length + (level === 'team' && !searching ? 1 : 0);
-  const height = projectBarHeight(rendering, barHeight, laneHeight, work.length);
-  const projectRowHeight = height + rowPadding * 2;
+  // The bar and its band, and the lines of the column: the row takes the taller, the same for
+  // every project at the level.
+  const band = WORK_BAND[level];
+  const height = projectBarHeight(rendering, barHeight, band);
+  const lines = level === 'titles' ? 1 : 2;
+  const projectRowHeight = Math.max(height + rowPadding * 2, lines * lineHeight + cellPadding * 2);
   const personRowHeight = assignmentHeight + rowPadding;
   const colorId = projectColorOf(project, config);
+  const sizeValue = colorField ? coloredValueOf(project, colorField) : null;
+  const tabLabel = colorField ? (sizeValue?.label ?? null) : null;
+  const tabColor = colorField ? (sizeValue?.colorId ?? null) : colorId;
+  const teams = teamsOf(work);
   const deadlineLeft =
     project.deadline && project.deadline >= range.start && project.deadline <= range.end
       ? (diffDays(range.start, project.deadline) + 1) * dayWidth
@@ -333,12 +291,15 @@ export function ProjectRow({
   const isDragged = (item: WorkItem) =>
     workDrag?.item.id === item.id && workDrag.item.kind === item.kind;
   const isEdited = (item: WorkItem) => editing?.kind === item.kind && editing.id === item.id;
+  const trigger = card.triggerProps(project);
+  const isBar = (target: EventTarget) =>
+    target instanceof HTMLElement && target.id === projectBarId(project.id);
 
   const dropLine = dropBefore ? 'top-0' : dropAfter ? 'bottom-0' : null;
 
   return (
     <div
-      className={`relative grid border-b border-line ${rowDragging ? 'opacity-50' : ''}`}
+      className={`group/row relative grid border-b border-line ${rowDragging ? 'opacity-50' : ''}`}
       style={ROW_STYLE}
       {...dragTarget}
     >
@@ -356,6 +317,11 @@ export function ProjectRow({
           columns={columns}
           onAdd={onAddMilestone ? addNoteAt : undefined}
           addTitle={noteTitle}
+        />
+        {/* The row under the mouse, name and days, so that a bar is matched to its project. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-link/5 opacity-0 transition-opacity group-hover/row:opacity-100"
         />
         {todayOffset !== null && (
           <div
@@ -386,11 +352,19 @@ export function ProjectRow({
         )}
       </div>
 
+      {/* The cell of the names: the mouse resting on it, or a tap on its background, opens the card. */}
       <div
-        className={`${LABEL_CELL} group/row flex flex-col justify-center gap-0.5 bg-surface-muted pl-5`}
-        style={{ gridColumn: 1, gridRow: 1, minHeight: projectRowHeight }}
+        ref={cellRef}
+        // The grip and the tab take the left of the cell at every density.
+        className={`${LABEL_CELL} flex flex-col justify-center overflow-hidden bg-surface-muted pr-2 pl-9 transition-colors in-data-compact:pl-9 group-hover/row:bg-surface-strong`}
+        style={{ gridColumn: 1, gridRow: 1, height: projectRowHeight }}
         draggable
         {...dragSource}
+        onPointerEnter={trigger.onPointerEnter}
+        onPointerLeave={trigger.onPointerLeave}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) trigger.onClick(event);
+        }}
       >
         {/* The grip says the row can be dragged; the keys and the window move it as well. */}
         <span
@@ -400,14 +374,56 @@ export function ProjectRow({
         >
           <GripVertical className="h-3.5 w-3.5" />
         </span>
-        <ProjectInfo
-          project={project}
-          level={level}
-          fields={config.fields}
-          hiddenFieldId={groupBy?.id}
-          descriptionLines={metrics.descriptionLines}
-          onOpen={onOpen}
-        />
+        <SizeTab label={tabLabel} colorId={tabColor} />
+        {/*
+          Out of the tab order: the bar is the project for the keyboard. A click opens the
+          project, as on the bar, and brings the bar into view behind the window: it may be far
+          in the past or in the future. The room on the right is for the buttons of the rows.
+        */}
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => {
+            showBar(project.id);
+            onOpen();
+          }}
+          title="Apri il progetto"
+          className="flex max-w-full min-w-0 cursor-pointer items-center gap-1 text-left text-xs leading-snug font-bold hover:underline sm:pr-[72px]"
+        >
+          <ProjectStatusMark status={project.status} iconOnly />
+          <span className="truncate">
+            <Highlight text={project.title} />
+          </span>
+          {colorField && sizeValue && (
+            <span className="sr-only">
+              , {colorField.label} {sizeValue.label}
+            </span>
+          )}
+        </button>
+        {level !== 'titles' && (
+          <span
+            title={teams.map((team) => team.name).join(', ') || undefined}
+            className="block overflow-hidden text-xs leading-snug text-ellipsis whitespace-nowrap text-fg-muted"
+          >
+            {teams.length > 0 && <span className="sr-only">Team: </span>}
+            {teams.map((team, index) => (
+              <span key={team.id} className="inline-flex items-center gap-1">
+                {index > 0 && (
+                  <span className="mx-0.5 opacity-60" aria-hidden="true">
+                    ·
+                  </span>
+                )}
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-2 w-2 shrink-0 rounded-full border border-line-strong"
+                  style={{ backgroundColor: `var(--rb-task-${team.colorId}-border)` }}
+                />
+                {team.tag}
+              </span>
+            ))}
+            {teams.length === 0 && ' '}
+          </span>
+        )}
         <LevelButtons
           title={project.title}
           level={level}
@@ -418,7 +434,14 @@ export function ProjectRow({
       </div>
       <div
         className="pointer-events-none relative"
-        style={{ gridColumn: 2, gridRow: 1, minHeight: projectRowHeight }}
+        style={{ gridColumn: 2, gridRow: 1, height: projectRowHeight }}
+        // The focus on the bar opens the card on the cell of the names, as the mouse does.
+        onFocus={(event) => {
+          if (isBar(event.target) && cellRef.current) card.open(project, cellRef.current);
+        }}
+        onBlur={(event) => {
+          if (isBar(event.target)) card.close();
+        }}
       >
         {placed && (
           <ProjectBar
@@ -432,7 +455,7 @@ export function ProjectRow({
             top={`calc(50% - ${height / 2}px)`}
             titleHeight={barHeight}
             height={height}
-            laneHeight={laneHeight}
+            band={band}
             resizableStart={work.length === 0}
             overflowTitle={oneLineTitles}
             dragging={projectDrag?.project.id === project.id}
@@ -455,6 +478,16 @@ export function ProjectRow({
           top="50%"
           tools={milestoneTools}
         />
+        {project.statusChange && todayOffset !== null && (
+          <StatusChangeSign
+            project={project}
+            change={project.statusChange}
+            today={today}
+            left={todayOffset}
+            onConfirm={() => onChange({ status: project.statusChange!.to })}
+            onOpen={onOpen}
+          />
+        )}
         {placed && editing?.kind === 'project' && editing.id === project.id && (
           <DaysEditor
             value={project.manDays ?? 0}

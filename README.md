@@ -7,13 +7,19 @@ giornalieri.
 
 ## Funzionalità
 
-- Tre aree, Notes, Next Releases e Roadmap: con le schede in fondo alla pagina («All» le mostra
-  tutte, le altre una sola) oppure, a scelta nelle Impostazioni, con i pulsanti nell'intestazione
-  che le mostrano e le nascondono.
-- Calendario continuo a corsie, con i mesi uno dopo l'altro, quattro livelli di zoom («Dettaglio»,
+- Le note libere in cima e una sola timeline per i rilasci e i progetti, sugli stessi giorni: il
+  fatturato, le note dei giorni e le note sulla timeline, poi le corsie delle attività (Next
+  Releases) e i progetti (Roadmap), ognuno sotto un'intestazione con i conteggi per stato che si
+  ripiega. Con le schede in fondo alla pagina «All» mostra tutto, «Next Releases» e «Roadmap» la
+  timeline con una parte sola; oppure, a scelta nelle Impostazioni, i pulsanti nell'intestazione
+  mostrano e nascondono le parti. Un solo pulsante «Nuovo» per attività, progetti e note.
+- La timeline scorre dentro la finestra, con mesi, fatturato e giorni sempre in alto e i nomi
+  sempre a sinistra, in una colonna larga quanto si vuole; quattro livelli di zoom («Dettaglio»,
   «Mese», «2 mesi», «Trimestre») più «Mostra N giorni», che riempie la finestra con quanti giorni
-  interi si vogliono, i giorni passati in grigio o nascosti, e bacheca settimanale. A scelta,
-  titoli interi su una riga che escono dalle loro barre, alte una riga.
+  interi si vogliono, i giorni passati in grigio o nascosti, la colonna di oggi segnata, e bacheca
+  settimanale delle attività. Tre livelli di dettaglio per tutte le righe: «Solo titoli», con i
+  titoli interi su una riga, «Info principali» e «Team». I comandi stanno in alto, con un
+  suggerimento al passaggio, e «?» apre l'aiuto con gesti, tasti e legenda.
 - Testo di note e calendari regolabile con le lenti, dal 75% al 175%, e vista compatta che mostra
   più testo in ogni casella.
 - Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e
@@ -23,12 +29,15 @@ giornalieri.
 - Note libere sotto la ricerca, una dopo l'altra: titolo, testo, colore, un promemoria che compare
   il giorno scelto e un ordine che si cambia trascinandole. In un'istanza condivisa ognuno vede le
   sue, può guardare quelle di tutti, raggruppate per autore, e può tenerne alcune private.
-- Roadmap: i progetti passati, in corso e futuri su una linea del tempo con le scale del
-  calendario, con stato, responsabile, descrizione e campi personalizzati (link a Jira, Figma e
-  Confluence, stime…), i cui valori compaiono come etichette colorate; la barra di un progetto
-  prende il colore della sua dimensione, o un colore libero a scelta nelle Impostazioni, e i
-  progetti si raggruppano per un campo e si ordinano a mano o per inizio, fine, deadline, stato o
-  titolo. Ogni progetto ha il suo team: le persone con i giorni uomo in una tabella che le formule
+- Roadmap: i progetti passati, in corso e futuri, una riga ciascuno con il titolo, lo stato come
+  forma, i team al lavoro e una linguetta con la dimensione; tutto il resto, periodo, giorni uomo,
+  responsabile, hard deadline, descrizione, campi personalizzati (link a Jira, Figma e Confluence,
+  stime…) e persone con i giorni, in una scheda che si apre fermando il mouse sulla riga. Lo stato
+  segue la data di oggi: un progetto pianificato di cui arriva il giorno è in corso, uno di cui
+  passa la fine è completato, e un triangolo sulla colonna di oggi chiede di confermare. La barra
+  di un progetto prende il colore della sua dimensione, o un colore libero a scelta nelle
+  Impostazioni, e i progetti si raggruppano per un campo e si ordinano a mano o per inizio, fine,
+  deadline, stato o titolo. Ogni progetto ha il suo team: le persone con i giorni uomo in una tabella che le formule
   dei team (analisi, test, contingency) riempiono da sole, disposte nel Gantt in parallelo o in
   sequenza, con la fine calcolata dal lavoro, una hard deadline segnata dove il lavoro la supera e
   un avviso qualche giorno prima; la barra mostra il lavoro come lane per persona, come fasi o da
