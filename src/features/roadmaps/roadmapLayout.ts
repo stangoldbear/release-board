@@ -44,9 +44,15 @@ export interface RoadmapMetrics {
   dayWidth: number;
   /** One line of text in the bar of a project, and its border. */
   barHeight: number;
-  /** The bar of a person under the project's: one line of text and its border. */
+  /** The same line with less room around the text, for the titles alone. */
+  tightBarHeight: number;
+  /** One line of text and room around it: the rows of the notes on the timeline and of a group. */
   assignmentHeight: number;
-  /** A lane of the work inside the bar of a project. */
+  /** The row of a person under the project's, at the Team level: one line of text, no more. */
+  personRowHeight: number;
+  /** The bar of the work of a person in that row, almost as tall: the bars of a team nearly touch. */
+  workBarHeight: number;
+  /** A lane of the work inside the bar of a project with the name of its person: a line of text. */
   laneHeight: number;
   /** Space above and below the bars of a row. */
   rowPadding: number;
@@ -71,8 +77,11 @@ export function roadmapMetrics(
   return {
     dayWidth,
     barHeight: Math.round(24 * textScale) + 4,
+    tightBarHeight: Math.round(20 * textScale) + 4,
     assignmentHeight: Math.round(line) + 8,
-    laneHeight: compact ? 6 : 8,
+    personRowHeight: Math.round(line),
+    workBarHeight: Math.round(line) - 2,
+    laneHeight: Math.round(12 * textScale) + (compact ? 2 : 4),
     rowPadding: Math.round((compact ? 3 : 6) * spacing),
     lineHeight: Math.round(line),
     cellPadding: compact ? 4 : 8,

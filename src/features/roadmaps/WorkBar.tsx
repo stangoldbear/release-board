@@ -1,14 +1,12 @@
 import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react';
-import { TreePalm, TriangleAlert } from 'lucide-react';
 import { describeEffort, moveAssignment } from '../../domain/assignments';
 import type { WorkSchedule } from '../../domain/assignments';
 import type { DateRange } from '../../domain/schedule';
 import type { Assignment } from '../../domain/types';
 import { useDateFormat, useFormatDate } from '../../shared/dateFormat';
-import { taskColorStyle } from '../../themes';
 import { diffDays, formatDate } from '../../utils/dateUtils';
 import type { DateFormat } from '../../utils/dateUtils';
-import { formatManDays } from './barRendering';
+import { Tooltip } from '../../shared/ui/Tooltip';
 import type { WorkItem } from './barRendering';
 import { useClickOrDoubleClick } from './useClickOrDoubleClick';
 import type { WorkChanges, WorkDragKind } from './useWorkDrag';
@@ -23,12 +21,8 @@ export function workBarId(item: Pick<WorkItem, 'kind' | 'id'>): string {
   return item.kind === 'assignment' ? assignmentBarId(item.id) : `contingency-rect-${item.id}`;
 }
 
-/** A hatched day away is wide enough for its icon from this width. */
-const MIN_ICON_WIDTH = 28;
 /** Bars narrower than this have no handle on their edge: the whole bar moves. */
 const MIN_RESIZABLE_WIDTH = 24;
-/** Bars narrower than this have no triangle beside their words; their name still says they are late. */
-const MIN_MARK_WIDTH = 72;
 
 /**
  * Red and pink oblique stripes over the days a person is away. Drawn with the danger colors,
@@ -64,9 +58,10 @@ interface WorkBarProps {
   /** The days the roadmap holds: the bar is cut to them. */
   range: DateRange;
   dayWidth: number;
+  /** The row of the person: the bar takes the clicks and the drags over all of it. */
   height: number;
-  /** The words on one line, out of the bar when longer, rather than cut. */
-  overflowTitle?: boolean;
+  /** The bar that shows, across the middle of the row. */
+  barHeight: number;
   dragging: boolean;
   /** Id of the text that explains the keyboard commands. */
   describedBy: string;
@@ -80,17 +75,20 @@ interface WorkBarProps {
 }
 
 /**
- * The work of a person on a project, in the color of their team, or the contingency of the
- * project in grey, from the first working day to the last, with the days away hatched. Click or
- * Enter opens it, a double click types its days; with a mouse it moves by dragging and its right
- * edge changes the days; the arrows move its start by a day, and with Shift by a week.
+ * The work of a person on a project, a bar in the color of their team almost as tall as its row,
+ * so that the bars of a team nearly touch, or the contingency of the project in grey, from the
+ * first working day to the last, with the days away hatched; name and days are beside it in the
+ * column, and over it in a tip on the mouse and the focus. The whole height of the row takes the
+ * pointer. Click or Enter opens it, a double click types its days; with a mouse it moves by
+ * dragging and its right edge, marked by a grip, changes the days; the arrows move its start by a
+ * day, and with Shift by a week.
  */
 export function WorkBar({
   item,
   range,
   dayWidth,
   height,
-  overflowTitle = false,
+  barHeight,
   dragging,
   describedBy,
   ignoreClick,
@@ -122,83 +120,80 @@ export function WorkBar({
     if (startDate !== item.startDate) onChange({ startDate });
   };
 
+  // The color of the team fills the bar, and its text color draws the edge, which keeps the bar
+  // in sight on the surface in every theme.
+  const fill = item.colorId
+    ? {
+        backgroundColor: `var(--rb-task-${item.colorId}-border)`,
+        borderColor: `var(--rb-task-${item.colorId}-fg)`,
+      }
+    : undefined;
+
   return (
-    <button
-      type="button"
-      id={workBarId(item)}
-      aria-label={`${item.name}: ${words}`}
-      aria-describedby={describedBy}
-      title={`${item.name}\n${words}`}
-      onPointerDown={(event) => {
-        clicks.onPointerDown(event);
-        onPointerDown(event, 'move');
-      }}
-      onClick={clicks.onClick}
-      onDoubleClick={clicks.onDoubleClick}
-      onKeyDown={handleKeyDown}
-      style={{
-        ...(item.colorId ? taskColorStyle(item.colorId) : undefined),
-        left: first * dayWidth + 1,
-        width: Math.max(width, 6),
-        top: `calc(50% - ${height / 2}px)`,
-        height,
-      }}
-      className={`group/work pointer-events-auto absolute flex cursor-grab items-center border-2 text-left text-xs active:cursor-grabbing ${
-        overflowTitle ? 'overflow-visible' : 'overflow-clip'
-      } ${
-        item.colorId ? '' : 'border-line-strong bg-surface-strong text-fg'
-      } ${continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'} ${
-        continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'
-      } ${dragging ? 'z-[1000] opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'}`}
-    >
-      {schedule.absences.map((absence) => {
-        const from = Math.max(first, diffDays(range.start, absence.start));
-        const to = Math.min(last, diffDays(range.start, absence.end));
-        const stripeWidth = (to - from + 1) * dayWidth;
-        return (
-          <span
-            key={absence.start}
-            aria-hidden="true"
-            title={`Assente dal ${formatDate(absence.start)} al ${formatDate(absence.end)}`}
-            style={{ ...ABSENCE_STRIPES, left: (from - first) * dayWidth - 1, width: stripeWidth }}
-            className="absolute inset-y-0 flex items-center justify-center text-danger"
-          >
-            {stripeWidth >= MIN_ICON_WIDTH && (
-              <span className="rounded-full bg-surface p-0.5">
-                <TreePalm className="h-3 w-3" />
-              </span>
-            )}
-          </span>
-        );
-      })}
-      {/* The words stay in view while the start of a long bar scrolls past the left edge. */}
-      {/* One line cut as a whole: a narrow bar shows the start of the name, not a clipped glyph. */}
-      <span
-        className={`sticky left-[calc(var(--gantt-label-width)+6px)] z-10 block px-1.5 in-data-compact:px-1 ${
-          overflowTitle ? 'max-w-none whitespace-nowrap' : 'max-w-full min-w-0 truncate'
+    <Tooltip text={`${item.name}: ${words}`}>
+      <button
+        type="button"
+        id={workBarId(item)}
+        aria-label={`${item.name}: ${words}`}
+        aria-describedby={describedBy}
+        onPointerDown={(event) => {
+          clicks.onPointerDown(event);
+          onPointerDown(event, 'move');
+        }}
+        onClick={clicks.onClick}
+        onDoubleClick={clicks.onDoubleClick}
+        onKeyDown={handleKeyDown}
+        style={{
+          left: first * dayWidth + 1,
+          width: Math.max(width, 6),
+          top: `calc(50% - ${height / 2}px)`,
+          height,
+        }}
+        className={`group/work pointer-events-auto absolute cursor-grab text-fg active:cursor-grabbing ${
+          dragging ? 'z-[1000]' : 'z-10'
         }`}
       >
-        <span className="font-semibold">{item.name}</span>
-        <span className="tabular-nums"> · {formatManDays(item.manDays)}</span>
-      </span>
-      {item.late && width >= MIN_MARK_WIDTH && (
         <span
           aria-hidden="true"
-          title="Oltre la hard deadline"
-          className="absolute top-1/2 right-3 z-10 -translate-y-1/2 rounded-full bg-surface p-px text-danger"
+          style={{ ...fill, height: barHeight }}
+          className={`absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-clip border ${
+            item.colorId ? '' : 'border-fg-muted bg-line-strong'
+          } ${continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'} ${
+            continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'
+          } ${
+            dragging
+              ? 'opacity-90 shadow-xl ring-2 ring-fg'
+              : 'shadow-xs group-hover/work:ring-2 group-hover/work:ring-link/40'
+          }`}
         >
-          <TriangleAlert className="h-3 w-3" />
+          {schedule.absences.map((absence) => {
+            const from = Math.max(first, diffDays(range.start, absence.start));
+            const to = Math.min(last, diffDays(range.start, absence.end));
+            return (
+              <span
+                key={absence.start}
+                title={`Assente dal ${formatDate(absence.start)} al ${formatDate(absence.end)}`}
+                style={{
+                  ...ABSENCE_STRIPES,
+                  left: (from - first) * dayWidth - 1,
+                  width: (to - from + 1) * dayWidth,
+                }}
+                className="absolute inset-y-0"
+              />
+            );
+          })}
         </span>
-      )}
-      {resizable && !continuesAfter && (
-        <span
-          aria-hidden="true"
-          onPointerDown={(event) => onPointerDown(event, 'end')}
-          className="absolute inset-y-0 right-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center hover:bg-current/15"
-        >
-          <span className="h-3 w-0.5 rounded-full bg-current opacity-0 group-hover/work:opacity-40" />
-        </span>
-      )}
-    </button>
+        {resizable && !continuesAfter && (
+          <span
+            aria-hidden="true"
+            onPointerDown={(event) => onPointerDown(event, 'end')}
+            className="absolute inset-y-0 right-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center rounded-xs hover:bg-current/15"
+          >
+            {/* The grip that says the edge can be dragged, stronger under the mouse. */}
+            <span className="h-2.5 w-0.5 rounded-full bg-current opacity-50 group-hover/work:opacity-100" />
+          </span>
+        )}
+      </button>
+    </Tooltip>
   );
 }

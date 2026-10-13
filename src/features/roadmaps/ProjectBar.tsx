@@ -1,5 +1,4 @@
 import type { KeyboardEvent, PointerEvent } from 'react';
-import { TriangleAlert } from 'lucide-react';
 import type { TaskColorId } from '../../domain/colors';
 import { PROJECT_STATUS_LABELS } from '../../domain/projects';
 import type { ProjectChanges, ProjectWithEnd } from '../../domain/projects';
@@ -11,15 +10,8 @@ import { CURRENT_RESULT, Highlight, useIsCurrentResult } from '../../shared/ui/H
 import { taskColorStyle } from '../../themes';
 import { diffDays } from '../../utils/dateUtils';
 import type { DragKind } from '../calendar/useTaskDrag';
-import {
-  LANE_GAP,
-  PHASE_STRIP_HEIGHT,
-  fadedParts,
-  formatManDays,
-  laneLayout,
-  phaseSegmentsOf,
-} from './barRendering';
-import type { BarRendering, WorkItem } from './barRendering';
+import { fadedParts, formatManDays } from './barRendering';
+import type { Lanes, WorkItem } from './barRendering';
 import { ProjectStatusMark } from './projectUi';
 import { useClickOrDoubleClick } from './useClickOrDoubleClick';
 
@@ -41,20 +33,20 @@ interface ProjectBarProps {
   /** The project, with its effective end, cut to the days the roadmap holds. */
   placed: PlacedTask<ProjectWithEnd>;
   span: ProjectSpan;
-  /** The bars of the work, in the order of the work: lanes or phases inside the bar. */
+  /** The bars of the work, in the order of the work: a lane each inside the bar. */
   work: WorkItem[];
   /** The color of the bar: from the value of a field, or the project's own. */
   colorId: TaskColorId;
-  rendering: BarRendering;
   range: DateRange;
   dayWidth: number;
   /** Pixels from the top of the row, or a CSS length such as one that centers the bar. */
   top: number | string;
-  /** The line of the title, and the whole bar: taller with the lanes or the phases inside. */
+  /** The line of the title, and the whole bar: taller with the lanes inside. */
   titleHeight: number;
-  height: number;
-  /** The band under the title that the lanes share, or the strip of the phases fills; 0 for none. */
-  band: number;
+  /** Pixels, or a CSS length such as one that reaches down around the rows of the people. */
+  height: number | string;
+  /** The lanes under the title, one for each bar of the work; null for none. */
+  lanes: Lanes | null;
   /** The start can be dragged: only when no bar of the team sets where the work begins. */
   resizableStart: boolean;
   /** The title on one line, out of the bar when longer, rather than cut. */
@@ -77,23 +69,23 @@ interface ProjectBarProps {
 
 /**
  * A project on the roadmap, from its first day to its last: solid where its team works, faded
- * and dashed where nobody does, and, by the rendering chosen, with a lane for each bar of the work
- * or a strip with its phases under the title. Click or Enter opens it; with a mouse it moves by
- * dragging, with the work of its team, and its edges change start and planned end; the arrows
- * move it by a week, and with Shift they move its planned end.
+ * and dashed where nobody does, with a lane for each bar of the work under the title, with the
+ * name of its person when the lane is a line of text tall. Click or Enter opens it; with a mouse
+ * it moves by dragging its title, with the work of its team, and its edges change start and
+ * planned end; the lanes do not move on their own. The arrows move it by a week, and with Shift
+ * they move its planned end.
  */
 export function ProjectBar({
   placed,
   span,
   work,
   colorId,
-  rendering,
   range,
   dayWidth,
   top,
   titleHeight,
   height,
-  band,
+  lanes,
   resizableStart,
   overflowTitle,
   dragging,
@@ -116,8 +108,6 @@ export function ProjectBar({
   // Inside the bar, from its left border: a day of the roadmap to pixels.
   const offset = (day: string) => (diffDays(range.start, day) - first) * dayWidth - 1;
   const spanWidth = (start: string, end: string) => (diffDays(start, end) + 1) * dayWidth - 2;
-  const inside = rendering !== 'rows' && work.length > 0 && band > 0 ? rendering : null;
-  const lanes = laneLayout(band, work.length);
   const people = work.map((item) => `${item.name} · ${formatManDays(item.manDays)}`);
 
   const handleKeyDown = (event: KeyboardEvent) => {
@@ -144,7 +134,7 @@ export function ProjectBar({
         edge === 'start' ? 'left-0' : 'right-0'
       }`}
     >
-      <span className="h-3 w-0.5 rounded-full bg-current opacity-0 group-hover/bar:opacity-40" />
+      <span className="h-3 w-0.5 rounded-full bg-current opacity-0 group-hover/bar:opacity-70" />
     </span>
   );
 
@@ -226,12 +216,14 @@ export function ProjectBar({
         </span>
         {days && <span className="shrink-0 font-normal tabular-nums opacity-80">· {days}</span>}
       </span>
-      {inside === 'lanes' &&
+      {lanes &&
         work.map((item, index) => (
           <span
             key={`${item.kind}-${item.id}`}
             aria-hidden="true"
             title={`${item.name} · ${formatManDays(item.manDays)}`}
+            // A lane is part of the picture of the project: it does not move on its own.
+            onPointerDown={(event) => event.stopPropagation()}
             style={{
               ...(item.colorId ? taskColorStyle(item.colorId) : undefined),
               left: offset(item.schedule.start),
@@ -239,62 +231,19 @@ export function ProjectBar({
               top: titleHeight - 2 + index * (lanes.height + lanes.gap),
               height: lanes.height,
             }}
-            className={`pointer-events-auto absolute z-[1] rounded-[2px] border ${
-              item.colorId ? '' : 'border-line-strong bg-surface-strong'
-            }`}
-          />
-        ))}
-      {inside === 'phases' &&
-        phaseSegmentsOf(work).map((segment) => (
-          <span
-            key={segment.phase}
-            aria-hidden="true"
-            title={`${segment.label} · ${formatManDays(segment.manDays)}${
-              segment.items.length > 1
-                ? `\n${segment.items.map((item) => `${item.name} · ${formatManDays(item.manDays)}`).join('\n')}`
-                : ''
-            }`}
-            style={{
-              ...(segment.colorId ? taskColorStyle(segment.colorId) : undefined),
-              left: offset(segment.start),
-              width: spanWidth(segment.start, segment.end),
-              top: titleHeight - 2 + LANE_GAP,
-              height: band,
-            }}
-            className={`pointer-events-auto absolute z-[1] flex items-start overflow-clip rounded-[2px] border px-1 text-xs leading-none font-semibold whitespace-nowrap ${
-              segment.colorId ? '' : 'border-line-strong bg-surface-strong text-fg'
+            className={`pointer-events-auto absolute z-[1] flex cursor-default items-center overflow-clip rounded-[2px] border text-xs leading-none font-semibold whitespace-nowrap ${
+              item.colorId ? '' : 'border-line-strong bg-surface-strong text-fg'
             }`}
           >
-            {band >= PHASE_STRIP_HEIGHT && (
-              <span className="sticky left-[calc(var(--gantt-label-width)+4px)] mt-px">
-                {segment.label} {formatManDays(segment.manDays)}
+            {lanes.labeled && (
+              // In view while the start of a long lane scrolls past the column of the names.
+              <span className="sticky left-[calc(var(--gantt-label-width)+4px)] min-w-0 truncate px-1">
+                {item.name}
+                <span className="font-normal tabular-nums"> · {formatManDays(item.manDays)}</span>
               </span>
             )}
-            {/* More bars in the phase: a thin line each at the bottom says who finishes first. */}
-            {segment.items.length > 1 &&
-              segment.items.map((item, index) => (
-                <span
-                  key={`${item.kind}-${item.id}`}
-                  style={{
-                    ...(item.colorId ? taskColorStyle(item.colorId) : undefined),
-                    left: offset(item.schedule.start) - offset(segment.start) - 1,
-                    width: spanWidth(item.schedule.start, item.schedule.end),
-                    bottom: index,
-                  }}
-                  className="absolute h-px border-b border-current opacity-70"
-                />
-              ))}
           </span>
         ))}
-      {span.late && (
-        <span
-          aria-hidden="true"
-          title="Oltre la hard deadline"
-          className="absolute top-1 right-3 z-10 rounded-full bg-surface p-px text-danger"
-        >
-          <TriangleAlert className="h-3 w-3" />
-        </span>
-      )}
       {resizable && !continuesAfter && handle('end')}
     </button>
   );

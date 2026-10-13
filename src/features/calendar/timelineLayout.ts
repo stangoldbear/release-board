@@ -25,12 +25,21 @@ export const LABEL_CELL =
 export const LABEL_CELL_SELECTOR = '.sticky.left-0';
 
 /**
- * The scrolling part of a timeline: its own stacking context, so that the bars (by closeness to
- * today, then the one under the pointer, the result in view and the dragged one) and the sticky
- * names stack among themselves, under the page's header.
+ * A timeline: its own stacking context, so that the bars (by closeness to today, then the one
+ * under the pointer, the result in view and the dragged one), the sticky names and the rows at the
+ * top stack among themselves, under the page's header. A pinch zooms it rather than the page. It
+ * does not scroll up and down: the page does.
+ */
+export const TIMELINE_FRAME = 'relative isolate w-full touch-pan-x touch-pan-y';
+
+/**
+ * A part of a timeline that scrolls sideways through the days, without a scroll bar of its own:
+ * the timeline has one at the bottom of the window. Relative, so that hidden labels placed
+ * absolutely stay inside it instead of widening the page. No scroll anchoring: the timeline keeps
+ * its place itself when it grows at the start.
  */
 export const TIMELINE_SCROLLER =
-  'relative isolate w-full touch-pan-x touch-pan-y overflow-x-auto overflow-y-auto [overflow-anchor:none]';
+  'relative overflow-x-auto overflow-y-hidden [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 /** Height of a task bar with text of the normal size: two lines over days, one over weeks. */
 const BAR_HEIGHT = { day: 46, week: 28 };

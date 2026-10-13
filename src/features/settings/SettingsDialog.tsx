@@ -16,7 +16,6 @@ import { BetaSection } from './BetaSection';
 import { InstanceSection } from './InstanceSection';
 import { MembersSection } from './MembersSection';
 import { RoadmapSettingsSection } from './RoadmapSettingsSection';
-import type { BarRendering } from '../roadmaps/barRendering';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 
 interface SettingsDialogProps {
@@ -40,8 +39,6 @@ interface SettingsDialogProps {
   roadmapUnavailable: boolean;
   roadmapActions: RoadmapConfigActions;
   /** How the roadmap draws the work of the team in the bar of a project, in this browser. */
-  barRendering: BarRendering;
-  onChangeBarRendering: (rendering: BarRendering) => void;
   /** Opens the page with every change to the plan. */
   onOpenHistory: () => void;
   onClose: () => void;
@@ -64,8 +61,6 @@ export function SettingsDialog({
   onToggleBetaFeatures,
   roadmapUnavailable,
   roadmapActions,
-  barRendering,
-  onChangeBarRendering,
   onOpenHistory,
   onClose,
 }: SettingsDialogProps) {
@@ -118,8 +113,6 @@ export function SettingsDialog({
           config={plan.roadmap}
           unavailable={roadmapUnavailable}
           actions={roadmapActions}
-          barRendering={barRendering}
-          onChangeBarRendering={onChangeBarRendering}
         />
         <BackupSection
           plan={plan}

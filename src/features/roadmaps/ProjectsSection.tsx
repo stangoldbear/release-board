@@ -27,7 +27,7 @@ import { DragHint } from '../calendar/DragHint';
 import { LABEL_CELL } from '../calendar/timelineLayout';
 import type { TimelineGeometry } from '../timeline/TimelineFrame';
 import { formatManDays, workItemsOf } from './barRendering';
-import type { BarRendering, WorkItem } from './barRendering';
+import type { WorkItem } from './barRendering';
 import { FieldTag } from './fieldUi';
 import type { MilestoneTools } from './MilestoneDiamond';
 import { projectBarId } from './ProjectBar';
@@ -53,15 +53,11 @@ export interface ProjectsSectionProps {
   levelOf: (projectId: string) => DetailLevel;
   /** The published rules know the assignments: the Team level can be chosen. */
   teamLevelAvailable: boolean;
-  /** How the work of the team is drawn in the bar of a project. */
-  rendering: BarRendering;
   /** The custom fields, the teams and the people, to show the main fields and the assignments. */
   config: RoadmapConfig;
   assignments: Assignment[];
   /** While searching, the rows are those found, and no row adds a project. */
   searching: boolean;
-  /** Titles on one line, out of their bars when longer, rather than cut. */
-  oneLineTitles: boolean;
   /** A field that groups: the projects with the same value go together, under its tag. */
   groupBy: ProjectField | null;
   metrics: RoadmapMetrics;
@@ -157,11 +153,9 @@ export function ProjectsSection({
   level,
   levelOf,
   teamLevelAvailable,
-  rendering,
   config,
   assignments,
   searching,
-  oneLineTitles,
   groupBy,
   metrics,
   onOpen,
@@ -327,14 +321,12 @@ export function ProjectsSection({
                   level={levelOf(project.id)}
                   defaultLevel={level}
                   teamLevelAvailable={teamLevelAvailable}
-                  rendering={rendering}
                   columns={columns}
                   totalWidth={totalWidth}
                   todayOffset={todayOffset}
                   range={range}
                   dayWidth={dayWidth}
                   metrics={metrics}
-                  oneLineTitles={oneLineTitles}
                   searching={searching}
                   config={config}
                   colorField={colorField}

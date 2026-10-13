@@ -12,12 +12,14 @@ import type { CalendarJump } from '../calendar/calendarView';
 import { MetricsRow } from '../calendar/MetricsRow';
 import { DayHeaderRow, MonthBand } from '../calendar/TimelineHeader';
 import {
+  TIMELINE_FRAME,
   TIMELINE_SCROLLER,
   buildColumns,
   columnUnit,
   timelineMetrics,
 } from '../calendar/timelineLayout';
 import type { Column } from '../calendar/timelineLayout';
+import { useLinkedScroll } from '../calendar/useLinkedScroll';
 import { useTimelineScroll } from '../calendar/useTimelineScroll';
 import { useViewportWidth } from '../calendar/useViewportWidth';
 import { useZoomGestures } from '../calendar/useZoomGestures';
@@ -25,12 +27,6 @@ import { ColumnHandle } from './ColumnHandle';
 
 /** The variable with the height of the rows at the top of the timeline, which stay in view. */
 const HEAD_HEIGHT_VAR = '--timeline-head-height';
-
-/** The variable with the height of the bar above the timeline, set by the area: the frame fits under it. */
-export const TOOLBAR_HEIGHT_VAR = '--timeline-toolbar-height';
-
-/** The least height of the frame: on a short window the page scrolls instead. */
-const MIN_HEIGHT = 320;
 
 /** The days of a timeline as its rows draw them: the same for every section. */
 export interface TimelineGeometry {
@@ -90,12 +86,14 @@ interface TimelineFrameProps {
 }
 
 /**
- * The scrolling part of a timeline: the months, the daily values and the days at the top, and the
- * rows the sections draw under them over the same columns. It scrolls through the days and, no
- * taller than the window leaves it, through the rows, with the rows at the top and the names at
- * the left always in view. It scrolls to the jumps of the view, keeps its place when the zoom
- * changes, reports the days in view and the width of the days, and zooms with Ctrl + wheel and a
- * pinch. Its own stacking context, so that nothing inside passes over the header of the page.
+ * The days of a timeline: the months, the daily values and the days at the top, and the rows the
+ * sections draw under them over the same columns. As tall as its rows: the page scrolls them, with
+ * one scroll bar, while the rows at the top stay in view under the header of the page. The days
+ * scroll sideways together at the top, in the rows and in a scroll bar kept at the bottom of the
+ * window, with the names at the left always in view. It scrolls to the jumps of the view, keeps
+ * its place when the zoom changes, reports the days in view and the width of the days, and zooms
+ * with Ctrl + wheel and a pinch. Its own stacking context, so that nothing inside passes over the
+ * header of the page.
  */
 export function TimelineFrame({
   range,
@@ -116,8 +114,12 @@ export function TimelineFrame({
   compact,
   children,
 }: TimelineFrameProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
+  const headScrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const followers = useMemo(() => [headScrollRef, barRef], []);
   const columns = useMemo(
     () => buildColumns(range, dayWidth, highlightWeekends, today),
     [range, dayWidth, highlightWeekends, today],
@@ -131,8 +133,10 @@ export function TimelineFrame({
   const showDays = useStableCallback(onShowDays);
   const { digitWidth } = timelineMetrics(dayWidth, textScale, compact);
 
-  useZoomGestures(scrollRef, onZoom);
-  useViewportWidth(scrollRef, onResized);
+  // The rows lead: the days at the top and the scroll bar follow them, and lead them in turn.
+  const follow = useLinkedScroll(scrollRef, followers);
+  useZoomGestures(frameRef, onZoom);
+  useViewportWidth(frameRef, onResized);
   useTimelineScroll(scrollRef, {
     range,
     dayWidth,
@@ -140,6 +144,7 @@ export function TimelineFrame({
     openOn: anchor,
     jump,
     onScrolled,
+    follow,
   });
   // An element brought into view stays clear of the rows at the top.
   useRootHeightVar(headRef, HEAD_HEIGHT_VAR);
@@ -155,53 +160,73 @@ export function TimelineFrame({
     onShowDays: showDays,
   };
 
+  const width = `calc(var(--gantt-label-width) + ${totalWidth}px)`;
+
   return (
-    // Relative, so that hidden labels placed absolutely stay inside the scroll area instead of
-    // widening the page. No scroll anchoring: the timeline keeps its place itself when it grows
-    // at the start.
     <div
-      ref={scrollRef}
+      ref={frameRef}
       data-compact={compact || undefined}
       style={
         {
           ...scaledTextStyle(textScale, compact),
           '--gantt-label-width': labelWidth,
-          maxHeight: `max(${MIN_HEIGHT}px, calc(100dvh - var(--header-height, 0px) - var(--tab-bar-height, 0px) - var(${TOOLBAR_HEIGHT_VAR}, 0px) - 0.5rem))`,
-          scrollPaddingTop: `var(${HEAD_HEIGHT_VAR}, 0px)`,
         } as CSSProperties
       }
-      className={TIMELINE_SCROLLER}
+      className={TIMELINE_FRAME}
     >
-      <div style={{ width: `calc(var(--gantt-label-width) + ${totalWidth}px)` }}>
-        {/* The rows at the top stay in view while the rows scroll under them. */}
-        <div ref={headRef} className="sticky top-0 z-[1100] bg-surface">
-          <MonthBand range={range} dayWidth={dayWidth} metrics={metrics} />
-          {metrics && (
-            <MetricsRow
+      {/* The rows at the top stay in view, under the header of the page, while the page scrolls. */}
+      <div
+        ref={headRef}
+        className="sticky top-0 z-[1100] bg-surface sm:top-[var(--header-height,0px)]"
+      >
+        {/* Not a stop of its own for the keyboard, which has the period and its arrows. */}
+        <div ref={headScrollRef} tabIndex={-1} className={TIMELINE_SCROLLER}>
+          <div style={{ width }}>
+            <MonthBand range={range} dayWidth={dayWidth} metrics={metrics} />
+            {metrics && (
+              <MetricsRow
+                columns={columns}
+                metrics={metrics}
+                weekColumns={weekColumns}
+                digitWidth={digitWidth}
+              />
+            )}
+            <DayHeaderRow
               columns={columns}
-              metrics={metrics}
               weekColumns={weekColumns}
-              digitWidth={digitWidth}
+              showMonth={dayWidth >= ZOOM_DAY_WIDTH.detail}
+              onShowDays={showDays}
             />
-          )}
-          <DayHeaderRow
-            columns={columns}
-            weekColumns={weekColumns}
-            showMonth={dayWidth >= ZOOM_DAY_WIDTH.detail}
-            onShowDays={showDays}
-          />
-          {labelResize && (
-            <ColumnHandle
-              width={labelResize.width}
-              min={labelResize.min}
-              max={labelResize.max}
-              scale={textScale}
-              onChange={labelResize.onChange}
-              onReset={labelResize.onReset}
-            />
-          )}
+          </div>
         </div>
-        {children(geometry)}
+        {/* Outside the days, so that it stays on the edge of the column while they scroll. */}
+        {labelResize && (
+          <ColumnHandle
+            width={labelResize.width}
+            min={labelResize.min}
+            max={labelResize.max}
+            scale={textScale}
+            onChange={labelResize.onChange}
+            onReset={labelResize.onReset}
+          />
+        )}
+      </div>
+      {/* An element brought into view in the rows stays clear of the rows at the top. */}
+      <div
+        ref={scrollRef}
+        className={`${TIMELINE_SCROLLER} **:scroll-mt-[var(--timeline-head-height,0px)]`}
+      >
+        <div style={{ width }}>{children(geometry)}</div>
+      </div>
+      {/* The scroll bar of the days, at the bottom of the window while the rows go on below it.
+          The keyboard has the period and its arrows. */}
+      <div
+        ref={barRef}
+        aria-hidden="true"
+        tabIndex={-1}
+        className="sticky bottom-[var(--tab-bar-height,0px)] z-[1100] overflow-x-auto overflow-y-hidden"
+      >
+        <div style={{ width, height: 1 }} />
       </div>
     </div>
   );

@@ -50,11 +50,18 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
           <li>
             Trascina {releases ? "un'attività" : ''}
             {releases && projects ? ', ' : ''}
-            {projects ? 'un progetto' : ''} o una nota per spostarli; dai bordi cambi le date
+            {projects ? 'un progetto, dal titolo,' : ''} o una nota per spostarli; dai bordi cambi
+            le date
             {projects ? ', al livello Team i giorni uomo di una persona' : ''}.
           </li>
           <li>Un clic su un giorno vuoto aggiunge lì; un clic su una barra la apre.</li>
           {projects && <li>Doppio clic su una barra del lavoro per scrivere i giorni uomo.</li>}
+          {projects && (
+            <li>
+              Sulla riga di un progetto, sotto il mouse: le righe da mostrare e, al livello Team,
+              «Aggiungi una persona».
+            </li>
+          )}
           <li>
             <Key>Maiusc</Key> + rotellina scorre i giorni, <Key>Ctrl</Key> + rotellina cambia lo
             zoom; con un dito scorri, con due fai lo zoom.
@@ -114,10 +121,12 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
           </Sign>
           {projects && (
             <>
-              <Sign label="Hard deadline, e il lavoro che la supera">
+              <Sign label="Hard deadline superata: il segno dice di quanto e chi la supera">
                 <span className="flex items-center gap-0.5">
                   <span className="block h-4 border-l-2 border-dashed border-danger" />
-                  <TriangleAlert className="h-3.5 w-3.5 text-danger" />
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-danger text-on-danger">
+                    <TriangleAlert className="h-3 w-3" />
+                  </span>
                 </span>
               </Sign>
               <Sign label="Giorni del progetto senza lavoro">

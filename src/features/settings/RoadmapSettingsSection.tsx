@@ -14,8 +14,6 @@ import type { RoadmapConfig } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { RulesNotice } from '../../shared/ui/RulesNotice';
-import { BAR_RENDERINGS } from '../roadmaps/barRendering';
-import type { BarRendering } from '../roadmaps/barRendering';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 import { ProjectFieldsDialog } from './ProjectFieldsDialog';
 import { TeamDialog } from './TeamDialog';
@@ -25,9 +23,6 @@ interface RoadmapSettingsSectionProps {
   /** The published rules do not know the configuration yet: the section says so, and no more. */
   unavailable: boolean;
   actions: RoadmapConfigActions;
-  /** How the work of the team is drawn in the bar of a project, in this browser. */
-  barRendering: BarRendering;
-  onChangeBarRendering: (rendering: BarRendering) => void;
 }
 
 /**
@@ -38,8 +33,6 @@ export function RoadmapSettingsSection({
   config,
   unavailable,
   actions,
-  barRendering,
-  onChangeBarRendering,
 }: RoadmapSettingsSectionProps) {
   const [open, setOpen] = useState<'fields' | 'team' | null>(null);
   const [confirmDefaults, setConfirmDefaults] = useState(false);
@@ -177,32 +170,6 @@ export function RoadmapSettingsSection({
           )}
         </>
       )}
-
-      <fieldset className="rounded-lg border border-line p-3">
-        <legend className="px-1 text-sm font-semibold">Resa delle barre</legend>
-        <p className="mb-2 text-xs text-fg-muted">
-          Come la roadmap disegna il lavoro del team nella barra di un progetto. Solo in questo
-          browser.
-        </p>
-        <div className="space-y-2">
-          {BAR_RENDERINGS.map((option) => (
-            <label key={option.id} className="flex cursor-pointer items-start gap-2 text-sm">
-              <input
-                type="radio"
-                name="roadmap-bars"
-                value={option.id}
-                checked={barRendering === option.id}
-                onChange={() => onChangeBarRendering(option.id)}
-                className="mt-0.5"
-              />
-              <span>
-                <span className="font-medium">{option.label}</span>
-                <span className="block text-xs text-fg-muted">{option.description}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
 
       {open === 'fields' && (
         <ProjectFieldsDialog config={config} actions={actions} onClose={() => setOpen(null)} />

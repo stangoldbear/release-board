@@ -6,6 +6,53 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-13
+
+### Cambiato
+
+- Una sola barra di scorrimento verticale, quella della pagina: la timeline non scorre più dentro
+  sé stessa ed è alta quanto le sue righe, così con molti progetti o una finestra bassa nessun
+  contenuto resta nascosto tra due barre. Mesi, fatturato e giorni restano fermi sotto
+  l'intestazione della pagina (in cima sul telefono) mentre si scorre, e una barra di scorrimento
+  orizzontale resta in fondo alla finestra, sopra le schede: righe, giorni in alto e barra si
+  muovono insieme con la rotellina, il dito, la barra, i salti del periodo e lo zoom. Un elemento
+  col focus o un risultato della ricerca non finisce sotto le righe ferme.
+- Roadmap: il lavoro del team si disegna sempre con le lane dentro la barra del progetto; le rese
+  «Righe sotto il progetto» e «Fasi su una barra», con la scelta «Resa delle barre» nelle
+  impostazioni, non ci sono più.
+- Righe dei progetti più basse a ogni livello, con le stesse informazioni, perché si vedano più
+  progetti insieme: il titolo nella barra è più stretto e c'è meno spazio intorno.
+- «Solo titoli»: righe di 38 px invece di 48 alla dimensione normale e la linguetta della
+  dimensione con un testo più piccolo.
+- «Info principali»: sotto il titolo del progetto una lane per ogni persona e per la contingency,
+  tutte alte uguali, una riga di testo con il nome e i giorni uomo; la riga cresce con il team.
+  Le lane fanno parte del disegno del progetto e non si trascinano: il progetto si sposta dal
+  titolo.
+- «Team»: nella colonna dei nomi il progetto e le sue persone formano un blocco, legato da un
+  binario nel colore della dimensione, dal titolo all'ultima persona, e da un albero; accanto al
+  titolo l'etichetta della dimensione, accanto a ogni persona il team e i giorni uomo. Sui giorni
+  il rettangolo del progetto, nel suo colore, scende intorno al lavoro delle sue persone, come un
+  piccolo gantt, e i rettangoli di due progetti quasi si toccano; tutto il blocco del progetto,
+  nomi e giorni, sta in un rettangolo con il bordo nel colore del progetto e lo sfondo del colore
+  della sua barra al 25%; il lavoro di ogni persona è una
+  barra nel colore del suo team, alta quasi quanto la sua riga di una riga di testo, così le barre
+  di un team sono quasi unite, con nome, giorni e date in un suggerimento al passaggio del mouse e
+  al focus; si trascina e si allunga come prima, e sul bordo destro una barretta dice dove si
+  allunga. «Aggiungi una persona» è tra i comandi della riga del progetto, accanto ai livelli, al
+  posto della riga «+ Persona». Un progetto con tre persone occupa 81 px invece di 180.
+- Hard deadline superata: un solo segno, un disco rosso sulla linea della deadline, nel punto in
+  cui il lavoro la supera e sopra tutte le barre a ogni livello (non più un triangolo in fondo alla
+  barra o nascosto sotto). Al passaggio del mouse il segno si ingrandisce e una scheda dice la
+  deadline, quando finisce il lavoro, di quanti giorni lavorativi la supera, chi lavora oltre, e
+  apre il progetto; la stessa scheda si apre al focus e al tocco. La linea tratteggiata della
+  deadline passa sopra le barre: si vede quale lavoro la supera.
+
+### Corretto
+
+- Un progetto con il livello «Solo titoli» scelto solo per lui ha il titolo su una riga, come
+  quando lo stesso livello vale per tutta la timeline.
+- La maniglia della colonna dei nomi resta sul bordo della colonna anche dopo aver scorso i giorni.
+
 ## [0.12.0] - 2026-10-12
 
 ### Aggiunto

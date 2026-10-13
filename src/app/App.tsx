@@ -1002,8 +1002,6 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             onToggleBetaFeatures={setBetaFeatures}
             roadmapUnavailable={sync.missing.includes('roadmap')}
             roadmapActions={configActions}
-            barRendering={display.barRendering}
-            onChangeBarRendering={displayControls.setBarRendering}
             theme={theme}
             onChangeTheme={setTheme}
             dateFormat={dateFormat}

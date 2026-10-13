@@ -6,11 +6,11 @@ import {
   fadedParts,
   formatManDays,
   laneLayout,
-  phaseSegmentsOf,
-  projectBarHeight,
+  projectRowGeometry,
   teamsOf,
   workItemsOf,
 } from './barRendering';
+import { roadmapMetrics } from './roadmapLayout';
 
 const config = defaultRoadmapConfig();
 const project: Project = {
@@ -48,14 +48,6 @@ describe('the bars of the work of a project', () => {
       'QA #1',
       'Persona non in configurazione',
       'Contingency',
-    ]);
-    expect(items.map((item) => item.phase)).toEqual([
-      'analysis',
-      'development',
-      'development',
-      'test',
-      'development',
-      'contingency',
     ]);
     expect(items[0]).toMatchObject({
       kind: 'assignment',
@@ -96,29 +88,35 @@ describe('the bars of the work of a project', () => {
     expect(fadedParts(bare)).toEqual([]);
   });
 
-  it('merge the bars of a phase into one segment, in the order of the phases', () => {
-    const segments = phaseSegmentsOf(workItemsOf(project, span, config));
-    expect(
-      segments.map((segment) => [segment.label, segment.start, segment.end, segment.manDays]),
-    ).toEqual([
-      ['Analisi', '2026-11-02', '2026-11-05', 4],
-      ['Sviluppo', '2026-11-09', '2026-11-24', 21],
-      ['Test', '2026-11-25', '2026-11-27', 3],
-      ['Contingency', '2026-11-30', '2026-12-01', 2],
-    ]);
-    expect(segments[1]!.items.map((item) => item.name)).toEqual([
-      'Server #1',
-      'iOS Dev #1',
-      'Persona non in configurazione',
-    ]);
-    expect(segments.map((segment) => segment.late)).toEqual([false, false, false, true]);
+  it('give every row of the titles alone the same tight height, bars or not', () => {
+    const metrics = roadmapMetrics(56, 1, false);
+    const none = projectRowGeometry('titles', 0, metrics);
+    const four = projectRowGeometry('titles', 4, metrics);
+    expect(none).toMatchObject({ titleHeight: 24, lanes: null, barHeight: 32, rowHeight: 38 });
+    expect(four).toMatchObject({ barHeight: 32, rowHeight: 38 });
+    expect(four.lanes).toEqual({ height: 1, gap: 2, labeled: false });
   });
 
-  it('give the bar its height from the rendering and the band of the rows, bars or not', () => {
-    expect(projectBarHeight('rows', 28, 16)).toBe(28);
-    expect(projectBarHeight('lanes', 28, 0)).toBe(28);
-    expect(projectBarHeight('lanes', 28, 16)).toBe(28 + 16 + 2);
-    expect(projectBarHeight('phases', 28, 6)).toBe(28 + 6 + 2);
+  it('give the main information a lane a line of text tall for each bar, with its name', () => {
+    const metrics = roadmapMetrics(56, 1, false);
+    expect(metrics.laneHeight).toBeGreaterThanOrEqual(10);
+    const one = projectRowGeometry('main', 1, metrics);
+    const four = projectRowGeometry('main', 4, metrics);
+    expect(one.lanes).toEqual({ height: 16, gap: 2, labeled: true });
+    expect(four.lanes).toEqual(one.lanes);
+    expect(one.barHeight).toBe(24 + 16 + 2);
+    expect(four.barHeight).toBe(24 + 4 * 16 + 3 * 2 + 2);
+    expect(four.rowHeight).toBe(four.barHeight + 2 * 3);
+    // Without work, the two lines of the column set the height.
+    expect(projectRowGeometry('main', 0, metrics)).toMatchObject({ lanes: null, rowHeight: 48 });
+    // Even the smallest text keeps the lanes at least 10 pixels tall.
+    expect(roadmapMetrics(56, 0.75, true).laneHeight).toBeGreaterThanOrEqual(10);
+  });
+
+  it('leave the bar alone at the Team level, where the people have rows', () => {
+    const geometry = projectRowGeometry('team', 4, roadmapMetrics(56, 1, false));
+    // The column has the title alone: the people are listed in their rows.
+    expect(geometry).toMatchObject({ titleHeight: 24, lanes: null, barHeight: 24, rowHeight: 26 });
   });
 
   it('share the band among the lanes, thinner with more of them', () => {

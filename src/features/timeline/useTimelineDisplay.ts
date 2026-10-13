@@ -4,8 +4,6 @@ import { isRoadmapId } from '../../domain/roadmapConfig';
 import type { RowVisibility } from '../../domain/types';
 import { isBoolean, oneOf, usePreference } from '../../infra/preferences';
 import { ALL_ROWS_VISIBLE, parseRowVisibility, toggleLane } from '../calendar/rowVisibility';
-import { BAR_RENDERING_IDS, DEFAULT_BAR_RENDERING } from '../roadmaps/barRendering';
-import type { BarRendering } from '../roadmaps/barRendering';
 import { DETAIL_LEVELS } from '../roadmaps/projectUi';
 import type { DetailLevel } from '../roadmaps/projectUi';
 
@@ -30,8 +28,6 @@ export interface TimelineDisplay {
   level: DetailLevel;
   /** The projects with a level of their own, by id: exceptions to `level`. */
   projectLevels: Readonly<Record<string, DetailLevel>>;
-  /** How the work of the team is drawn in the bar of a project. */
-  barRendering: BarRendering;
   /** The id of the field the projects are grouped by; null for no groups. */
   groupBy: string | null;
   /** The order of the rows of the projects: the members' own, or a criterion over it. */
@@ -55,7 +51,6 @@ export interface TimelineDisplayControls {
   setLevel: (level: DetailLevel) => void;
   /** The level of one project, or null to follow the timeline again. */
   setProjectLevel: (projectId: string, level: DetailLevel | null) => void;
-  setBarRendering: (rendering: BarRendering) => void;
   setGroupBy: (fieldId: string | null) => void;
   setSort: (sort: RoadmapSort) => void;
   toggleCollapsed: (part: TimelinePart) => void;
@@ -126,11 +121,6 @@ export function useTimelineDisplay(): [TimelineDisplay, TimelineDisplayControls]
     parseProjectLevels,
     NO_LEVELS,
   );
-  const [barRendering, setBarRendering] = usePreference<BarRendering>(
-    'roadmap-bars',
-    oneOf(BAR_RENDERING_IDS),
-    DEFAULT_BAR_RENDERING,
-  );
   const [sort, setSort] = usePreference<RoadmapSort>(
     'roadmap-sort',
     oneOf(ROADMAP_SORTS),
@@ -162,7 +152,6 @@ export function useTimelineDisplay(): [TimelineDisplay, TimelineDisplayControls]
       showFreeNotes,
       level,
       projectLevels,
-      barRendering,
       groupBy,
       sort,
       collapsed,
@@ -190,7 +179,6 @@ export function useTimelineDisplay(): [TimelineDisplay, TimelineDisplayControls]
           const { [projectId]: _previous, ...rest } = current;
           return next === null ? rest : { ...rest, [projectId]: next };
         }),
-      setBarRendering,
       setGroupBy,
       setSort,
       toggleCollapsed: (part) =>

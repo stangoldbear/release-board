@@ -21,6 +21,8 @@ interface TimelineScrollOptions {
   jump: CalendarJump;
   /** First and last day in view; `settled` once scrolling has stopped. */
   onScrolled: (first: string, last: string, settled: boolean) => void;
+  /** Brings the parts that scroll with the timeline to its place, after each scroll made here. */
+  follow?: () => void;
 }
 
 /**
@@ -31,7 +33,7 @@ interface TimelineScrollOptions {
  */
 export function useTimelineScroll(
   ref: RefObject<HTMLElement | null>,
-  { range, dayWidth, labelWidth, openOn, jump, onScrolled }: TimelineScrollOptions,
+  { range, dayWidth, labelWidth, openOn, jump, onScrolled, follow }: TimelineScrollOptions,
 ): void {
   const firstDay = useRef(openOn);
   const previous = useRef<{ start: string; dayWidth: number; jumpId: number } | null>(null);
@@ -84,7 +86,7 @@ export function useTimelineScroll(
       if (before === null || before.dayWidth !== dayWidth || prefersReducedMotion()) {
         element.scrollLeft = target;
       } else {
-        animateScroll(element, target, element.clientWidth - labelWidth, animation);
+        animateScroll(element, target, element.clientWidth - labelWidth, animation, follow);
       }
     } else if (before.dayWidth !== dayWidth) {
       stopAnimation(animation);
@@ -93,7 +95,8 @@ export function useTimelineScroll(
       stopAnimation(animation);
       element.scrollLeft += diffDays(range.start, before.start) * dayWidth;
     }
-  }, [ref, range.start, dayWidth, labelWidth, openOn, jump.id, jump.date]);
+    follow?.();
+  }, [ref, range.start, dayWidth, labelWidth, openOn, jump.id, jump.date, follow]);
 
   useEffect(() => {
     const element = ref.current;
@@ -134,6 +137,7 @@ function animateScroll(
   target: number,
   viewport: number,
   animation: RefObject<number | null>,
+  follow?: () => void,
 ): void {
   const from = scrollStart(element.scrollLeft, target, viewport);
   element.scrollLeft = from;
@@ -141,6 +145,7 @@ function animateScroll(
   const step = (now: number) => {
     const progress = Math.min(1, (now - startedAt) / SCROLL_DURATION_MS);
     element.scrollLeft = from + (target - from) * easeInOut(progress);
+    follow?.();
     animation.current = progress < 1 ? window.requestAnimationFrame(step) : null;
   };
   animation.current = window.requestAnimationFrame(step);

@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef } from 'react';
+import { useId, useMemo } from 'react';
 import {
   ArrowUpDown,
   Banknote,
@@ -40,7 +40,6 @@ import { SEGMENT, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from '../../shared/ui/seg
 import type { TextScale } from '../../shared/ui/textScale';
 import { ToggleChip } from '../../shared/ui/ToggleChip';
 import { Tooltip } from '../../shared/ui/Tooltip';
-import { useRootHeightVar } from '../../shared/useRootHeightVar';
 import { startOfMonth, startOfWeek } from '../../utils/dateUtils';
 import { CalendarNav } from '../calendar/CalendarNav';
 import { dayWidthOf } from '../calendar/calendarView';
@@ -67,7 +66,7 @@ import type { OpenRequest } from '../roadmaps/useRoadmapDialogs';
 import { TASK_STATUS_ICONS, TASK_STATUS_PLURALS } from '../tasks/taskUi';
 import { HelpPanel } from './HelpPanel';
 import { SectionHeader } from './SectionHeader';
-import { TOOLBAR_HEIGHT_VAR, TimelineFrame } from './TimelineFrame';
+import { TimelineFrame } from './TimelineFrame';
 import { LABEL_WIDTH, oneLineTitlesOf } from './useTimelineDisplay';
 import type { TimelineDisplay, TimelineDisplayControls, TimelinePart } from './useTimelineDisplay';
 
@@ -222,9 +221,6 @@ export function TimelineArea({
   // phones at most two fifths of the screen.
   const labelWidthPx = Math.round(display.labelWidth * textScale);
   const labelWidth = `min(${labelWidthPx}px, 40vw)`;
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  // The frame fits under the bar of the card: the page keeps the bar in view, the frame scrolls.
-  useRootHeightVar(toolbarRef, TOOLBAR_HEIGHT_VAR);
 
   // The days held: those of the view, widened to every project shown; without the past, from
   // today or from the Monday of this week in weekly columns.
@@ -468,11 +464,10 @@ export function TimelineArea({
         </>
       }
     >
-      <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface shadow-xs">
-        <div
-          ref={toolbarRef}
-          className="flex flex-wrap items-center gap-x-2 gap-y-2 bg-surface-muted px-3 py-2 select-none"
-        >
+      {/* Clipped, not hidden: a hidden overflow would hold the rows at the top of the timeline,
+          which stay in view as the page scrolls. */}
+      <div className="divide-y divide-line overflow-clip rounded-xl border border-line bg-surface shadow-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 bg-surface-muted px-3 py-2 select-none">
           <Menu label="Righe visibili" items={rowItems} title="Le righe da mostrare">
             <Rows3 className="h-3.5 w-3.5" aria-hidden="true" />
             Righe
@@ -707,11 +702,9 @@ export function TimelineArea({
                               level={level}
                               levelOf={levelOf}
                               teamLevelAvailable={!roadmap.detailsUnavailable}
-                              rendering={display.barRendering}
                               config={plan.roadmap}
                               assignments={plan.assignments}
                               searching={searching}
-                              oneLineTitles={oneLineTitles}
                               groupBy={groupBy}
                               metrics={metrics}
                               onOpen={(project) => dialogs.openProject(project)}

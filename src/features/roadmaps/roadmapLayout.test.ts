@@ -41,6 +41,11 @@ describe('roadmapMetrics', () => {
     const bigger = roadmapMetrics(56, 1.5, false);
     expect(bigger.barHeight).toBeGreaterThan(normal.barHeight);
     expect(bigger.assignmentHeight).toBeGreaterThan(normal.assignmentHeight);
+    // The row of a person is a line of text, and its bar leaves two pixels to the next one: the
+    // bars of a team nearly touch, as there are many projects.
+    expect(normal.personRowHeight).toBe(16);
+    expect(normal.workBarHeight).toBe(14);
+    expect(bigger.personRowHeight).toBeGreaterThan(normal.personRowHeight);
     expect(roadmapMetrics(56, 1, true).rowPadding).toBeLessThan(normal.rowPadding);
   });
 
