@@ -167,7 +167,7 @@ const SAMPLE_MEMOS: { title: string; body?: string; colorId?: TaskColorId; remin
 const SAMPLE_PROJECTS: {
   title: string;
   from: [month: number, day: number];
-  to: [month: number, day: number];
+  deadline: [month: number, day: number];
   colorId: TaskColorId;
   status: ProjectStatus;
   owner?: string;
@@ -176,7 +176,7 @@ const SAMPLE_PROJECTS: {
   {
     title: 'Nuovo sito vetrina',
     from: [-5, 1],
-    to: [-2, 15],
+    deadline: [-2, 15],
     colorId: 'blue',
     status: 'completed',
     owner: 'Sara',
@@ -184,7 +184,7 @@ const SAMPLE_PROJECTS: {
   {
     title: 'App mobile 3.0',
     from: [-1, 10],
-    to: [2, 28],
+    deadline: [2, 28],
     colorId: 'purple',
     status: 'in_progress',
     owner: 'Giulia',
@@ -193,7 +193,7 @@ const SAMPLE_PROJECTS: {
   {
     title: 'Migrazione al cloud',
     from: [0, 1],
-    to: [5, 30],
+    deadline: [5, 30],
     colorId: 'green',
     status: 'in_progress',
     owner: 'Marco',
@@ -202,14 +202,14 @@ const SAMPLE_PROJECTS: {
   {
     title: 'Programma fedeltà',
     from: [3, 1],
-    to: [7, 31],
+    deadline: [7, 31],
     colorId: 'yellow',
     status: 'planned',
   },
   {
     title: 'Nuovo magazzino',
     from: [6, 1],
-    to: [11, 30],
+    deadline: [11, 30],
     colorId: 'gray',
     status: 'idea',
   },
@@ -281,18 +281,24 @@ const SAMPLE_PROJECT_NOTES: {
   },
 ];
 
-/** Who works on the running projects: people of the default configuration. */
+/** Who works on the projects, which last as long as their work: people of the default configuration. */
 const SAMPLE_ASSIGNMENTS: {
   project: number;
   stakeholderId: string;
   from: [month: number, day: number];
   manDays: number;
 }[] = [
+  { project: 1, stakeholderId: 'content-1', from: [-5, 1], manDays: 40 },
+  { project: 1, stakeholderId: 'qa-2', from: [-4, 1], manDays: 10 },
   // Across the week away of "Server #1", so that the hatched days show.
   { project: 2, stakeholderId: 'server-1', from: [0, 12], manDays: 20 },
   { project: 2, stakeholderId: 'ios-1', from: [0, 5], manDays: 15 },
   { project: 2, stakeholderId: 'qa-1', from: [1, 1], manDays: 5 },
   { project: 3, stakeholderId: 'server-2', from: [0, 1], manDays: 40 },
+  { project: 4, stakeholderId: 'ba-1', from: [3, 1], manDays: 10 },
+  { project: 4, stakeholderId: 'server-3', from: [3, 15], manDays: 30 },
+  { project: 4, stakeholderId: 'android-1', from: [3, 15], manDays: 25 },
+  { project: 5, stakeholderId: 'ba-2', from: [6, 1], manDays: 15 },
 ];
 
 /** "Server #1" is away for a week of the given month, so that the hatched days show. */
@@ -390,7 +396,7 @@ export function buildSamplePlan(year: number, month: number): PlanSnapshot {
       id: `sample-project-${index + 1}`,
       title: sample.title,
       startDate: dayIn(sample.from),
-      endDate: dayIn(sample.to),
+      deadline: dayIn(sample.deadline),
       colorId: sample.colorId,
       status: sample.status,
     };

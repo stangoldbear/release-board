@@ -61,7 +61,7 @@ const plan: PlanSnapshot = {
       id: 'project-1',
       title: 'App mobile 3.0',
       startDate: '2026-09-10',
-      endDate: '2026-12-20',
+      deadline: '2026-12-20',
       colorId: 'purple',
       status: 'in_progress',
       owner: 'Giulia',
@@ -71,7 +71,6 @@ const plan: PlanSnapshot = {
       id: 'project-2',
       title: 'Programma fedeltà',
       startDate: '2027-01-01',
-      endDate: '2027-03-31',
       colorId: 'yellow',
       status: 'idea',
     },
@@ -332,7 +331,7 @@ describe('invalid backups', () => {
     };
     expect(errorsOf(broken)).toEqual([
       'Progetto 1: manca il titolo.',
-      'Progetto "Due": la fine precede l\'inizio, colore non riconosciuto, stato non valido.',
+      'Progetto "Due": colore non riconosciuto, stato non valido.',
       'Progetto "Tre": data di inizio non valida, responsabile non valido.',
       'Progetto "Quattro": descrizione non valida.',
       'Progetto 5: formato non valido.',

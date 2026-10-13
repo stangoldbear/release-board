@@ -1,7 +1,11 @@
 import { useId, useState } from 'react';
 import { ChevronDown, Monitor, Palette } from 'lucide-react';
-import { CUSTOM_THEME_IDS, SYSTEM_THEMES, getTheme, isDarkTheme } from '../../themes';
+import { CUSTOM_THEME_IDS, SYSTEM_THEMES, getTheme, isDarkTheme, resolveTheme } from '../../themes';
 import type { CustomThemeId, Theme, ThemePreference } from '../../themes';
+import { COLOR_PRESETS, presetTasks } from '../../themes/presets';
+import type { ColorPreset } from '../../themes/presets';
+import { useSystemIsDark } from '../../themes/useAppliedTheme';
+import type { TaskColorId } from '../../domain/colors';
 import { TextSizeControls } from '../calendar/DisplayControls';
 import type { TextScale } from '../../shared/ui/textScale';
 import { DATE_FORMATS, formatDate, todayIso } from '../../utils/dateUtils';
@@ -12,6 +16,9 @@ import type { PageLayout } from '../../app/layout';
 interface AppearanceSectionProps {
   theme: ThemePreference;
   onChangeTheme: (theme: ThemePreference) => void;
+  /** How the colors of tasks, projects and teams look over the theme, in this browser. */
+  colorPreset: ColorPreset;
+  onChangeColorPreset: (preset: ColorPreset) => void;
   /** How the dates are written in full, in this browser. */
   dateFormat: DateFormat;
   onChangeDateFormat: (format: DateFormat) => void;
@@ -43,6 +50,42 @@ function ThemeSwatch({ theme, small = false }: { theme: Theme; small?: boolean }
   );
 }
 
+/** The colors a preset shows in its miniature: a few hues, from warm to cool. */
+const PRESET_SAMPLE: readonly TaskColorId[] = ['yellow', 'red', 'purple', 'blue', 'teal', 'green'];
+
+/**
+ * A miniature of a preset over the current theme: the bar of a project, with a line for its text,
+ * over the bars of its people in a few colors.
+ */
+function PresetSwatch({ theme, preset }: { theme: Theme; preset: ColorPreset }) {
+  const tasks = presetTasks(theme, preset);
+  const bar = tasks.blue;
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-9 w-24 shrink-0 flex-col justify-center gap-1 rounded-md border px-1.5"
+      style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors['line-strong'] }}
+    >
+      {/* The bar of a project: its text is a line of the color of the text. */}
+      <span
+        className="flex h-3 items-center rounded-[2px] border px-1"
+        style={{ backgroundColor: bar.bg, borderColor: bar.border }}
+      >
+        <span className="h-1 w-10 rounded-full" style={{ backgroundColor: bar.fg }} />
+      </span>
+      <span className="flex gap-0.5">
+        {PRESET_SAMPLE.map((id) => (
+          <span
+            key={id}
+            className="h-2 flex-1 rounded-[2px]"
+            style={{ backgroundColor: tasks[id].border }}
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
+
 const OPTION =
   'flex cursor-pointer items-center gap-3 rounded-lg border border-line p-2 text-sm hover:bg-surface-strong has-checked:border-accent has-checked:bg-accent-soft';
 
@@ -64,6 +107,8 @@ function isCustom(theme: ThemePreference): theme is CustomThemeId {
 export function AppearanceSection({
   theme,
   onChangeTheme,
+  colorPreset,
+  onChangeColorPreset,
   dateFormat,
   onChangeDateFormat,
   layout,
@@ -75,6 +120,8 @@ export function AppearanceSection({
   const systemDescriptionId = useId();
   // Open from the start when a custom theme is in use, so that its choice is in view.
   const [customOpen, setCustomOpen] = useState(() => isCustom(theme));
+  // The miniatures of the presets show the theme in use.
+  const shownTheme = resolveTheme(theme, useSystemIsDark());
 
   const radio = (option: ThemePreference, name: string, describedBy?: string) => (
     <input
@@ -164,6 +211,33 @@ export function AppearanceSection({
               </div>
             )}
           </details>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend className="mb-2 text-xs text-fg-muted">
+          Colori di attività, progetti e team, sopra il tema: in questo browser.
+        </legend>
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {COLOR_PRESETS.map((option) => (
+            <label key={option.id} className={OPTION}>
+              <input
+                type="radio"
+                name="color-preset"
+                value={option.id}
+                checked={colorPreset === option.id}
+                onChange={() => onChangeColorPreset(option.id)}
+                aria-label={option.name}
+                aria-describedby={`color-preset-${option.id}`}
+              />
+              <PresetSwatch theme={shownTheme} preset={option.id} />
+              <span className="min-w-0">
+                <span className="block font-semibold">{option.name}</span>
+                <span id={`color-preset-${option.id}`} className="block text-xs text-fg-muted">
+                  {option.description}
+                </span>
+              </span>
+            </label>
+          ))}
         </div>
       </fieldset>
       <fieldset>

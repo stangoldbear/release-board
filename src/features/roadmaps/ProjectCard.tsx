@@ -46,7 +46,7 @@ function Fact({
 
 /**
  * Everything the column of the names no longer shows of a project, laid out in full: the tab and
- * the title with the state, the period with its days, the owner, the hard deadline, the
+ * the title with the state, the period with its days, the owner, the deadline, the
  * description, the main fields with their links, and the people at work with their days.
  */
 export function ProjectCard({ project, span, work, config, tagField }: ProjectCardProps) {
@@ -95,7 +95,7 @@ export function ProjectCard({ project, span, work, config, tagField }: ProjectCa
           </Fact>
         )}
         {project.deadline && (
-          <Fact icon={Flag} label="Hard deadline">
+          <Fact icon={Flag} label="Deadline">
             {formatDate(project.deadline)}
             {span.late && <span className="text-danger"> · superata</span>}
           </Fact>

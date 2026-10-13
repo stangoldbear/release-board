@@ -633,8 +633,16 @@ const STEPS: Record<StepId, GuideStep> = {
           <p>
             Su GitHub Pages pubblico il dominio è lo stesso per tutti i siti di un account o di
             un'organizzazione (per esempio <code>nome.github.io</code>): autorizzarlo vale per tutti
-            quei siti. Anche se un altro di loro usasse l'accesso del progetto, non leggerebbe il
-            piano: lo proteggono le regole.
+            quei siti: ognuno potrebbe avviare l&apos;accesso al progetto, e un membro che lì
+            entrasse gli darebbe la sua sessione. Su un dominio che usi solo tu va bene; per un
+            piano aziendale su un dominio condiviso con altri siti conviene un dominio proprio (la
+            guida <code>docs/ISTANZA-101.md</code> del repository, capitolo 3c).
+          </p>
+          <p>
+            Se un giorno renderai pubblico il sito Pages di un repository privato, l&apos;indirizzo
+            passerà da <code>…pages.github.io</code> a <code>&lt;organizzazione&gt;.github.io</code>
+            : aggiungi anche quel dominio, prima di cambiare la visibilità. La guida{' '}
+            <code>docs/ISTANZA-101.md</code> del repository, al capitolo 3c, dice tutti i passi.
           </p>
         </More>
       </>
@@ -958,8 +966,9 @@ const STEPS: Record<StepId, GuideStep> = {
         </Actions>
         <More title="il primo accesso">
           <p>
-            Il primo che entra crea il piano e ne diventa proprietario: fallo tu, prima di
-            condividere il link.
+            Il primo che entra crea il piano e ne diventa proprietario: fallo tu, subito, prima di
+            condividere il link o di rendere pubblico il sito. Da quel momento nessun altro può
+            creare piani nel progetto.
           </p>
           <p>Il piano può partire vuoto, dai dati di questo browser o da un backup JSON.</p>
           <p>

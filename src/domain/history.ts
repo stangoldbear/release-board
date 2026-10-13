@@ -32,7 +32,8 @@ export type HistoryEntity =
   | 'team'
   | 'stakeholder'
   | 'roadmapSettings'
-  | 'member';
+  | 'member'
+  | 'access';
 export type HistoryAction = 'create' | 'update' | 'delete' | 'import' | 'setup';
 
 /** One change to the plan: who did what, and when. */
@@ -51,6 +52,9 @@ export interface HistoryEntry {
   summary?: string;
 }
 
+/** The longest summary of an entry, as the security rules allow it. */
+export const HISTORY_SUMMARY_MAX = 500;
+
 const ENTITY_LABELS: Record<HistoryEntity, string> = {
   plan: 'il piano',
   lane: 'la corsia',
@@ -68,6 +72,7 @@ const ENTITY_LABELS: Record<HistoryEntity, string> = {
   stakeholder: 'la persona del team',
   roadmapSettings: 'le impostazioni della roadmap',
   member: 'il membro',
+  access: 'i domini email ammessi',
 };
 
 /** Entities named by what they are and their title: "il progetto «App mobile»". */
@@ -200,7 +205,10 @@ export const HISTORY_KIND_LABELS: Record<HistoryKind, string> = {
 
 export const HISTORY_KINDS = Object.keys(HISTORY_KIND_LABELS) as HistoryKind[];
 
-/** The kind of an entry: the notes and assignments go with their projects, the setup apart. */
+/**
+ * The kind of an entry: the notes and assignments go with their projects, the email domains with
+ * the members, the setup apart.
+ */
 export function historyKind(entry: HistoryEntry): HistoryKind {
   switch (entry.entity) {
     case 'metric':
@@ -215,6 +223,8 @@ export function historyKind(entry: HistoryEntry): HistoryKind {
     case 'stakeholder':
     case 'roadmapSettings':
       return 'roadmap';
+    case 'access':
+      return 'member';
     default:
       return entry.entity;
   }
@@ -248,7 +258,7 @@ const PROJECT_FIELDS: Record<string, string> = {
   startDate: 'Inizio',
   endDate: 'Fine pianificata',
   manDays: 'Giorni uomo',
-  deadline: 'Hard deadline',
+  deadline: 'Deadline',
   remindDaysBefore: 'Avviso di scadenza',
   contingency: 'Contingency',
   arrangement: 'Disposizione',
@@ -478,6 +488,11 @@ export function fieldChanges(
       )
       .map(([field, label]) => pair(field, label))
       .filter((change) => change.before !== undefined || change.after !== undefined);
+  }
+  if (entry.entity === 'access') {
+    const list = (value: unknown) => (Array.isArray(value) ? value.join(', ') : undefined);
+    const change = { label: 'Domini', before: list(before.domains), after: list(after.domains) };
+    return change.before !== undefined || change.after !== undefined ? [change] : [];
   }
   if (entry.entity === 'note') {
     const changes = [pair('date', 'Giorno'), pair('text', 'Testo')];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endFromManDays, projectSpan, withEffectiveEnd, workBarsOf } from './projectSpan';
+import { projectSpan, withEffectiveEnd, workBarsOf } from './projectSpan';
 import type { Assignment, Project, Stakeholder } from './types';
 
 const project: Project = {
@@ -27,7 +27,7 @@ const assignment = (id: string, stakeholderId: string, startDate: string, manDay
   ({ id, projectId: 'p1', stakeholderId, startDate, manDays }) as Assignment;
 
 describe('the span of a project', () => {
-  it('ends on its start without anything else, and counts working days of its own effort', () => {
+  it('ends on its start without the work of a team', () => {
     expect(projectSpan(project, [], calendar)).toMatchObject({
       start: '2026-11-02',
       end: '2026-11-02',
@@ -36,31 +36,23 @@ describe('the span of a project', () => {
       totalManDays: 0,
       late: false,
     });
-    // 2 November 2026 is a Monday: ten working days end on Friday the 13th.
-    expect(endFromManDays('2026-11-02', 10, [])).toBe('2026-11-13');
-    expect(projectSpan({ ...project, manDays: 10 }, [], calendar)).toMatchObject({
-      end: '2026-11-13',
-      totalManDays: 10,
-    });
   });
 
-  it('reaches the furthest of the planned end and the work of the team', () => {
+  it('ends with the work of the team, whatever an older version stored', () => {
     const bars = [
       assignment('a1', 'ba-1', '2026-11-02', 5),
       assignment('a2', 'server-1', '2026-11-09', 12),
     ];
-    const span = projectSpan({ ...project, endDate: '2026-11-20' }, bars, calendar);
+    const span = projectSpan(project, bars, calendar);
     // Server #1 is away on the 16th and 17th: twelve days from the 9th end on the 26th.
     expect(span.work).toEqual({ start: '2026-11-02', end: '2026-11-26' });
     expect(span.end).toBe('2026-11-26');
-    expect(span.plannedEnd).toBe('2026-11-20');
     expect(span.totalManDays).toBe(17);
     expect(span.bars.map((bar) => bar.kind)).toEqual(['assignment', 'assignment']);
-    // The project's own days do not count beside the work of the team.
-    expect(projectSpan({ ...project, manDays: 40 }, bars, calendar).totalManDays).toBe(17);
-    expect(projectSpan({ ...project, endDate: '2026-12-11' }, bars, calendar).end).toBe(
-      '2026-12-11',
-    );
+    // The planned end and the days of the project of the versions before 0.16 count no more.
+    const old = { ...project, endDate: '2026-12-11', manDays: 40 } as Project;
+    expect(projectSpan(old, bars, calendar)).toMatchObject({ end: '2026-11-26', totalManDays: 17 });
+    expect(projectSpan(old, [], calendar)).toMatchObject({ end: '2026-11-02', totalManDays: 0 });
   });
 
   it('finds the days without work between the bars, weekends alone excluded', () => {
@@ -102,6 +94,6 @@ describe('the span of a project across a company closure', () => {
     const span = projectSpan(project, bars, closed);
     expect(span.work).toEqual({ start: '2026-11-02', end: '2026-11-20' });
     expect(span.gaps).toEqual([]);
-    expect(endFromManDays('2026-11-02', 10, closed.closures)).toBe('2026-11-20');
+    expect(span.end).toBe('2026-11-20');
   });
 });

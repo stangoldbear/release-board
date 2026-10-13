@@ -6,6 +6,90 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-13
+
+**Le regole di Firestore cambiano**: in un'istanza condivisa ripubblica `firestore/firestore.rules`
+subito dopo l'aggiornamento, e fai ricaricare la pagina a chi la tiene aperta. Finché sito e regole
+non sono della stessa versione, cancellazioni, inviti e modifiche dei membri vengono rifiutati.
+Prima di rendere pubblico il sito Pages di un repository privato leggi il capitolo 3c di
+`docs/ISTANZA-101.md`: dice anche perché su un dominio condiviso con altri siti Pages conviene un
+dominio proprio. Le schede ancora aperte con la versione di prima si fermano all'aggiornamento:
+vanno ricaricate. I backup restano allo schema 7: quelli di prima si leggono come prima.
+
+### Sicurezza
+
+- Corrette le due dipendenze con avvisi di sicurezza di gravità alta: `@grpc/grpc-js`, usata dalla
+  parte Node di Firebase e non dal sito, passa alla 1.14.5 con un `overrides` in `package.json`,
+  finché Firebase non la aggiorna da sé (anche la 13.0.0 chiede ancora la 1.9); `source-map-js`,
+  usata solo nella build, passa alla 1.2.2. `npm audit` non segnala più nulla.
+- Regole di Firestore più severe, da ripubblicare insieme all'aggiornamento:
+  - si può creare solo il piano dell'istanza (`main`): prima chiunque avesse fatto l'accesso
+    poteva creare piani propri e consumare la quota giornaliera del progetto;
+  - ogni modifica vuole una voce di storico nuova, scritta nello stesso batch da chi modifica:
+    una voce già esistente non vale più;
+  - anche le cancellazioni, le modifiche dei membri e il nome del piano lasciano la loro voce di
+    storico: il batch scrive anche il documento di chi scrive (`writers/{uid}`), che dice quale
+    voce lo registra, perché un documento cancellato non può dirlo;
+  - la voce di storico ha come autore il membro con il suo username, chiavi e lunghezze limitate;
+  - creare il piano e ripristinare un backup (le voci che conservano gli autori delle note) sono
+    solo dell'owner: un membro non può più firmare una nota con il nome di un altro;
+  - date con mese e giorno plausibili, elementi delle liste di testo controllati (checklist,
+    owner e tag delle note dei progetti), una sola metrica, quella dell'app;
+  - la foto di un membro viene solo da GitHub, e si carica senza dire da quale sito.
+- Impostazioni → Membri → «Domini email ammessi»: il proprietario può ammettere solo gli account
+  GitHub con un'email principale verificata di alcuni domini, per esempio quello aziendale. Chi
+  ne resta fuori non vede più nemmeno il nome del piano, anche se è tra i membri, e la pagina
+  d'accesso spiega il perché. Le regole controllano i domini a ogni richiesta e rifiutano una
+  lista che lascerebbe fuori il proprietario che la scrive; senza lista tutto resta come prima.
+- In un'istanza condivisa il browser non tiene più nulla sul disco: il piano sta nella memoria
+  della pagina e l'accesso dura quanto la scheda (una scheda nuova chiede di accedere di nuovo,
+  ricaricare la pagina no). Su un computer condiviso non resta una copia del piano, e gli altri
+  siti dello stesso indirizzo, come i siti Pages pubblici di un'organizzazione su
+  `<organizzazione>.github.io`, non trovano sul disco né l'accesso né il piano. All'aggiornamento l'accesso si
+  sposta da solo nella scheda e la copia tenuta dalle versioni precedenti si cancella; uscire
+  ricarica la pagina. Lasciare la pagina con modifiche non ancora inviate chiede conferma, perché
+  senza la copia sul disco andrebbero perse. Si legge un po' di più dal database a ogni apertura.
+- Un'istanza con un progetto Firebase chiede ai motori di ricerca di non indicizzarla
+  (`noindex`); il sito dimostrativo senza Firebase resta indicizzabile.
+- In un'istanza condivisa il ripristino di un backup e i dati di esempio sono solo del
+  proprietario del piano, come vogliono le regole: gli altri membri scaricano i backup, e il
+  piano vuoto dice loro a chi chiedere. La configurazione della roadmap e il fatturato previsto
+  si importano come prima.
+- La CI fallisce se una dipendenza ha un avviso di sicurezza di gravità alta o critica
+  (`npm audit --audit-level=high`) e gira anche una volta a settimana, perché un avviso nuovo può
+  comparire senza commit nuovi. Il workflow di pubblicazione del sito fa lo stesso controllo, più
+  lint, tipi e test, prima della build: un sito si pubblica solo da un commit che li supera.
+
+### Aggiunto
+
+- Preset di colori in Impostazioni → Aspetto, sopra il tema scelto: cambiano i 24 colori di
+  attività, progetti, team, note sulla timeline e valori dei campi. «Pastello», quello di serie,
+  ha tinte chiare e tenui, tutte della stessa luminosità, perché nessuna sovrasti le altre;
+  «Morbido» ha colori smorzati, più presenti; «Regolare» tiene i colori pieni di ogni tema, come
+  prima; «Solarized» usa gli accenti della tavolozza Solarized. Ogni preset ha la sua anteprima,
+  vale con i temi dell'app e con quelli personalizzati, tiene il testo dei colori a 4,5:1 sul suo
+  sfondo, e il browser lo ricorda; il file delle impostazioni lo esporta e lo importa con il resto
+  dell'aspetto.
+
+### Cambiato
+
+- La «Hard deadline» di un progetto si chiama «Deadline», nella finestra, nelle informazioni, sul
+  segno della deadline superata, negli avvisi e nella cronologia.
+- Un progetto dura quanto il lavoro del suo team: va dall'inizio all'ultimo giorno della barra
+  più lontana, persone o contingency. Senza giorni del team la barra è lunga un giorno, quello
+  d'inizio, e la finestra lo dice invece di chiedere una durata. La barra di un progetto non ha
+  più bordi da trascinare: si sposta intera, col lavoro del team; le frecce la spostano di una
+  settimana, e Maiusc + frecce non cambia più la fine.
+- I dati di esempio danno a ogni progetto il lavoro di qualche persona e una deadline.
+
+### Rimosso
+
+- «Fine pianificata» e «Giorni uomo del progetto» non esistono più, nemmeno nella vista avanzata
+  della finestra del progetto, né con il doppio clic sulla barra. I valori che un progetto aveva
+  vengono ignorati e non finiscono altrove (la deadline resta quella che era); in un'istanza
+  condivisa spariscono dal documento alla prima modifica del progetto, come vogliono le regole
+  nuove, e non entrano più nei backup. La cronologia delle modifiche passate li mostra ancora.
+
 ## [0.15.0] - 2026-10-13
 
 Le regole di Firestore e i backup non cambiano: un'istanza si aggiorna al tag senza ripubblicare
@@ -882,7 +966,9 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/stangoldbear/release-board/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/stangoldbear/release-board/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/stangoldbear/release-board/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/stangoldbear/release-board/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/stangoldbear/release-board/compare/v0.11.1...v0.12.0

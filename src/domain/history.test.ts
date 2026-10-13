@@ -57,6 +57,19 @@ describe('describeChange', () => {
 describe('fieldChanges', () => {
   const lanes = (id: string) => ({ 'lane-1': 'Frontend', 'lane-2': 'Backend' })[id];
 
+  it('names the email domains the owner admits, before and after', () => {
+    const entry = noteEntry({
+      entity: 'access',
+      entityId: 'access',
+      before: { domains: ['example.com'] },
+      after: { domains: ['example.com', 'mail.example.com'] },
+    });
+    expect(describeHistoryEntry(entry)).toBe('anna ha modificato i domini email ammessi');
+    expect(fieldChanges(entry, lanes)).toEqual([
+      { label: 'Domini', before: 'example.com', after: 'example.com, mail.example.com' },
+    ]);
+  });
+
   it('lists the fields of a task that changed, in words', () => {
     const entry = noteEntry({
       entity: 'task',

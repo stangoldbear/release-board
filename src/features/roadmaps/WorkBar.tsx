@@ -109,7 +109,7 @@ export function WorkBar({
   const width = (last - first + 1) * dayWidth - 2;
   const resizable = width >= MIN_RESIZABLE_WIDTH;
   const words = `${describeSchedule(item, schedule, dateFormat)}${
-    item.late ? ', oltre la hard deadline' : ''
+    item.late ? ', oltre la deadline' : ''
   }`;
 
   const handleKeyDown = (event: KeyboardEvent) => {

@@ -4,6 +4,9 @@ on:
   push:
     branches: ['**']
   pull_request:
+  # A new advisory can appear without a new commit: the weekly run catches it.
+  schedule:
+    - cron: '23 5 * * 1'
 
 permissions:
   contents: read
@@ -26,6 +29,8 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
       - run: npm ci
+      # npm ci only prints advisories: this step fails on any of high or critical severity.
+      - run: npm audit --audit-level=high
       - run: npm audit signatures
       - run: npm run format:check
       - run: npm run lint

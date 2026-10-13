@@ -21,6 +21,7 @@ export function AccountSection({ user, role, planName, onSignOut }: AccountSecti
         {user.avatarUrl ? (
           <img
             src={user.avatarUrl}
+            referrerPolicy="no-referrer"
             alt=""
             width={40}
             height={40}

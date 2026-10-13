@@ -3,9 +3,14 @@ import rules from '../../../firestore/firestore.rules?raw';
 import { APPROVAL_LIGHTS } from '../../domain/approval';
 import { ASSIGNMENT_NOTE_MAX, MAN_DAYS_MAX } from '../../domain/assignments';
 import { TASK_COLOR_IDS } from '../../domain/colors';
-import { HISTORY_ACTIONS, HISTORY_ENTITIES } from '../../domain/history';
+import { HISTORY_ACTIONS, HISTORY_ENTITIES, HISTORY_SUMMARY_MAX } from '../../domain/history';
 import { MEMO_BODY_MAX, MEMO_TITLE_MAX } from '../../domain/memos';
-import { PROJECT_NOTE_STATUSES, PROJECT_NOTE_TEXT_MAX } from '../../domain/projectNotes';
+import {
+  NOTE_LIST_ITEM_MAX,
+  NOTE_LIST_MAX,
+  PROJECT_NOTE_STATUSES,
+  PROJECT_NOTE_TEXT_MAX,
+} from '../../domain/projectNotes';
 import { BORDER_STYLES, TASK_STATUSES } from '../../domain/plan';
 import {
   PROJECT_ARRANGEMENTS,
@@ -32,6 +37,7 @@ import {
 } from '../../domain/roadmapConfig';
 import { FORMULA_MAX } from '../../domain/teamFormula';
 import { MILESTONE_BODY_MAX, MILESTONE_TITLE_MAX } from '../../domain/milestones';
+import { METRIC_ID, PLAN_ID } from './planDocs';
 
 // The security rules repeat some lists and limits of the app. When they part, saving in a shared
 // instance fails, and only there: these tests compare the two without the emulator.
@@ -73,6 +79,12 @@ describe('the security rules', () => {
   it('allow the history entries that the app writes', () => {
     expect(allowedLists('entity')).toEqual([sorted(HISTORY_ENTITIES)]);
     expect(allowedLists('action')).toEqual([sorted(HISTORY_ACTIONS)]);
+    expect(rules).toContain(`isText(data.summary, ${HISTORY_SUMMARY_MAX})`);
+  });
+
+  it('know the one plan and the one metric of the app', () => {
+    expect(rules).toContain(`return planId == '${PLAN_ID}';`);
+    expect(rules.match(new RegExp(`metricId == '${METRIC_ID}'`, 'g'))).toHaveLength(2);
   });
 
   it('limit the free notes as the app does', () => {
@@ -90,16 +102,19 @@ describe('the security rules', () => {
     expect(projects).toContain(`isText(data.owner, ${PROJECT_OWNER_MAX})`);
     expect(projects).toContain(`isText(data.description, ${PROJECT_DESCRIPTION_MAX})`);
     expect(projects).toContain(`data.fields.size() <= ${PROJECT_FIELDS_MAX}`);
-    expect(projects).toContain(`data.manDays <= ${MAN_DAYS_MAX}`);
     expect(projects).toContain(`data.contingency.manDays <= ${MAN_DAYS_MAX}`);
   });
 
   it('limit the notes of the projects, the assignments and the configuration as the app does', () => {
     const block = (start: string, end: string) =>
       rules.slice(rules.indexOf(`match /${start}/`), rules.indexOf(`match /${end}/`));
-    expect(block('projectNotes', 'milestones')).toContain(
-      `isText(data.text, ${PROJECT_NOTE_TEXT_MAX})`,
-    );
+    const notes = block('projectNotes', 'milestones');
+    expect(notes).toContain(`isText(data.text, ${PROJECT_NOTE_TEXT_MAX})`);
+    for (const list of ['owners', 'tags']) {
+      expect(notes).toContain(
+        `isTextList(data.${list}, ${NOTE_LIST_MAX}, ${NOTE_LIST_MAX * NOTE_LIST_ITEM_MAX})`,
+      );
+    }
     const milestones = block('milestones', 'assignments');
     expect(milestones).toContain(`isText(data.title, ${MILESTONE_TITLE_MAX})`);
     expect(milestones).toContain(`isText(data.body, ${MILESTONE_BODY_MAX})`);

@@ -14,7 +14,7 @@ interface DeadlineSignProps {
 }
 
 /**
- * The sign of a project past its hard deadline, on the line of the deadline at the top of its
+ * The sign of a project past its deadline, on the line of the deadline at the top of its
  * row, over every bar: a red disc with a triangle that grows under the mouse and the focus, and
  * a card with the deadline, how far the work goes past it and who works past it, on the mouse,
  * the focus and a tap. The same words are its accessible name.
@@ -24,7 +24,7 @@ export function DeadlineSign({ title, overrun, left, onOpen }: DeadlineSignProps
   const card = useHoverCard<true>();
   const days =
     overrun.workingDays === 1 ? '1 giorno lavorativo' : `${overrun.workingDays} giorni lavorativi`;
-  const summary = `Hard deadline di «${title}» superata: il ${formatDate(overrun.deadline)}, il lavoro finisce il ${formatDate(overrun.end)}, ${days} dopo`;
+  const summary = `Deadline di «${title}» superata: il ${formatDate(overrun.deadline)}, il lavoro finisce il ${formatDate(overrun.end)}, ${days} dopo`;
   return (
     <span
       className="absolute top-0.5 z-30 -translate-x-1/2"
@@ -50,12 +50,12 @@ export function DeadlineSign({ title, overrun, left, onOpen }: DeadlineSignProps
           <div>
             <p className="-mx-3 -mt-3 mb-2 flex items-center gap-1.5 rounded-t-xl bg-danger-soft px-3 py-2 text-sm font-bold text-danger">
               <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
-              Hard deadline superata
+              Deadline superata
             </p>
             <div className="space-y-1.5 text-xs">
               <p className="font-semibold">{title}</p>
               <p>
-                Hard deadline: <strong>{formatDate(overrun.deadline)}</strong>
+                Deadline: <strong>{formatDate(overrun.deadline)}</strong>
               </p>
               <p>
                 Il lavoro finisce il <strong>{formatDate(overrun.end)}</strong>, {days} dopo.
@@ -73,7 +73,7 @@ export function DeadlineSign({ title, overrun, left, onOpen }: DeadlineSignProps
                   </ul>
                 </div>
               ) : (
-                <p className="text-fg-muted">La fine pianificata è oltre la deadline.</p>
+                <p className="text-fg-muted">Il progetto inizia dopo la deadline.</p>
               )}
               <div className="pt-1">
                 <Button size="sm" onClick={onOpen}>

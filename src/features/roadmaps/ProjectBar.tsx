@@ -1,22 +1,18 @@
 import type { KeyboardEvent, PointerEvent } from 'react';
 import type { TaskColorId } from '../../domain/colors';
 import { PROJECT_STATUS_LABELS } from '../../domain/projects';
-import type { ProjectChanges, ProjectWithEnd } from '../../domain/projects';
+import type { ProjectWithEnd } from '../../domain/projects';
 import type { ProjectSpan } from '../../domain/projectSpan';
-import { resizeTask } from '../../domain/schedule';
 import type { DateRange, PlacedTask } from '../../domain/schedule';
 import { useFormatDate } from '../../shared/dateFormat';
 import { CURRENT_RESULT, Highlight, useIsCurrentResult } from '../../shared/ui/Highlight';
 import { taskColorStyle } from '../../themes';
 import { diffDays } from '../../utils/dateUtils';
-import type { DragKind } from '../calendar/useTaskDrag';
 import { fadedParts, formatManDays } from './barRendering';
 import type { Lanes, WorkItem } from './barRendering';
 import { ProjectStatusMark } from './projectUi';
 import { useClickOrDoubleClick } from './useClickOrDoubleClick';
 
-/** Bars narrower than this have no handles on their edges: the whole bar moves. */
-const MIN_RESIZABLE_WIDTH = 24;
 /** The arrows move a project by a week: a day is too little to see on a roadmap. */
 const KEY_STEP_DAYS = 7;
 
@@ -47,8 +43,6 @@ interface ProjectBarProps {
   height: number | string;
   /** The lanes under the title, one for each bar of the work; null for none. */
   lanes: Lanes | null;
-  /** The start can be dragged: only when no bar of the team sets where the work begins. */
-  resizableStart: boolean;
   /** The title on one line, out of the bar when longer, rather than cut. */
   overflowTitle: boolean;
   dragging: boolean;
@@ -56,11 +50,8 @@ interface ProjectBarProps {
   describedBy: string;
   /** True for the click that ends a drag, which must not open the project. */
   ignoreClick: () => boolean;
-  onPointerDown: (event: PointerEvent, kind: DragKind) => void;
+  onPointerDown: (event: PointerEvent) => void;
   onOpen: () => void;
-  /** A double click types the days of the project, when it has no bars of work. */
-  onEditDays?: () => void;
-  onChange: (changes: ProjectChanges) => void;
   /** Moves the project with the work of its team by some days. */
   onMove: (days: number) => void;
   /** Moves the project up or down by a row in the order of the members. */
@@ -68,12 +59,11 @@ interface ProjectBarProps {
 }
 
 /**
- * A project on the roadmap, from its first day to its last: solid where its team works, faded
- * and dashed where nobody does, with a lane for each bar of the work under the title, with the
- * name of its person when the lane is a line of text tall. Click or Enter opens it; with a mouse
- * it moves by dragging its title, with the work of its team, and its edges change start and
- * planned end; the lanes do not move on their own. The arrows move it by a week, and with Shift
- * they move its planned end.
+ * A project on the roadmap, from its start to the end of the work of its team: solid where the
+ * team works, faded and dashed where nobody does, with a lane for each bar of the work under the
+ * title, with the name of its person when the lane is a line of text tall. Click or Enter opens
+ * it; with a mouse it moves by dragging its title, with the work of its team; the lanes do not
+ * move on their own. The arrows move it by a week.
  */
 export function ProjectBar({
   placed,
@@ -86,23 +76,19 @@ export function ProjectBar({
   titleHeight,
   height,
   lanes,
-  resizableStart,
   overflowTitle,
   dragging,
   describedBy,
   ignoreClick,
   onPointerDown,
   onOpen,
-  onEditDays,
-  onChange,
   onMove,
   onMoveRow,
 }: ProjectBarProps) {
   const formatDate = useFormatDate();
-  const clicks = useClickOrDoubleClick(onOpen, onEditDays, ignoreClick);
+  const clicks = useClickOrDoubleClick(onOpen, undefined, ignoreClick);
   const { task: project, first, last, continuesBefore, continuesAfter } = placed;
   const width = (last - first + 1) * dayWidth - 2;
-  const resizable = width >= MIN_RESIZABLE_WIDTH;
   const current = useIsCurrentResult('project', project.id);
   const days = span.totalManDays > 0 ? formatManDays(span.totalManDays) : null;
   // Inside the bar, from its left border: a day of the roadmap to pixels.
@@ -118,25 +104,8 @@ export function ProjectBar({
     }
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
-    const step = event.key === 'ArrowRight' ? KEY_STEP_DAYS : -KEY_STEP_DAYS;
-    if (event.shiftKey) {
-      onChange({ endDate: resizeTask(project, 'end', step).endDate });
-    } else {
-      onMove(step);
-    }
+    onMove(event.key === 'ArrowRight' ? KEY_STEP_DAYS : -KEY_STEP_DAYS);
   };
-
-  const handle = (edge: 'start' | 'end') => (
-    <span
-      aria-hidden="true"
-      onPointerDown={(event) => onPointerDown(event, edge)}
-      className={`absolute inset-y-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center hover:bg-current/15 ${
-        edge === 'start' ? 'left-0' : 'right-0'
-      }`}
-    >
-      <span className="h-3 w-0.5 rounded-full bg-current opacity-0 group-hover/bar:opacity-70" />
-    </span>
-  );
 
   return (
     <button
@@ -148,8 +117,8 @@ export function ProjectBar({
         days ? `${days.replace(/ gg?$/, '')} giorni uomo` : null,
         PROJECT_STATUS_LABELS[project.status],
         project.owner ? `responsabile ${project.owner}` : null,
-        project.deadline ? `hard deadline il ${formatDate(project.deadline)}` : null,
-        span.late ? 'oltre la hard deadline' : null,
+        project.deadline ? `deadline il ${formatDate(project.deadline)}` : null,
+        span.late ? 'oltre la deadline' : null,
       ]
         .filter(Boolean)
         .join(', ')}
@@ -160,7 +129,7 @@ export function ProjectBar({
           days ? ` · ${days.replace(/ gg?$/, '')} giorni uomo` : ''
         }`,
         project.deadline
-          ? `Hard deadline ${formatDate(project.deadline)}${span.late ? ', superata' : ''}`
+          ? `Deadline ${formatDate(project.deadline)}${span.late ? ', superata' : ''}`
           : null,
         ...people,
       ]
@@ -168,7 +137,7 @@ export function ProjectBar({
         .join('\n')}
       onPointerDown={(event) => {
         clicks.onPointerDown(event);
-        onPointerDown(event, 'move');
+        onPointerDown(event);
       }}
       onClick={clicks.onClick}
       onDoubleClick={clicks.onDoubleClick}
@@ -202,7 +171,6 @@ export function ProjectBar({
           className="pointer-events-none absolute inset-y-0 bg-surface/60"
         />
       ))}
-      {resizable && resizableStart && !continuesBefore && handle('start')}
       {/* The title stays in view while the start of a long bar scrolls past the left edge. */}
       <span
         style={{ height: titleHeight - 4 }}
@@ -244,7 +212,6 @@ export function ProjectBar({
             )}
           </span>
         ))}
-      {resizable && !continuesAfter && handle('end')}
     </button>
   );
 }

@@ -192,8 +192,6 @@ export function projectContent(project: Omit<Project, 'id'>): DocumentData {
     colorId: project.colorId,
     status: project.status,
   };
-  if (project.endDate) data.endDate = project.endDate;
-  if (project.manDays) data.manDays = project.manDays;
   if (project.deadline) data.deadline = project.deadline;
   if (project.remindDaysBefore !== undefined) data.remindDaysBefore = project.remindDaysBefore;
   if (project.contingency) {

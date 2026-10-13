@@ -12,8 +12,11 @@ import { useDateFormat } from '../..//shared/dateFormat';
 
 interface BackupSectionProps {
   plan: PlanSnapshot;
-  /** Called after the user confirmed, once a copy of the current data has been downloaded. */
-  onReplacePlan: (plan: PlanSnapshot) => void;
+  /**
+   * Called after the user confirmed, once a copy of the current data has been downloaded; absent
+   * for whoever may not replace the plan, who only exports it.
+   */
+  onReplacePlan?: (plan: PlanSnapshot) => void;
   /** More to save and restore, under the data: the settings. */
   children?: ReactNode;
 }
@@ -71,6 +74,7 @@ export function BackupSection({ plan, onReplacePlan, children }: BackupSectionPr
   };
 
   const handleConfirmReplace = (next: PlanSnapshot) => {
+    if (!onReplacePlan) return;
     downloadBackup(plan, 'prima-del-ripristino');
     onReplacePlan(next);
   };
@@ -86,18 +90,28 @@ export function BackupSection({ plan, onReplacePlan, children }: BackupSectionPr
           <Download className="h-4 w-4" aria-hidden="true" />
           Esporta JSON
         </Button>
-        <Button onClick={() => fileInputRef.current?.click()}>
-          <Upload className="h-4 w-4" aria-hidden="true" />
-          Importa JSON…
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={(event) => void handleFileChosen(event)}
-        />
+        {onReplacePlan && (
+          <>
+            <Button onClick={() => fileInputRef.current?.click()}>
+              <Upload className="h-4 w-4" aria-hidden="true" />
+              Importa JSON…
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => void handleFileChosen(event)}
+            />
+          </>
+        )}
       </div>
+      {!onReplacePlan && (
+        <p className="text-xs text-fg-muted">
+          Un backup lo ripristina il proprietario del piano: conserva gli autori delle note, e le
+          regole lo consentono solo al proprietario.
+        </p>
+      )}
 
       {importState.step === 'invalid' && (
         <div className="rounded-lg border border-danger bg-danger-soft p-3 text-xs">

@@ -4,6 +4,8 @@ import type { TaskColorId } from '../domain/colors';
 import darkModern from './dark-modern.json';
 import { deriveTheme } from './derive';
 import lightModern from './light-modern.json';
+import { DEFAULT_COLOR_PRESET, presetTasks } from './presets';
+import type { ColorPreset } from './presets';
 import { VSCODE_THEME_SEEDS } from './vscodeThemes';
 
 /** The semantic colors of the interface. tokens.css turns each one into Tailwind utilities. */
@@ -132,11 +134,19 @@ export function resolveTheme(preference: ThemePreference, systemIsDark: boolean)
   return getTheme(SYSTEM_THEMES[systemIsDark ? 'dark' : 'light']);
 }
 
-/** Sets the theme's colors as the --rb-* variables that tokens.css reads. */
-export function applyTheme(theme: Theme, root: HTMLElement): void {
+/**
+ * Sets the theme's colors as the --rb-* variables that tokens.css reads, with the 24 colors of the
+ * tasks, projects and teams in the preset.
+ */
+export function applyTheme(
+  theme: Theme,
+  root: HTMLElement,
+  preset: ColorPreset = DEFAULT_COLOR_PRESET,
+): void {
   for (const token of COLOR_TOKENS) root.style.setProperty(`--rb-${token}`, theme.colors[token]);
+  const tasks = presetTasks(theme, preset);
   for (const id of TASK_COLOR_IDS) {
-    const tint = theme.tasks[id];
+    const tint = tasks[id];
     root.style.setProperty(`--rb-task-${id}-bg`, tint.bg);
     root.style.setProperty(`--rb-task-${id}-border`, tint.border);
     root.style.setProperty(`--rb-task-${id}-fg`, tint.fg);

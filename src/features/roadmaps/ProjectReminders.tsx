@@ -23,7 +23,7 @@ interface ProjectRemindersProps {
   seenMilestones: SeenReminders;
   onSeenMilestones: (shown: Milestone[]) => void;
   onOpenMilestone: (milestoneId: string) => void;
-  /** The end of the work of a project, the day of the alert without a hard deadline. */
+  /** The end of the work of a project, the day of the alert without a deadline. */
   endOf: (project: Project) => string;
   /** The alerts this browser has already shown. */
   seen: SeenReminders;
@@ -42,7 +42,7 @@ function distance(date: string, today: string, deadline: boolean): string {
 }
 
 /**
- * The projects whose alert has come, in a window: the hard deadline, or the end of the work, and
+ * The projects whose alert has come, in a window: the deadline, or the end of the work, and
  * how far it is; «Apri il progetto» opens one, «Chiudi» dismisses the alerts for their day in
  * this browser. The window waits for the ones the user opened to close.
  */
@@ -145,7 +145,7 @@ export function ProjectReminders({
             </p>
             <p className="mt-1 text-xs">
               <span className="font-semibold">
-                {deadline ? 'Hard deadline' : 'Fine del progetto'} il {formatDate(date)}
+                {deadline ? 'Deadline' : 'Fine del progetto'} il {formatDate(date)}
               </span>
               , {distance(date, today, deadline)}
             </p>

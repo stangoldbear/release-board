@@ -51,7 +51,7 @@ import { ProjectNotesPanel } from './ProjectNotesPanel';
 import { ProjectStatusMark } from './projectUi';
 import type { NoteActions } from './roadmapActions';
 import { projectPeriod } from './roadmapLayout';
-import { initialRows, parseDays, toTeamRows } from './teamEffort';
+import { initialRows, toTeamRows } from './teamEffort';
 import type { EffortRow } from './teamEffort';
 import { TeamEffortTable } from './TeamEffortTable';
 
@@ -147,12 +147,6 @@ export function ProjectDialog({
   const [tab, setTab] = useState<ProjectTab>(project ? initialTab : 'project');
   const [title, setTitle] = useState(project?.title ?? '');
   const [startDate, setStartDate] = useState(project?.startDate ?? defaultStart);
-  const [endDate, setEndDate] = useState(project?.endDate ?? '');
-  const [projectDays, setProjectDays] = useState(
-    project?.manDays
-      ? formatLocaleNumber(project.manDays, Number.isInteger(project.manDays) ? 0 : 1)
-      : '',
-  );
   const [deadline, setDeadline] = useState(project?.deadline ?? '');
   const [remind, setRemind] = useState<number | null>(project?.remindDaysBefore ?? null);
   const remindId = useId();
@@ -187,8 +181,6 @@ export function ProjectDialog({
   const formId = useId();
   const titleId = useId();
   const startId = useId();
-  const endId = useId();
-  const daysId = useId();
   const deadlineId = useId();
   const arrangementId = useId();
   const statusId = useId();
@@ -198,13 +190,9 @@ export function ProjectDialog({
   const viewsId = useId();
 
   const startValid = isIsoDate(startDate);
-  const endValid = endDate === '' || (isIsoDate(endDate) && endDate >= startDate);
   const deadlineValid = deadline === '' || isIsoDate(deadline);
-  const ownDays = parseDays(projectDays);
-  const ownDaysValid = projectDays.trim() === '' || ownDays !== null;
   const teamRows = useMemo(() => toTeamRows(rows, config), [rows, config]);
   const teamDays = teamRows.team.length > 0 || teamRows.contingency !== null;
-  const hasLength = teamDays || isIsoDate(endDate) || ownDays !== null;
 
   // Where the project would fall once saved: the bars placed by the arrangement, the span after them.
   const preview = useMemo(() => {
@@ -230,8 +218,6 @@ export function ProjectDialog({
       colorId,
       status,
     };
-    if (isIsoDate(endDate)) draft.endDate = endDate;
-    if (ownDays) draft.manDays = ownDays;
     if (deadline && isIsoDate(deadline)) draft.deadline = deadline;
     if (plan.contingency) draft.contingency = plan.contingency;
     return {
@@ -249,8 +235,6 @@ export function ProjectDialog({
     title,
     colorId,
     status,
-    endDate,
-    ownDays,
     deadline,
   ]);
 
@@ -263,14 +247,7 @@ export function ProjectDialog({
     });
   };
 
-  const canSave =
-    title.trim() !== '' &&
-    startValid &&
-    endValid &&
-    deadlineValid &&
-    ownDaysValid &&
-    hasLength &&
-    !gone;
+  const canSave = title.trim() !== '' && startValid && deadlineValid && !gone;
 
   const save = (event: FormEvent) => {
     event.preventDefault();
@@ -286,8 +263,6 @@ export function ProjectDialog({
       return;
     }
     const content: ProjectContent = { title: title.trim(), startDate, colorId, status };
-    if (isIsoDate(endDate)) content.endDate = endDate;
-    if (ownDays) content.manDays = ownDays;
     if (deadline && isIsoDate(deadline)) content.deadline = deadline;
     if (remind !== null) content.remindDaysBefore = remind;
     if (preview.plan.contingency) content.contingency = preview.plan.contingency;
@@ -338,7 +313,7 @@ export function ProjectDialog({
           · lavoro dal {formatDate(span.work.start)} al {formatDate(span.work.end)}
         </span>
       )}
-      {span.late && <span className="font-semibold text-danger"> · oltre la hard deadline</span>}
+      {span.late && <span className="font-semibold text-danger"> · oltre la deadline</span>}
     </>
   ) : (
     '—'
@@ -532,7 +507,7 @@ export function ProjectDialog({
               {dateField(startId, 'Data inizio lavori del team', startDate, setStartDate, {
                 required: true,
               })}
-              {dateField(deadlineId, 'Hard deadline', deadline, setDeadline, {
+              {dateField(deadlineId, 'Deadline', deadline, setDeadline, {
                 min: startDate || undefined,
                 hint: 'Oltre questo giorno il progetto non può andare online: la roadmap segna dove il lavoro la supera.',
               })}
@@ -558,38 +533,9 @@ export function ProjectDialog({
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-fg-muted">
-                  Una finestra all&apos;apertura della bacheca, una volta per browser: sulla hard
+                  Una finestra all&apos;apertura della bacheca, una volta per browser: sulla
                   deadline, o senza di essa sulla fine del lavoro del progetto.
                 </p>
-              </div>
-            )}
-
-            {advanced && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {dateField(endId, 'Fine pianificata', endDate, setEndDate, {
-                  min: startDate || undefined,
-                  hint: 'Facoltativa: i giorni oltre il lavoro del team restano nella barra, sbiaditi.',
-                })}
-                <div>
-                  <label htmlFor={daysId} className={LABEL_CLASS}>
-                    Giorni uomo del progetto
-                  </label>
-                  <input
-                    id={daysId}
-                    type="text"
-                    inputMode="decimal"
-                    value={projectDays}
-                    onChange={(event) => setProjectDays(event.target.value)}
-                    aria-invalid={!ownDaysValid || undefined}
-                    placeholder="es. 20"
-                    className={`${FIELD_CLASS} tabular-nums`}
-                  />
-                  <p className="mt-1 text-xs text-fg-muted">
-                    {teamDays
-                      ? 'Contano i giorni del team: questi restano da parte.'
-                      : 'Senza lo spaccato del team: la barra dura questi giorni lavorativi.'}
-                  </p>
-                </div>
               </div>
             )}
 
@@ -605,10 +551,10 @@ export function ProjectDialog({
                   if (assignment) onOpenAssignment(assignment);
                 }}
               />
-              {!hasLength && (
-                <p className="mt-1.5 text-xs text-warning">
-                  Serve una durata: i giorni del team qui sopra, oppure nella vista avanzata una
-                  fine pianificata o i giorni uomo del progetto.
+              {!teamDays && (
+                <p className="mt-1.5 text-xs text-fg-muted">
+                  Il progetto dura quanto il lavoro del team: senza giorni la barra è lunga un
+                  giorno, quello d&apos;inizio.
                 </p>
               )}
             </div>
@@ -780,8 +726,7 @@ export function ProjectDialog({
             />
             {!advanced && fields.length > quickFields.length && (
               <p className="text-xs text-fg-muted">
-                Stato, responsabile, descrizione, fine pianificata e gli altri campi sono nella
-                vista avanzata.
+                Stato, responsabile, descrizione e gli altri campi sono nella vista avanzata.
               </p>
             )}
           </form>

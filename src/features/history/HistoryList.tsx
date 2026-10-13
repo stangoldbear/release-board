@@ -20,6 +20,7 @@ function Author({ entry }: { entry: HistoryEntry }) {
       {picture ? (
         <img
           src={picture}
+          referrerPolicy="no-referrer"
           alt=""
           loading="lazy"
           onError={() => setFailed(true)}

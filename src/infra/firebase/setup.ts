@@ -6,16 +6,30 @@ import type { Actor } from './FirestorePlanRepository';
 /** What the signed-in user finds in the instance. */
 export type Access =
   | { kind: 'no-plan' }
+  /** The plan admits only emails of some domains, and the account's is not one of them. */
+  | { kind: 'not-admitted' }
   | { kind: 'not-member'; planName: string }
   | { kind: 'member'; planName: string; role: Role; login: string; avatarUrl: string };
 
-/** Reads the plan and the user's own membership: the two documents the rules open to everyone. */
+/**
+ * Reads the plan and the user's own membership: the two documents the rules open to everyone
+ * admitted. Only the email domains of the plan refuse the first.
+ */
 export async function checkAccess(
   db: Firestore,
   planId: string,
   githubId: string,
 ): Promise<Access> {
-  const plan = await getDoc(doc(db, `plans/${planId}`));
+  let plan;
+  try {
+    plan = await getDoc(doc(db, `plans/${planId}`));
+  } catch (error) {
+    const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : '';
+    if (code === 'permission-denied') {
+      return { kind: 'not-admitted' };
+    }
+    throw error;
+  }
   if (!plan.exists()) return { kind: 'no-plan' };
   const planName = typeof plan.data().name === 'string' ? (plan.data().name as string) : '';
   const member = await getDoc(doc(db, `plans/${planId}/members/${githubId}`));
@@ -31,8 +45,9 @@ export async function checkAccess(
 }
 
 /**
- * Creates the plan with the actor as its owner: plan document, membership and the first history
- * entry in one batch, as the rules require. The content is imported afterwards, as a member.
+ * Creates the plan with the actor as its owner: plan document, membership, the first history
+ * entry and the writer's document that names it, in one batch, as the rules require. The content
+ * is imported afterwards, as a member.
  */
 export async function createPlan(
   db: Firestore,
@@ -55,7 +70,8 @@ export async function createPlan(
     addedBy: actor.uid,
     addedAt: serverTimestamp(),
   });
-  batch.set(doc(db, `plans/${planId}/history/${createId()}`), {
+  const historyId = createId();
+  batch.set(doc(db, `plans/${planId}/history/${historyId}`), {
     entity: 'plan',
     entityId: planId,
     action: 'setup',
@@ -63,5 +79,7 @@ export async function createPlan(
     at: serverTimestamp(),
     after: { name: name.trim() },
   });
+  // The plan document has no room for the entry's id: the writer's document carries it.
+  batch.set(doc(db, `plans/${planId}/writers/${actor.uid}`), { historyId, at: serverTimestamp() });
   await batch.commit();
 }

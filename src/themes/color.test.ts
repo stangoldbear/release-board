@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contrast, ensureContrast, luminance, mix } from './color';
+import { contrast, deltaE, ensureContrast, fromOklch, luminance, mix, toOklch } from './color';
 import { deriveTheme } from './derive';
 import { VSCODE_THEME_SEEDS } from './vscodeThemes';
 
@@ -9,6 +9,27 @@ describe('colors', () => {
     expect(luminance('#000000')).toBe(0);
     expect(contrast('#FFFFFF', '#000000')).toBeCloseTo(21);
     expect(contrast('#767676', '#FFFFFF')).toBeCloseTo(4.54, 2);
+  });
+
+  it('turns colors into OKLCH and back', () => {
+    const red = toOklch('#FF0000');
+    expect(red.l).toBeCloseTo(0.628, 3);
+    expect(red.c).toBeCloseTo(0.2577, 3);
+    expect(red.h).toBeCloseTo(29.23, 1);
+    for (const hex of ['#FF0000', '#38BDF8', '#1F1F1F', '#FEF3C7', '#FFFFFF']) {
+      expect(fromOklch(toOklch(hex))).toBe(hex);
+    }
+    // A chroma out of the screen's gamut comes down, at the same lightness and hue.
+    const vivid = toOklch(fromOklch({ l: 0.9, c: 0.4, h: 260 }));
+    expect(vivid.l).toBeCloseTo(0.9, 2);
+    // Rounded to 8 bits a channel, a pale color keeps its hue within a couple of degrees.
+    expect(Math.abs(vivid.h - 260)).toBeLessThan(2);
+    expect(vivid.c).toBeLessThan(0.1);
+  });
+
+  it('measures how far apart two colors look', () => {
+    expect(deltaE('#38BDF8', '#38BDF8')).toBe(0);
+    expect(deltaE('#000000', '#FFFFFF')).toBeCloseTo(100, 0);
   });
 
   it('mixes two colors', () => {

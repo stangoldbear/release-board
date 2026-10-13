@@ -75,16 +75,20 @@ describe('project documents', () => {
     const data = projectContent({
       title: 'App mobile 3.0',
       startDate: '2026-09-10',
-      endDate: '2026-12-20',
+      deadline: '2026-12-20',
       colorId: 'purple',
       status: 'in_progress',
       owner: '',
     });
     expect(Object.keys(data).sort()).toEqual(
-      ['colorId', 'endDate', 'startDate', 'status', 'title'].sort(),
+      ['colorId', 'deadline', 'startDate', 'status', 'title'].sort(),
     );
     expect(readProject('p1', data)).toEqual({ id: 'p1', ...data });
-    expect(readProject('p1', { ...data, endDate: '2026-01-01' })).toBeNull();
+    // The planned end and the days of the project of the versions before 0.16 are ignored.
+    expect(readProject('p1', { ...data, endDate: '2026-01-01', manDays: 0 })).toEqual({
+      id: 'p1',
+      ...data,
+    });
     expect(readProject('p1', { ...data, status: 'done' })).toBeNull();
     // The default color of a project, not the yellow of the tasks.
     expect(readProject('p1', { ...data, colorId: 'neon' })?.colorId).toBe('blue');
@@ -322,7 +326,7 @@ describe('plan documents', () => {
   it('writes the metric definition along with the content', () => {
     expect(contentWrites(plan).some((write) => write.path === 'metrics/metric-1')).toBe(true);
     expect(importSummary(plan)).toBe(
-      '3 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere, 5 progetti, 4 note dei progetti, 4 assegnazioni, 2 note sulla timeline',
+      '3 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere, 5 progetti, 4 note dei progetti, 10 assegnazioni, 2 note sulla timeline',
     );
   });
 

@@ -18,6 +18,7 @@ const roadmap = {
 };
 const appearance: AppearanceSettings = {
   theme: 'dark-modern',
+  colorPreset: 'smooth',
   dateFormat: 'dd/mm/yyyy',
   layout: 'classic',
   textScale: 1.15,
@@ -50,7 +51,13 @@ describe('the settings file', () => {
         closures: [...roadmap.closures, { start: 'domani', end: 'dopodomani' }],
         widgets: ['x'],
       },
-      appearance: { ...appearance, theme: 'neon', textScale: 3, sound: 'on' },
+      appearance: {
+        ...appearance,
+        theme: 'neon',
+        colorPreset: 'rainbow',
+        textScale: 3,
+        sound: 'on',
+      },
     };
     const result = parseSettingsText(JSON.stringify(changed));
     expect(result.ok && result.roadmap?.teams).toHaveLength(roadmap.teams.length);
@@ -61,6 +68,7 @@ describe('the settings file', () => {
       '1 team non letto',
       '1 chiusura non letta',
       'Tema non riconosciuto',
+      'Colori non riconosciuti',
       'Dimensione del testo non riconosciuta',
     ]);
   });

@@ -17,4 +17,8 @@ export interface MembersRepository {
   invite(login: string): Promise<InviteResult>;
   setRole(githubId: string, role: Role): Promise<void>;
   remove(githubId: string): Promise<void>;
+  /** The email domains the plan admits; null while it admits every email. */
+  subscribeDomains(listener: (domains: string[] | null) => void): () => void;
+  /** Admits only the accounts with a verified email of these domains, or everyone with null. */
+  setDomains(domains: string[] | null): Promise<void>;
 }

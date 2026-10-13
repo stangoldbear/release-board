@@ -1,4 +1,5 @@
 import { collection, doc, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
+import type { DocumentData } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import type { InviteResult, Member, MembersRepository, Role } from '../../app/MembersRepository';
 import type { GitHubUser } from '../github/users';
@@ -15,6 +16,9 @@ interface Options {
 
 const ROLE_ORDER: Record<Role, number> = { owner: 0, editor: 1 };
 
+/** The document of the settings with the email domains the plan admits. */
+const ACCESS_ID = 'access';
+
 /** The members of the plan in Firestore. Changes wait for the server, so failures can be shown. */
 export class FirestoreMembersRepository implements MembersRepository {
   private readonly db: Firestore;
@@ -23,6 +27,7 @@ export class FirestoreMembersRepository implements MembersRepository {
   private readonly createId: () => string;
   private readonly lookupUser: Options['lookupUser'];
   private members: Member[] = [];
+  private domains: string[] | null = null;
 
   constructor({ db, planId, actor, createId, lookupUser }: Options) {
     this.db = db;
@@ -61,7 +66,9 @@ export class FirestoreMembersRepository implements MembersRepository {
       addedBy: this.actor.uid,
       addedAt: serverTimestamp(),
     });
-    this.record(batch, user.id, 'create', { after: { login: user.login, role: 'editor' } });
+    this.record(batch, 'member', user.id, 'create', {
+      after: { login: user.login, role: 'editor' },
+    });
     await batch.commit();
     return 'added';
   }
@@ -70,7 +77,7 @@ export class FirestoreMembersRepository implements MembersRepository {
     const member = this.members.find((item) => item.githubId === githubId);
     const batch = writeBatch(this.db);
     batch.update(this.memberRef(githubId), { role });
-    this.record(batch, githubId, 'update', {
+    this.record(batch, 'member', githubId, 'update', {
       before: { login: member?.login ?? '', role: member?.role ?? '' },
       after: { login: member?.login ?? '', role },
     });
@@ -81,9 +88,40 @@ export class FirestoreMembersRepository implements MembersRepository {
     const member = this.members.find((item) => item.githubId === githubId);
     const batch = writeBatch(this.db);
     batch.delete(this.memberRef(githubId));
-    this.record(batch, githubId, 'delete', {
+    this.record(batch, 'member', githubId, 'delete', {
       before: { login: member?.login ?? '', role: member?.role ?? '' },
     });
+    await batch.commit();
+  }
+
+  subscribeDomains(listener: (domains: string[] | null) => void): () => void {
+    return onSnapshot(this.accessRef(), (snapshot) => {
+      const domains: unknown = snapshot.data()?.domains;
+      this.domains = Array.isArray(domains)
+        ? domains.filter((item): item is string => typeof item === 'string')
+        : null;
+      listener(this.domains);
+    });
+  }
+
+  async setDomains(domains: string[] | null): Promise<void> {
+    const before = this.domains ? { domains: this.domains } : undefined;
+    const batch = writeBatch(this.db);
+    if (domains === null) {
+      this.record(batch, 'access', ACCESS_ID, 'delete', { ...(before && { before }) });
+      batch.delete(this.accessRef());
+    } else {
+      const historyId = this.record(batch, 'access', ACCESS_ID, before ? 'update' : 'create', {
+        ...(before && { before }),
+        after: { domains },
+      });
+      batch.set(this.accessRef(), {
+        domains,
+        updatedAt: serverTimestamp(),
+        updatedBy: this.actor.uid,
+        lastHistoryId: historyId,
+      });
+    }
     await batch.commit();
   }
 
@@ -91,19 +129,34 @@ export class FirestoreMembersRepository implements MembersRepository {
     return doc(this.db, `${this.planPath}/members/${githubId}`);
   }
 
+  private accessRef() {
+    return doc(this.db, `${this.planPath}/settings/${ACCESS_ID}`);
+  }
+
+  /**
+   * The history entry of the change, whose id it returns. A member document has no room for the
+   * entry's id: the writer's document carries it, as the rules require.
+   */
   private record(
     batch: ReturnType<typeof writeBatch>,
-    githubId: string,
+    entity: 'member' | 'access',
+    entityId: string,
     action: 'create' | 'update' | 'delete',
-    details: { before?: Record<string, unknown>; after?: Record<string, unknown> },
-  ): void {
-    batch.set(doc(this.db, `${this.planPath}/history/${this.createId()}`), {
-      entity: 'member',
-      entityId: githubId,
+    details: { before?: DocumentData; after?: DocumentData },
+  ): string {
+    const historyId = this.createId();
+    batch.set(doc(this.db, `${this.planPath}/history/${historyId}`), {
+      entity,
+      entityId,
       action,
       actor: { ...this.actor },
       at: serverTimestamp(),
       ...details,
     });
+    batch.set(doc(this.db, `${this.planPath}/writers/${this.actor.uid}`), {
+      historyId,
+      at: serverTimestamp(),
+    });
+    return historyId;
   }
 }

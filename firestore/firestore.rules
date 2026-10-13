@@ -1,9 +1,14 @@
 rules_version = '2';
 
-// Release Board. One plan per instance, open to its members only. Every change to the plan's
-// content says who made it and when, and is written in the same batch as a history entry.
+// Release Board. One plan per instance, open to its members only. Every change to the plan says
+// who made it and when, and is written in the same batch as a new history entry.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // The id of the one plan of an instance: no other plan can be created.
+    function isPlanId(planId) {
+      return planId == 'main';
+    }
 
     function signedIn() {
       return request.auth != null;
@@ -26,26 +31,56 @@ service cloud.firestore {
       return /databases/$(database)/documents/plans/$(planId)/history/$(entryId);
     }
 
+    function writerPath(planId) {
+      return /databases/$(database)/documents/plans/$(planId)/writers/$(request.auth.uid);
+    }
+
+    function accessPath(planId) {
+      return /databases/$(database)/documents/plans/$(planId)/settings/access;
+    }
+
+    // The email of the signed-in user, verified, with one "@" and a domain among the given ones.
+    function hasEmailIn(domains) {
+      let email = request.auth.token.email.lower();
+      return request.auth.token.email_verified == true
+        && email.matches('^[^@]+@[^@]+$')
+        && email.split('@')[1] in domains;
+    }
+
+    // When the owner admits only some email domains, everyone else is out, plan name included.
+    function emailAdmitted(planId) {
+      return !exists(accessPath(planId)) || hasEmailIn(get(accessPath(planId)).data.domains);
+    }
+
     function isMember(planId) {
-      return signedIn() && exists(memberPath(planId));
+      return signedIn() && exists(memberPath(planId)) && emailAdmitted(planId);
     }
 
     // For writes: also true for the first owner, who adds themselves in the batch that creates
     // the plan. Member documents can only be created by the owner or in that batch.
     function isMemberAfter(planId) {
-      return signedIn() && existsAfter(memberPath(planId));
+      return signedIn() && existsAfter(memberPath(planId)) && emailAdmitted(planId);
     }
 
     function isOwner(planId) {
       return isMember(planId) && get(memberPath(planId)).data.role == 'owner';
     }
 
+    // A day of the calendar: four digits of the year, a month from 01 to 12, a day from 01 to 31.
     function isIsoDate(value) {
-      return value is string && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+      return value is string
+        && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
     }
 
     function isText(value, max) {
       return value is string && value.size() > 0 && value.size() <= max;
+    }
+
+    // A list of text, at most `count` items and `max` characters in all. join() fails on an item
+    // that is a map or a list; a number, a boolean or null passes as its text, and the app reads
+    // only the strings.
+    function isTextList(value, count, max) {
+      return value is list && value.size() <= count && value.join('').size() <= max;
     }
 
     // Ids of the roadmap configuration: letters, digits, dashes and underscores.
@@ -66,26 +101,34 @@ service cloud.firestore {
       return author.id == githubId() && author.login == get(memberPath(planId)).data.login;
     }
 
-    // The change is an import, which keeps the authors of a restored backup.
-    function isImport(planId) {
-      return getAfter(historyPath(planId, request.resource.data.lastHistoryId)).data.action
-        == 'import';
+    // A history entry that this very batch creates: it did not exist before the request.
+    function isNewEntry(planId, entryId) {
+      return entryId is string
+        && !exists(historyPath(planId, entryId))
+        && existsAfter(historyPath(planId, entryId));
     }
 
-    // Who, when, and the history entry of the same batch that records the change. The client
+    // The change restores a backup, which keeps the authors of its notes: only the owner writes
+    // such an entry.
+    function isImport(planId) {
+      let entry = getAfter(historyPath(planId, request.resource.data.lastHistoryId)).data;
+      return entry.action == 'import' && entry.entity == 'plan';
+    }
+
+    // Who, when, and the new history entry of the same batch that records the change. The client
     // writes the server timestamp, so updatedAt equals the time of the request.
     function audited(planId) {
       let data = request.resource.data;
       return data.updatedBy == request.auth.uid
         && data.updatedAt == request.time
-        && data.lastHistoryId is string
-        && existsAfter(historyPath(planId, data.lastHistoryId));
+        && isNewEntry(planId, data.lastHistoryId);
     }
 
-    // An update must point to a new entry: the previous one already exists.
-    function auditedUpdate(planId) {
-      return audited(planId)
-        && request.resource.data.lastHistoryId != resource.data.lastHistoryId;
+    // A write that leaves no document to carry its history entry, as a deletion: the batch also
+    // writes the writer's document, at the time of the request, with the id of its new entry.
+    function recorded(planId) {
+      let writer = getAfter(writerPath(planId)).data;
+      return writer.at == request.time && isNewEntry(planId, writer.historyId);
     }
 
     // What a free note holds, shared or private. Its position orders the strip; a move changes
@@ -102,19 +145,23 @@ service cloud.firestore {
     }
 
     match /plans/{planId} {
-      // Anyone signed in may learn whether the plan exists, to be offered its creation or told to
-      // ask for an invitation. The document holds only the plan's name.
-      allow get: if signedIn();
+      // Anyone signed in, and admitted by the email domains when the owner sets them, may learn
+      // whether the plan exists, to be offered its creation or told to ask for an invitation. The
+      // document holds only the plan's name.
+      allow get: if signedIn() && emailAdmitted(planId);
       allow list: if false;
       allow create: if signedIn()
+        && isPlanId(planId)
         && request.resource.data.keys().hasOnly(['name', 'createdBy', 'createdAt'])
         && isText(request.resource.data.name, 80)
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdAt == request.time
-        && getAfter(memberPath(planId)).data.role == 'owner';
+        && getAfter(memberPath(planId)).data.role == 'owner'
+        && recorded(planId);
       allow update: if isOwner(planId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
-        && isText(request.resource.data.name, 80);
+        && isText(request.resource.data.name, 80)
+        && recorded(planId);
       allow delete: if false;
 
       match /members/{memberId} {
@@ -125,18 +172,23 @@ service cloud.firestore {
             && data.login.matches('^[A-Za-z0-9-]+$')
             && data.avatarUrl is string
             && data.avatarUrl.size() <= 300
+            // The GitHub picture, or none: never an address of someone's own server.
+            && (data.avatarUrl == ''
+              || data.avatarUrl.matches('^https://avatars[.]githubusercontent[.]com/.*'))
             && data.role in ['owner', 'editor']
             && data.addedBy == request.auth.uid
             && data.addedAt == request.time;
         }
 
-        // Everyone sees their own membership; members see each other.
-        allow get: if signedIn() && (memberId == githubId() || isMember(planId));
+        // Everyone admitted sees their own membership; members see each other.
+        allow get: if signedIn() && emailAdmitted(planId)
+          && (memberId == githubId() || isMember(planId));
         allow list: if isMember(planId);
         // The first owner adds themselves while creating the plan; then only the owner invites.
-        allow create: if validMember() && (
+        allow create: if validMember() && recorded(planId) && (
           isOwner(planId)
           || (memberId == githubId()
+            && isPlanId(planId)
             && request.resource.data.role == 'owner'
             && !exists(planPath(planId))
             && getAfter(planPath(planId)).data.createdBy == request.auth.uid));
@@ -144,8 +196,9 @@ service cloud.firestore {
         allow update: if isOwner(planId)
           && memberId != githubId()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
-          && request.resource.data.role in ['owner', 'editor'];
-        allow delete: if isOwner(planId) && memberId != githubId();
+          && request.resource.data.role in ['owner', 'editor']
+          && recorded(planId);
+        allow delete: if isOwner(planId) && memberId != githubId() && recorded(planId);
 
         // The member's private free notes: nobody else reads or writes them, so they leave no
         // history and carry no author, which is the member of the path.
@@ -168,8 +221,8 @@ service cloud.firestore {
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validLane();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validLane();
-        allow delete: if isMember(planId);
+        allow update: if isMemberAfter(planId) && audited(planId) && validLane();
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
       match /tasks/{taskId} {
@@ -191,21 +244,22 @@ service cloud.firestore {
             && (!('assignee' in data) || (data.assignee is string && data.assignee.size() <= 100))
             && (!('description' in data)
               || (data.description is string && data.description.size() <= 5000))
-            && (!('deliverables' in data)
-              || (data.deliverables is list && data.deliverables.size() <= 100));
+            && (!('deliverables' in data) || isTextList(data.deliverables, 100, 20000));
         }
 
         allow read: if isMember(planId);
         allow create: if isMemberAfter(planId) && audited(planId) && validTask();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validTask();
-        allow delete: if isMember(planId);
+        allow update: if isMemberAfter(planId) && audited(planId) && validTask();
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
+      // The plan has one metric, the daily revenue, with the id the app gives it.
       match /metrics/{metricId} {
         allow read: if isMember(planId);
         function validMetric() {
           let data = request.resource.data;
-          return data.keys().hasOnly(
+          return metricId == 'metric-1'
+            && data.keys().hasOnly(
               ['label', 'unit', 'decimals', 'position', 'visible', 'updatedAt', 'updatedBy', 'lastHistoryId'])
             && isText(data.label, 60)
             && data.unit is string
@@ -218,15 +272,16 @@ service cloud.firestore {
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validMetric();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validMetric();
-        allow delete: if isMember(planId);
+        allow update: if isMemberAfter(planId) && audited(planId) && validMetric();
+        allow delete: if isMember(planId) && recorded(planId);
 
         // A daily value; from a revenue forecast also the day's approval light and promotions.
         match /values/{date} {
           allow read: if isMember(planId);
           function validValue() {
             let data = request.resource.data;
-            return isIsoDate(date)
+            return metricId == 'metric-1'
+              && isIsoDate(date)
               && data.keys().hasOnly(
                 ['value', 'approval', 'promoEu', 'promoNonEu', 'updatedAt', 'updatedBy', 'lastHistoryId'])
               && data.value is number
@@ -236,8 +291,8 @@ service cloud.firestore {
           }
 
           allow create: if isMemberAfter(planId) && audited(planId) && validValue();
-          allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validValue();
-          allow delete: if isMember(planId);
+          allow update: if isMemberAfter(planId) && audited(planId) && validValue();
+          allow delete: if isMember(planId) && recorded(planId);
         }
       }
 
@@ -250,8 +305,8 @@ service cloud.firestore {
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validNote();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validNote();
-        allow delete: if isMember(planId);
+        allow update: if isMemberAfter(planId) && audited(planId) && validNote();
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
       // A shared free note, in the strip under the search, with the member who wrote it. The
@@ -269,25 +324,24 @@ service cloud.firestore {
 
         allow create: if isMemberAfter(planId) && audited(planId) && validMemo()
           && (writtenBy(planId, request.resource.data.author) || isImport(planId));
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validMemo()
+        allow update: if isMemberAfter(planId) && audited(planId) && validMemo()
           && request.resource.data.author == resource.data.author;
-        allow delete: if isMember(planId);
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
-      // A project of the roadmap: a row with a bar from its start to its end. The values of its
-      // custom fields are a map by field id, which the app validates against the definitions.
+      // A project of the roadmap: a row with a bar from its start to the end of the work of its
+      // team. The values of its custom fields are a map by field id, which the app validates
+      // against the definitions. The planned end and the days of the project of the versions
+      // before 0.16 are gone: a change of a project removes them.
       match /projects/{projectId} {
         allow read: if isMember(planId);
         function validProject() {
           let data = request.resource.data;
-          return data.keys().hasOnly(['title', 'startDate', 'endDate', 'manDays', 'deadline',
-              'remindDaysBefore', 'contingency', 'arrangement', 'position', 'colorId', 'status',
-              'owner', 'description', 'fields', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+          return data.keys().hasOnly(['title', 'startDate', 'deadline', 'remindDaysBefore',
+              'contingency', 'arrangement', 'position', 'colorId', 'status', 'owner',
+              'description', 'fields', 'updatedAt', 'updatedBy', 'lastHistoryId'])
             && isText(data.title, 200)
             && isIsoDate(data.startDate)
-            && (!('endDate' in data) || (isIsoDate(data.endDate) && data.startDate <= data.endDate))
-            && (!('manDays' in data)
-              || (data.manDays is number && data.manDays > 0 && data.manDays <= 500))
             && (!('deadline' in data) || isIsoDate(data.deadline))
             && (!('remindDaysBefore' in data) || (data.remindDaysBefore is int
               && data.remindDaysBefore >= 0 && data.remindDaysBefore <= 365))
@@ -310,8 +364,8 @@ service cloud.firestore {
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validProject();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validProject();
-        allow delete: if isMember(planId);
+        allow update: if isMemberAfter(planId) && audited(planId) && validProject();
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
       // A note written on a project along the way, by the member who writes it; as for the free
@@ -331,17 +385,17 @@ service cloud.firestore {
             && (!('status' in data) || data.status in ['open', 'done'])
             && (!('dueOn' in data) || isIsoDate(data.dueOn))
             && (!('remind' in data) || (data.remind == true && 'dueOn' in data))
-            && (!('owners' in data) || (data.owners is list && data.owners.size() <= 20))
-            && (!('tags' in data) || (data.tags is list && data.tags.size() <= 20));
+            && (!('owners' in data) || isTextList(data.owners, 20, 1200))
+            && (!('tags' in data) || isTextList(data.tags, 20, 1200));
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validProjectNote()
           && (writtenBy(planId, request.resource.data.author) || isImport(planId));
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validProjectNote()
+        allow update: if isMemberAfter(planId) && audited(planId) && validProjectNote()
           && request.resource.data.author == resource.data.author
           && request.resource.data.projectId == resource.data.projectId
           && request.resource.data.createdAt == resource.data.createdAt;
-        allow delete: if isMember(planId);
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
       // A note on a day of the roadmap: of a project, or of none on the row at the top.
@@ -362,8 +416,8 @@ service cloud.firestore {
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validMilestone();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validMilestone();
-        allow delete: if isMember(planId);
+        allow update: if isMemberAfter(planId) && audited(planId) && validMilestone();
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
       // The work of a person on a project: from a day on, for some days of effort.
@@ -383,8 +437,8 @@ service cloud.firestore {
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validAssignment();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validAssignment();
-        allow delete: if isMember(planId);
+        allow update: if isMemberAfter(planId) && audited(planId) && validAssignment();
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
       // A custom field of the projects, as Settings → Roadmap defines it; a choice field brings
@@ -413,8 +467,8 @@ service cloud.firestore {
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validProjectField();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validProjectField();
-        allow delete: if isMember(planId);
+        allow update: if isMemberAfter(planId) && audited(planId) && validProjectField();
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
       // A team of the people who work on the projects, with its color and its short tag.
@@ -436,8 +490,8 @@ service cloud.firestore {
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validTeam();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validTeam();
-        allow delete: if isMember(planId);
+        allow update: if isMemberAfter(planId) && audited(planId) && validTeam();
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
       // Someone who works on the projects, in a team, with the days they are away.
@@ -458,13 +512,13 @@ service cloud.firestore {
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validStakeholder();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validStakeholder();
-        allow delete: if isMember(planId);
+        allow update: if isMemberAfter(planId) && audited(planId) && validStakeholder();
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
-      // The shared settings of the roadmap: one document, "roadmap", with the formula of the
-      // contingency, the colors of the projects and the company closures. An empty document is
-      // fine: an import always writes it.
+      // The shared settings: "roadmap", with the formula of the contingency, the colors of the
+      // projects and the company closures, which every member changes (an empty document is fine:
+      // an import always writes it); and "access", with the email domains the owner admits.
       match /settings/{settingId} {
         allow read: if isMember(planId);
         function validSettings() {
@@ -479,26 +533,66 @@ service cloud.firestore {
               || (data.closures is list && data.closures.size() <= 100));
         }
 
-        allow create: if isMemberAfter(planId) && audited(planId) && validSettings();
-        allow update: if isMemberAfter(planId) && auditedUpdate(planId) && validSettings();
-        allow delete: if isMember(planId);
+        // Lower-case domains, such as "example.com"; never a list that leaves out the owner who
+        // writes it, who would lose the plan.
+        function validAccess() {
+          let data = request.resource.data;
+          return settingId == 'access'
+            && data.keys().hasOnly(['domains', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && data.domains is list
+            && data.domains.size() > 0
+            && data.domains.size() <= 20
+            && data.domains.join(',').matches('^[a-z0-9.-]+(,[a-z0-9.-]+)*$')
+            && hasEmailIn(data.domains);
+        }
+
+        allow create, update: if isMemberAfter(planId) && audited(planId)
+          && (validSettings() || (validAccess() && isOwner(planId)));
+        allow delete: if isMember(planId) && recorded(planId)
+          && (settingId != 'access' || isOwner(planId));
+      }
+
+      // The last batch of a writer that leaves no document to record it, as a deletion: the id
+      // of its history entry, written at the time of the request. Nobody reads it but the rules.
+      match /writers/{uid} {
+        allow read, delete: if false;
+        allow create, update: if uid == request.auth.uid
+          && isMemberAfter(planId)
+          && request.resource.data.keys().hasOnly(['historyId', 'at'])
+          && request.resource.data.at == request.time
+          && isNewEntry(planId, request.resource.data.historyId);
       }
 
       // Who changed what and when. Entries are written by the client together with the change
-      // and can never be altered.
+      // and can never be altered. The member who writes one is its actor, with the username of
+      // their member document; creating the plan and restoring a backup are the owner's.
       match /history/{entryId} {
         allow read: if isMember(planId);
-        allow create: if isMemberAfter(planId)
-          && request.resource.data.keys().hasOnly(
-            ['entity', 'entityId', 'action', 'actor', 'at', 'before', 'after', 'summary'])
-          && request.resource.data.entity
-            in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'memo', 'project',
-              'projectNote', 'assignment', 'projectField', 'team', 'stakeholder',
-              'roadmapSettings', 'milestone', 'member']
-          && request.resource.data.action in ['create', 'update', 'delete', 'import', 'setup']
-          && request.resource.data.actor.uid == request.auth.uid
-          && request.resource.data.actor.githubId == githubId()
-          && request.resource.data.at == request.time;
+        function validEntry() {
+          let data = request.resource.data;
+          let member = getAfter(memberPath(planId)).data;
+          return data.keys().hasOnly(
+              ['entity', 'entityId', 'action', 'actor', 'at', 'before', 'after', 'summary'])
+            && data.entity
+              in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'memo', 'project',
+                'projectNote', 'assignment', 'projectField', 'team', 'stakeholder',
+                'roadmapSettings', 'milestone', 'member', 'access']
+            && data.action in ['create', 'update', 'delete', 'import', 'setup']
+            && ((data.action != 'setup' && (data.action != 'import' || data.entity != 'plan'))
+              || member.role == 'owner')
+            && isText(data.entityId, 100)
+            && data.actor is map
+            && data.actor.keys().hasOnly(['uid', 'githubId', 'login'])
+            && data.actor.uid == request.auth.uid
+            && data.actor.githubId == githubId()
+            && data.actor.login == member.login
+            && data.at == request.time
+            && (!('summary' in data) || isText(data.summary, 500))
+            && (!('before' in data) || data.before is map)
+            && (!('after' in data) || data.after is map);
+        }
+
+        allow create: if isMemberAfter(planId) && validEntry();
         allow update, delete: if false;
       }
     }

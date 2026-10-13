@@ -185,6 +185,17 @@ function CloudSession({ services, account, projectId, onSignOut }: CloudSessionP
     );
   }
 
+  if (access.kind === 'not-admitted') {
+    return (
+      <NotMemberScreen
+        planName=""
+        login={login}
+        error="Questa istanza ammette solo account GitHub con un'email verificata di alcuni domini, e quella del tuo account non lo è. Rendi principale e verifica su GitHub l'email di lavoro, poi esci e accedi di nuovo; o chiedi al proprietario del piano quali domini sono ammessi."
+        onSignOut={onSignOut}
+      />
+    );
+  }
+
   if (access.kind === 'not-member') {
     return <NotMemberScreen planName={access.planName} login={login} onSignOut={onSignOut} />;
   }
@@ -286,6 +297,8 @@ function MemberSession({
       login,
       name: account.name,
       avatarUrl: account.avatarUrl ?? (access.avatarUrl || null),
+      email: account.email,
+      emailVerified: account.emailVerified,
     },
     role: access.role,
     members: session.members,

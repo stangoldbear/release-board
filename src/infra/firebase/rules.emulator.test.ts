@@ -4,6 +4,7 @@ import {
   Timestamp,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -42,6 +43,45 @@ function audit(identity: Identity, historyId: string) {
 
 function historyEntry(identity: Identity, entity: string, entityId: string, action = 'create') {
   return { entity, entityId, action, actor: actor(identity), at: serverTimestamp() };
+}
+
+let entryCount = 0;
+const newEntryId = () => `h-new-${++entryCount}`;
+
+/** The writer's document, which names the history entry of a batch that deletes. */
+function writerDoc(db: Firestore, identity: Identity) {
+  return doc(db, `${PLAN}/writers/${identity.uid}`);
+}
+
+/**
+ * A change without a document to carry its history entry, as a deletion or a change of a member:
+ * the batch adds the entry and the writer's document that names it.
+ */
+function recordedChange(
+  db: Firestore,
+  identity: Identity,
+  change: (batch: ReturnType<typeof writeBatch>) => void,
+  [entity, entityId, action]: [string, string, string],
+) {
+  const historyId = newEntryId();
+  const batch = writeBatch(db);
+  change(batch);
+  batch.set(
+    doc(db, `${PLAN}/history/${historyId}`),
+    historyEntry(identity, entity, entityId, action),
+  );
+  batch.set(writerDoc(db, identity), { historyId, at: serverTimestamp() });
+  return batch.commit();
+}
+
+/** Deletes a document with its history entry, as the app does. */
+function deleteRecorded(db: Firestore, identity: Identity, path: string, entity: string) {
+  const id = path.split('/').at(-1) ?? '';
+  return recordedChange(db, identity, (batch) => batch.delete(doc(db, path)), [
+    entity,
+    id,
+    'delete',
+  ]);
 }
 
 const TASK: Record<string, unknown> = {
@@ -118,18 +158,51 @@ describe('creating the plan', () => {
     });
     batch.set(doc(owner, `${PLAN}/members/${OWNER.githubId}`), {
       login: OWNER.login,
-      avatarUrl: 'https://example.com/a.png',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1001?v=4',
       role: 'owner',
       addedBy: OWNER.uid,
       addedAt: serverTimestamp(),
     });
     batch.set(doc(owner, `${PLAN}/history/h1`), historyEntry(OWNER, 'plan', 'main', 'setup'));
+    batch.set(writerDoc(owner, OWNER), { historyId: 'h1', at: serverTimestamp() });
     batch.set(doc(owner, `${PLAN}/lanes/lane-1`), {
       name: 'Frontend',
       position: 0,
       ...audit(OWNER, 'h1'),
     });
     await assertSucceeds(batch.commit());
+  });
+
+  /** The batch that creates a plan, under any id, as the app writes it for 'main'. */
+  function createPlanBatch(db: Firestore, identity: Identity, planPath: string, withWriter = true) {
+    const batch = writeBatch(db);
+    batch.set(doc(db, planPath), {
+      name: 'Piano',
+      createdBy: identity.uid,
+      createdAt: serverTimestamp(),
+    });
+    batch.set(doc(db, `${planPath}/members/${identity.githubId}`), {
+      login: identity.login,
+      avatarUrl: '',
+      role: 'owner',
+      addedBy: identity.uid,
+      addedAt: serverTimestamp(),
+    });
+    batch.set(doc(db, `${planPath}/history/h1`), historyEntry(identity, 'plan', 'x', 'setup'));
+    if (withWriter) {
+      batch.set(doc(db, `${planPath}/writers/${identity.uid}`), {
+        historyId: 'h1',
+        at: serverTimestamp(),
+      });
+    }
+    return batch.commit();
+  }
+
+  it('refuses any plan but the one of the instance, and a plan without its history', async () => {
+    // Anyone signed in could otherwise fill the database with plans of their own.
+    await assertFails(createPlanBatch(stranger, STRANGER, 'plans/mine'));
+    await assertFails(createPlanBatch(stranger, STRANGER, PLAN, false));
+    await assertSucceeds(createPlanBatch(stranger, STRANGER, PLAN));
   });
 
   it('refuses a plan without its owner in the same batch', async () => {
@@ -140,6 +213,7 @@ describe('creating the plan', () => {
       createdAt: serverTimestamp(),
     });
     batch.set(doc(owner, `${PLAN}/history/h1`), historyEntry(OWNER, 'plan', 'main', 'setup'));
+    batch.set(writerDoc(owner, OWNER), { historyId: 'h1', at: serverTimestamp() });
     await assertFails(batch.commit());
   });
 
@@ -169,40 +243,68 @@ describe('creating the plan', () => {
 describe('members', () => {
   beforeEach(seedPlan);
 
+  const strangerPath = `${PLAN}/members/${STRANGER.githubId}`;
+  const membership = (by: Identity, avatarUrl = '') => ({
+    login: STRANGER.login,
+    avatarUrl,
+    role: 'editor',
+    addedBy: by.uid,
+    addedAt: serverTimestamp(),
+  });
+  const invite = (db: Firestore, by: Identity, avatarUrl = '') =>
+    recordedChange(db, by, (batch) => batch.set(doc(db, strangerPath), membership(by, avatarUrl)), [
+      'member',
+      STRANGER.githubId,
+      'create',
+    ]);
+  const setRole = (db: Firestore, by: Identity, githubId: string, role: string) =>
+    recordedChange(
+      db,
+      by,
+      (batch) => batch.update(doc(db, `${PLAN}/members/${githubId}`), { role }),
+      ['member', githubId, 'update'],
+    );
+
   it('lets only the owner invite, change roles and remove members', async () => {
-    const invite = (db: Firestore, by: Identity) =>
-      setDoc(doc(db, `${PLAN}/members/${STRANGER.githubId}`), {
-        login: STRANGER.login,
-        avatarUrl: '',
-        role: 'editor',
-        addedBy: by.uid,
-        addedAt: serverTimestamp(),
-      });
     await assertFails(invite(editor, EDITOR));
     await assertSucceeds(invite(owner, OWNER));
-    await assertSucceeds(
-      updateDoc(doc(owner, `${PLAN}/members/${STRANGER.githubId}`), { role: 'owner' }),
-    );
-    await assertFails(
-      updateDoc(doc(editor, `${PLAN}/members/${STRANGER.githubId}`), { role: 'editor' }),
-    );
-    await assertFails(deleteDoc(doc(editor, `${PLAN}/members/${STRANGER.githubId}`)));
-    await assertSucceeds(deleteDoc(doc(owner, `${PLAN}/members/${STRANGER.githubId}`)));
+    await assertSucceeds(setRole(owner, OWNER, STRANGER.githubId, 'owner'));
+    await assertFails(setRole(editor, EDITOR, STRANGER.githubId, 'editor'));
+    await assertFails(deleteRecorded(editor, EDITOR, strangerPath, 'member'));
+    await assertSucceeds(deleteRecorded(owner, OWNER, strangerPath, 'member'));
+  });
+
+  it('wants a history entry for every change of the members', async () => {
+    await assertFails(setDoc(doc(owner, strangerPath), membership(OWNER)));
+    await assertSucceeds(invite(owner, OWNER));
+    await assertFails(updateDoc(doc(owner, strangerPath), { role: 'owner' }));
+    await assertFails(deleteDoc(doc(owner, strangerPath)));
+  });
+
+  it('takes a picture only from GitHub', async () => {
+    await assertFails(invite(owner, OWNER, 'https://example.com/tracker.png'));
+    await assertFails(invite(owner, OWNER, 'https://avatars.githubusercontent.com.example.com/a'));
+    await assertSucceeds(invite(owner, OWNER, 'https://avatars.githubusercontent.com/u/1003?v=4'));
   });
 
   it('never lets the owner touch their own membership', async () => {
-    await assertFails(
-      updateDoc(doc(owner, `${PLAN}/members/${OWNER.githubId}`), { role: 'editor' }),
-    );
-    await assertFails(deleteDoc(doc(owner, `${PLAN}/members/${OWNER.githubId}`)));
+    await assertFails(setRole(owner, OWNER, OWNER.githubId, 'editor'));
+    await assertFails(deleteRecorded(owner, OWNER, `${PLAN}/members/${OWNER.githubId}`, 'member'));
   });
 
   it('lets members see each other and the plan name', async () => {
     const members = await assertSucceeds(getDocs(collection(editor, `${PLAN}/members`)));
     expect(members.size).toBe(2);
     await assertSucceeds(getDoc(doc(editor, PLAN)));
-    await assertFails(updateDoc(doc(editor, PLAN), { name: 'Altro' }));
-    await assertSucceeds(updateDoc(doc(owner, PLAN), { name: 'Altro' }));
+    const rename = (db: Firestore, identity: Identity) =>
+      recordedChange(db, identity, (batch) => batch.update(doc(db, PLAN), { name: 'Altro' }), [
+        'plan',
+        'main',
+        'update',
+      ]);
+    await assertFails(rename(editor, EDITOR));
+    await assertFails(updateDoc(doc(owner, PLAN), { name: 'Altro' }));
+    await assertSucceeds(rename(owner, OWNER));
   });
 });
 
@@ -271,7 +373,7 @@ describe('tasks', () => {
     await assertFails(getDocs(collection(stranger, `${PLAN}/tasks`)));
     await assertFails(deleteDoc(doc(stranger, `${PLAN}/tasks/t1`)));
     await assertFails(getDocs(collection(nobody, `${PLAN}/tasks`)));
-    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/tasks/t1`)));
+    await assertSucceeds(deleteRecorded(editor, EDITOR, `${PLAN}/tasks/t1`, 'task'));
   });
 });
 
@@ -376,6 +478,7 @@ describe('free notes', () => {
   beforeEach(seedPlan);
 
   const AUTHOR = { id: EDITOR.githubId, login: EDITOR.login };
+  const OTHER_AUTHOR = { id: OWNER.githubId, login: OWNER.login };
   const MEMO = { title: 'Stima del fornitore', position: 1, author: AUTHOR };
 
   function writeMemo(
@@ -388,7 +491,12 @@ describe('free notes', () => {
     const historyId = `h-${id}-${Math.random().toString(36).slice(2)}`;
     const batch = writeBatch(db);
     batch.set(doc(db, `${PLAN}/memos/${id}`), { ...data, ...audit(identity, historyId) });
-    batch.set(doc(db, `${PLAN}/history/${historyId}`), historyEntry(identity, 'memo', id, action));
+    // An import is of the whole plan.
+    const [entity, entityId] = action === 'import' ? ['plan', 'main'] : ['memo', id];
+    batch.set(
+      doc(db, `${PLAN}/history/${historyId}`),
+      historyEntry(identity, entity, entityId, action),
+    );
     return batch.commit();
   }
 
@@ -441,7 +549,27 @@ describe('free notes', () => {
     await assertFails(
       writeMemo(editor, EDITOR, { ...MEMO, author: { id: EDITOR.githubId, login: OWNER.login } }),
     );
-    // A backup restored by the owner keeps the notes the editor wrote, and the history says so.
+    // Only the owner restores a backup, which keeps the notes the editor wrote, and the history
+    // says so; an import entry written before is not one of this change.
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, author: OTHER_AUTHOR }, 'm1', 'import'));
+    await assertSucceeds(writeMemo(owner, OWNER, MEMO, 'm9', 'import'));
+    const stale = writeBatch(owner);
+    stale.set(
+      doc(owner, `${PLAN}/history/old-import`),
+      historyEntry(OWNER, 'plan', 'main', 'import'),
+    );
+    await assertSucceeds(stale.commit());
+    await assertFails(
+      setDoc(doc(owner, `${PLAN}/memos/m8`), { ...MEMO, ...audit(OWNER, 'old-import') }),
+    );
+    // An import of the daily values is not one of the plan: it keeps no authors.
+    const values = writeBatch(owner);
+    values.set(doc(owner, `${PLAN}/memos/m7`), { ...MEMO, ...audit(OWNER, 'values-import') });
+    values.set(
+      doc(owner, `${PLAN}/history/values-import`),
+      historyEntry(OWNER, 'metric', 'metric-1', 'import'),
+    );
+    await assertFails(values.commit());
     await assertSucceeds(writeMemo(owner, OWNER, MEMO, 'm1', 'import'));
     // Every member changes a shared note, never its author.
     await assertSucceeds(updateMemo(owner, OWNER, { title: 'Stima rivista', position: 3 }));
@@ -461,7 +589,7 @@ describe('free notes', () => {
     await assertSucceeds(batch.commit());
     await assertFails(writeMemo(stranger, STRANGER, MEMO, 'm3'));
     await assertFails(getDocs(collection(stranger, `${PLAN}/memos`)));
-    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/memos/m1`)));
+    await assertSucceeds(deleteRecorded(editor, EDITOR, `${PLAN}/memos/m1`, 'memo'));
   });
 
   it('keeps private notes to their author, without history', async () => {
@@ -492,6 +620,7 @@ describe('free notes', () => {
     hide.delete(doc(editor, `${PLAN}/memos/m1`));
     hide.set(doc(editor, privatePath(EDITOR, 'm1')), { title: MEMO.title, position: 1 });
     hide.set(doc(editor, `${PLAN}/history/hide-1`), historyEntry(EDITOR, 'memo', 'm1', 'update'));
+    hide.set(writerDoc(editor, EDITOR), { historyId: 'hide-1', at: serverTimestamp() });
     await assertSucceeds(hide.commit());
 
     const share = writeBatch(editor);
@@ -508,7 +637,7 @@ describe('projects', () => {
   const PROJECT: Record<string, unknown> = {
     title: 'App mobile 3.0',
     startDate: '2026-09-10',
-    endDate: '2026-12-20',
+    deadline: '2026-12-20',
     colorId: 'purple',
     status: 'in_progress',
   };
@@ -542,13 +671,13 @@ describe('projects', () => {
         'p2',
       ),
     );
-    await assertSucceeds(writeProject(editor, EDITOR, { endDate: '2027-01-31' }, 'p2', true));
+    await assertSucceeds(writeProject(editor, EDITOR, { deadline: '2027-01-31' }, 'p2', true));
     await assertSucceeds(writeProject(editor, EDITOR, { position: 1.5 }, 'p2', true));
     await assertSucceeds(
       writeProject(editor, EDITOR, { deadline: '2027-01-15', remindDaysBefore: 7 }, 'p2', true),
     );
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/projects`)));
-    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/projects/p2`)));
+    await assertSucceeds(deleteRecorded(editor, EDITOR, `${PLAN}/projects/p2`, 'project'));
   });
 
   it('refuses a project without a history entry, and bad fields', async () => {
@@ -560,16 +689,16 @@ describe('projects', () => {
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, remindDaysBefore: 1.5 }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, remindDaysBefore: 400 }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, title: 'x'.repeat(201) }));
-    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, endDate: '2026-09-01' }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, startDate: '10/09/2026' }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, colorId: 'neon' }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, status: 'blocked' }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, owner: '' }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, description: 'x'.repeat(5001) }));
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, progress: 50 }));
-    // The effort, the deadline, the contingency and the arrangement of 0.11.
-    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, manDays: 0 }));
-    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, manDays: 501 }));
+    // The planned end and the days of the project are gone since 0.16.
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, endDate: '2026-12-20' }));
+    await assertFails(writeProject(editor, EDITOR, { ...PROJECT, manDays: 20 }));
+    // The deadline, the contingency and the arrangement of 0.11.
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, deadline: '01/12/2026' }));
     await assertFails(
       writeProject(editor, EDITOR, { ...PROJECT, contingency: { startDate: '2026-12-01' } }),
@@ -583,16 +712,15 @@ describe('projects', () => {
     await assertFails(writeProject(editor, EDITOR, { ...PROJECT, arrangement: 'free' }));
   });
 
-  it('accepts a project without a planned end, with its effort, deadline, contingency and arrangement', async () => {
-    const { endDate: _endDate, ...withoutEnd } = PROJECT;
-    await assertSucceeds(writeProject(editor, EDITOR, withoutEnd, 'p3'));
+  it('accepts a project without a deadline, or with its deadline, contingency and arrangement', async () => {
+    const { deadline: _deadline, ...withoutDeadline } = PROJECT;
+    await assertSucceeds(writeProject(editor, EDITOR, withoutDeadline, 'p3'));
     await assertSucceeds(
       writeProject(
         editor,
         EDITOR,
         {
           ...PROJECT,
-          manDays: 20,
           deadline: '2026-12-01',
           contingency: { startDate: '2026-11-20', manDays: 3 },
           arrangement: 'manual',
@@ -634,9 +762,10 @@ describe('notes of the projects', () => {
     const ref = doc(db, `${PLAN}/projectNotes/${id}`);
     if (action === 'update') batch.update(ref, { ...data, ...audit(identity, historyId) });
     else batch.set(ref, { ...data, ...audit(identity, historyId) });
+    const [entity, entityId] = action === 'import' ? ['plan', 'main'] : ['projectNote', id];
     batch.set(
       doc(db, `${PLAN}/history/${historyId}`),
-      historyEntry(identity, 'projectNote', id, action),
+      historyEntry(identity, entity, entityId, action),
     );
     return batch.commit();
   }
@@ -659,7 +788,7 @@ describe('notes of the projects', () => {
       ),
     );
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/projectNotes`)));
-    await assertSucceeds(deleteDoc(doc(owner, `${PLAN}/projectNotes/n2`)));
+    await assertSucceeds(deleteRecorded(owner, OWNER, `${PLAN}/projectNotes/n2`, 'projectNote'));
   });
 
   it('refuses a note without a history entry, and bad fields', async () => {
@@ -680,6 +809,15 @@ describe('notes of the projects', () => {
 
   it('wants the writer as author, keeps author, project and time, and lets an import keep other authors', async () => {
     await assertFails(writeNote(owner, OWNER, NOTE));
+    await assertFails(
+      writeNote(
+        editor,
+        EDITOR,
+        { ...NOTE, author: { id: OWNER.githubId, login: OWNER.login } },
+        'n1',
+        'import',
+      ),
+    );
     await assertSucceeds(writeNote(owner, OWNER, NOTE, 'n1', 'import'));
     await assertSucceeds(
       writeNote(owner, OWNER, { text: 'Stima rivista', status: 'done' }, 'n1', 'update'),
@@ -744,7 +882,7 @@ describe('assignments', () => {
     );
     await assertSucceeds(writeAssignment(editor, EDITOR, { startDate: '2027-01-11' }, 'a2', true));
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/assignments`)));
-    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/assignments/a2`)));
+    await assertSucceeds(deleteRecorded(editor, EDITOR, `${PLAN}/assignments/a2`, 'assignment'));
   });
 
   it('refuses bad efforts, dates, people and extra fields', async () => {
@@ -903,9 +1041,13 @@ describe('configuration of the roadmap', () => {
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/projectFields`)));
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/teams`)));
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/stakeholders`)));
-    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/stakeholders/qa-2`)));
-    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/teams/qa`)));
-    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/projectFields/jiraEpics`)));
+    await assertSucceeds(
+      deleteRecorded(editor, EDITOR, `${PLAN}/stakeholders/qa-2`, 'stakeholder'),
+    );
+    await assertSucceeds(deleteRecorded(editor, EDITOR, `${PLAN}/teams/qa`, 'team'));
+    await assertSucceeds(
+      deleteRecorded(editor, EDITOR, `${PLAN}/projectFields/jiraEpics`, 'projectField'),
+    );
   });
 
   it('refuses bad ids, a choice without values, values on a link, unknown types and colors', async () => {
@@ -1038,7 +1180,7 @@ describe('milestones', () => {
     );
     await assertSucceeds(writeMilestone(editor, EDITOR, { date: '2026-12-19' }, 'm2', true));
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/milestones`)));
-    await assertSucceeds(deleteDoc(doc(editor, `${PLAN}/milestones/m2`)));
+    await assertSucceeds(deleteRecorded(editor, EDITOR, `${PLAN}/milestones/m2`, 'milestone'));
   });
 
   it('refuses a note without its history entry, or that is not one', async () => {
@@ -1058,5 +1200,242 @@ describe('milestones', () => {
     await assertFails(getDocs(collection(stranger, `${PLAN}/milestones`)));
     await assertFails(getDoc(doc(nobody, `${PLAN}/milestones/m1`)));
     await assertFails(deleteDoc(doc(stranger, `${PLAN}/milestones/m1`)));
+  });
+});
+
+describe('the history of every change', () => {
+  beforeEach(seedPlan);
+
+  it('wants a new entry: an entry written before records no change', async () => {
+    // h0 is the entry of the plan's creation.
+    await assertFails(setDoc(doc(editor, `${PLAN}/tasks/t2`), { ...TASK, ...audit(EDITOR, 'h0') }));
+    const early = writeBatch(editor);
+    early.set(doc(editor, `${PLAN}/history/early`), historyEntry(EDITOR, 'task', 't2'));
+    await assertSucceeds(early.commit());
+    await assertFails(
+      setDoc(doc(editor, `${PLAN}/tasks/t2`), { ...TASK, ...audit(EDITOR, 'early') }),
+    );
+  });
+
+  it('records every deletion, in the same batch, through the writer of the batch', async () => {
+    const path = `${PLAN}/tasks/t1`;
+    await assertFails(deleteDoc(doc(editor, path)));
+    // The writer's document naming an entry that exists already.
+    const reused = writeBatch(editor);
+    reused.delete(doc(editor, path));
+    reused.set(writerDoc(editor, EDITOR), { historyId: 'h0', at: serverTimestamp() });
+    await assertFails(reused.commit());
+    // A new entry, but no writer's document to name it.
+    const unnamed = writeBatch(editor);
+    unnamed.delete(doc(editor, path));
+    unnamed.set(doc(editor, `${PLAN}/history/del-1`), historyEntry(EDITOR, 'task', 't1', 'delete'));
+    await assertFails(unnamed.commit());
+    // The writer's document of someone else, or of another time.
+    const other = writeBatch(editor);
+    other.delete(doc(editor, path));
+    other.set(doc(editor, `${PLAN}/history/del-2`), historyEntry(EDITOR, 'task', 't1', 'delete'));
+    other.set(writerDoc(editor, OWNER), { historyId: 'del-2', at: serverTimestamp() });
+    await assertFails(other.commit());
+    const stale = writeBatch(editor);
+    stale.delete(doc(editor, path));
+    stale.set(doc(editor, `${PLAN}/history/del-3`), historyEntry(EDITOR, 'task', 't1', 'delete'));
+    stale.set(writerDoc(editor, EDITOR), {
+      historyId: 'del-3',
+      at: Timestamp.fromDate(new Date('2026-01-01')),
+    });
+    await assertFails(stale.commit());
+    await assertSucceeds(deleteRecorded(editor, EDITOR, path, 'task'));
+    // Nobody reads the writers' documents, nor deletes them.
+    await assertFails(getDoc(writerDoc(editor, EDITOR)));
+    await assertFails(deleteDoc(writerDoc(editor, EDITOR)));
+  });
+
+  it('deletes many documents under one entry, as a project with its work or a restore', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      for (let index = 0; index < 60; index += 1) {
+        await context
+          .firestore()
+          .doc(`${PLAN}/tasks/many-${index}`)
+          .set({ ...TASK, ...audit(OWNER, 'h0'), updatedAt: new Date() });
+      }
+    });
+    await assertSucceeds(
+      recordedChange(
+        owner,
+        OWNER,
+        (batch) => {
+          for (let index = 0; index < 60; index += 1) {
+            batch.delete(doc(owner, `${PLAN}/tasks/many-${index}`));
+          }
+        },
+        ['plan', 'main', 'import'],
+      ),
+    );
+  });
+
+  it('wants the actor as the member is, and entries within their limits', async () => {
+    const entry = (data: Record<string, unknown>) => {
+      const batch = writeBatch(editor);
+      batch.set(doc(editor, `${PLAN}/tasks/t2`), { ...TASK, ...audit(EDITOR, 'h-t2') });
+      batch.set(doc(editor, `${PLAN}/history/h-t2`), {
+        ...historyEntry(EDITOR, 'task', 't2'),
+        ...data,
+      });
+      return batch.commit();
+    };
+    await assertFails(entry({ actor: { ...actor(EDITOR), login: OWNER.login } }));
+    await assertFails(entry({ actor: { ...actor(EDITOR), role: 'owner' } }));
+    await assertFails(entry({ entityId: '' }));
+    await assertFails(entry({ entityId: 'x'.repeat(101) }));
+    await assertFails(entry({ summary: 'x'.repeat(501) }));
+    await assertFails(entry({ before: 'tutto' }));
+    await assertFails(entry({ after: ['x'] }));
+    await assertSucceeds(entry({ summary: 'Collaudo', before: {}, after: { title: 'Collaudo' } }));
+  });
+
+  it('leaves creating the plan and restoring it to the owner', async () => {
+    const write = (db: Firestore, identity: Identity, entity: string, action: string) =>
+      setDoc(
+        doc(db, `${PLAN}/history/${newEntryId()}`),
+        historyEntry(identity, entity, 'main', action),
+      );
+    await assertFails(write(editor, EDITOR, 'plan', 'setup'));
+    await assertFails(write(editor, EDITOR, 'plan', 'import'));
+    await assertSucceeds(write(owner, OWNER, 'plan', 'import'));
+    // The forecast and the configuration keep no authors: every member imports them.
+    await assertSucceeds(write(editor, EDITOR, 'metric', 'import'));
+    await assertSucceeds(write(editor, EDITOR, 'roadmapSettings', 'import'));
+  });
+});
+
+describe('the values the rules check', () => {
+  beforeEach(seedPlan);
+
+  it('takes only real months and days', async () => {
+    await assertFails(createTask(editor, EDITOR, 'x1', { ...TASK, startDate: '2026-13-01' }));
+    await assertFails(createTask(editor, EDITOR, 'x2', { ...TASK, endDate: '2026-09-45' }));
+    await assertFails(createTask(editor, EDITOR, 'x3', { ...TASK, startDate: '2026-00-10' }));
+    await assertSucceeds(createTask(editor, EDITOR, 'x4', { ...TASK, endDate: '2026-09-30' }));
+  });
+
+  it('takes lists of text only, within their limits', async () => {
+    await assertFails(createTask(editor, EDITOR, 'x1', { ...TASK, deliverables: 'Revisione' }));
+    await assertFails(createTask(editor, EDITOR, 'x2', { ...TASK, deliverables: [{ a: 1 }] }));
+    await assertFails(
+      createTask(editor, EDITOR, 'x3', { ...TASK, deliverables: ['x'.repeat(20001)] }),
+    );
+    await assertSucceeds(
+      createTask(editor, EDITOR, 'x4', { ...TASK, deliverables: ['Revisione'] }),
+    );
+  });
+
+  it('keeps the one metric of the plan', async () => {
+    const write = (metricId: string) => {
+      const batch = writeBatch(editor);
+      batch.set(doc(editor, `${PLAN}/metrics/${metricId}/values/2026-09-10`), {
+        value: 10,
+        ...audit(EDITOR, `h-${metricId}`),
+      });
+      batch.set(
+        doc(editor, `${PLAN}/history/h-${metricId}`),
+        historyEntry(EDITOR, 'metric', metricId, 'update'),
+      );
+      return batch.commit();
+    };
+    await assertFails(write('metric-2'));
+    await assertSucceeds(write('metric-1'));
+  });
+});
+
+describe('the email domains the owner admits', () => {
+  const OWNER_AT_WORK: Identity = { ...OWNER, email: 'Owner@Example.com', emailVerified: true };
+  const EDITOR_AT_WORK: Identity = { ...EDITOR, email: 'editor@example.com', emailVerified: true };
+  const EDITOR_AT_HOME: Identity = { ...EDITOR, email: 'editor@example.org', emailVerified: true };
+  const EDITOR_UNVERIFIED: Identity = {
+    ...EDITOR,
+    email: 'editor@example.com',
+    emailVerified: false,
+  };
+
+  beforeEach(seedPlan);
+
+  function writeAccess(db: Firestore, identity: Identity, domains: unknown) {
+    const historyId = newEntryId();
+    const batch = writeBatch(db);
+    batch.set(doc(db, `${PLAN}/settings/access`), { domains, ...audit(identity, historyId) });
+    batch.set(
+      doc(db, `${PLAN}/history/${historyId}`),
+      historyEntry(identity, 'access', 'access', 'update'),
+    );
+    return batch.commit();
+  }
+
+  it('lets only the owner set them, never leaving themselves out', async () => {
+    const ownerAtWork = clientAs(OWNER_AT_WORK);
+    await assertFails(writeAccess(clientAs(EDITOR_AT_WORK), EDITOR_AT_WORK, ['example.com']));
+    // The owner's own email must stay admitted, verified.
+    await assertFails(writeAccess(ownerAtWork, OWNER_AT_WORK, ['example.org']));
+    await assertFails(writeAccess(owner, OWNER, ['example.com']));
+    await assertFails(writeAccess(ownerAtWork, OWNER_AT_WORK, ['Example.com']));
+    await assertFails(writeAccess(ownerAtWork, OWNER_AT_WORK, []));
+    await assertFails(writeAccess(ownerAtWork, OWNER_AT_WORK, 'example.com'));
+    await assertSucceeds(writeAccess(ownerAtWork, OWNER_AT_WORK, ['example.com', 'example.org']));
+  });
+
+  it('keeps everyone else out, plan name included, once they are set', async () => {
+    await assertSucceeds(getDocs(collection(clientAs(EDITOR_AT_HOME), `${PLAN}/tasks`)));
+    await assertSucceeds(writeAccess(clientAs(OWNER_AT_WORK), OWNER_AT_WORK, ['example.com']));
+    await assertSucceeds(getDocs(collection(clientAs(EDITOR_AT_WORK), `${PLAN}/tasks`)));
+    await assertFails(getDocs(collection(clientAs(EDITOR_AT_HOME), `${PLAN}/tasks`)));
+    await assertFails(getDocs(collection(clientAs(EDITOR_UNVERIFIED), `${PLAN}/tasks`)));
+    // An address with two "@" is not of the domain that follows the first one.
+    const twoAts: Identity = { ...EDITOR, email: 'x@example.com@example.org', emailVerified: true };
+    await assertFails(getDocs(collection(clientAs(twoAts), `${PLAN}/tasks`)));
+    await assertFails(getDocs(collection(editor, `${PLAN}/tasks`)));
+    await assertFails(getDoc(doc(clientAs(EDITOR_AT_HOME), PLAN)));
+    await assertFails(getDoc(doc(clientAs(EDITOR_AT_HOME), `${PLAN}/members/${EDITOR.githubId}`)));
+    await assertFails(createTask(clientAs(EDITOR_AT_HOME), EDITOR_AT_HOME, 't2'));
+    await assertSucceeds(createTask(clientAs(EDITOR_AT_WORK), EDITOR_AT_WORK, 't2'));
+    // The owner turns the check off by deleting the list.
+    await assertSucceeds(
+      deleteRecorded(clientAs(OWNER_AT_WORK), OWNER_AT_WORK, `${PLAN}/settings/access`, 'access'),
+    );
+    await assertSucceeds(getDocs(collection(clientAs(EDITOR_AT_HOME), `${PLAN}/tasks`)));
+  });
+});
+
+describe('projects of the versions before 0.16', () => {
+  beforeEach(seedPlan);
+
+  it('change only by dropping the planned end and the days of the project', async () => {
+    await env.withSecurityRulesDisabled((context) =>
+      context
+        .firestore()
+        .doc(`${PLAN}/projects/old`)
+        .set({
+          title: 'Vecchio',
+          startDate: '2026-09-10',
+          endDate: '2026-12-20',
+          manDays: 20,
+          colorId: 'purple',
+          status: 'planned',
+          ...audit(OWNER, 'h0'),
+          updatedAt: new Date(),
+        }),
+    );
+    const change = (data: Record<string, unknown>) => {
+      const batch = writeBatch(editor);
+      const historyId = newEntryId();
+      batch.update(doc(editor, `${PLAN}/projects/old`), { ...data, ...audit(EDITOR, historyId) });
+      batch.set(
+        doc(editor, `${PLAN}/history/${historyId}`),
+        historyEntry(EDITOR, 'project', 'old', 'update'),
+      );
+      return batch.commit();
+    };
+    await assertFails(change({ title: 'Nuovo' }));
+    await assertSucceeds(
+      change({ title: 'Nuovo', endDate: deleteField(), manDays: deleteField() }),
+    );
   });
 });

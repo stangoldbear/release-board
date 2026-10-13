@@ -101,6 +101,7 @@ import { useAuthorNames } from './authorNames';
 import type { AreaId } from './areas';
 import { EmptyPlanNotice } from './EmptyPlanNotice';
 import { Header, SEARCH_FIELD_ID } from './Header';
+import { canReplacePlan } from './Instance';
 import type { Instance } from './Instance';
 import type { PlanRepository } from './PlanRepository';
 import { SearchResultsBar, describeFound } from './SearchResultsBar';
@@ -203,7 +204,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     readSeenReminders,
     {},
   );
-  const { theme, setTheme } = useThemeSetting();
+  const { theme, setTheme, colorPreset, setColorPreset } = useThemeSetting();
   const { dateFormat, setDateFormat } = useDateFormatSetting();
 
   // One view for the whole timeline: the releases and the projects share period, zoom and days.
@@ -388,12 +389,14 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
 
   // Whole plan
   const handleReplacePlan = (next: PlanSnapshot) => {
+    if (!canReplacePlan(instance)) return;
     repository.replacePlan(next);
     displayControls.showAllRows();
     showToast('Dati ripristinati dal backup');
   };
 
   const handleLoadSample = () => {
+    if (!canReplacePlan(instance)) return;
     repository.replacePlan(buildSamplePlan(anchorDate.getFullYear(), anchorDate.getMonth()));
     showToast('Dati di esempio caricati');
   };
@@ -497,13 +500,12 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     for (const assignmentId of teamPlan.remove) repository.deleteAssignment(assignmentId);
   };
 
-  // The whole project moves: start, planned end, contingency and the bars of its team, each on a
-  // working day; the hard deadline stays where it is.
+  // The whole project moves: start, contingency and the bars of its team, each on a working day;
+  // the deadline stays where it is.
   const handleMoveProject = (projectId: string, days: number) => {
     const project = plan.projects.find((item) => item.id === projectId);
     if (!project || days === 0) return;
     const changes: ProjectChanges = { startDate: addDaysIso(project.startDate, days) };
-    if (project.endDate) changes.endDate = addDaysIso(project.endDate, days);
     const closures = plan.roadmap.closures ?? [];
     if (project.contingency) {
       changes.contingency = moveAssignment(project.contingency, days, closures);
@@ -702,10 +704,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       // The roadmap goes to the start of the project, with the past when the project is past.
       const project = plan.projects.find((item) => item.id === result.id);
       if (project) {
-        if (
-          display.hidePastDays &&
-          (spans.get(project.id)?.end ?? project.endDate ?? project.startDate) < today
-        ) {
+        if (display.hidePastDays && (spans.get(project.id)?.end ?? project.startDate) < today) {
           displayControls.togglePastDays();
         }
         dispatchView({ type: 'goTo', date: project.startDate });
@@ -834,8 +833,10 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           {isPlanEmpty(plan) && (
             <EmptyPlanNotice
               warning={loadWarning}
-              onLoadSample={handleLoadSample}
-              onRestoreBackup={() => setDialog({ kind: 'settings' })}
+              {...(canReplacePlan(instance) && {
+                onLoadSample: handleLoadSample,
+                onRestoreBackup: () => setDialog({ kind: 'settings' }),
+              })}
             />
           )}
 
@@ -1071,6 +1072,8 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             roadmapActions={configActions}
             theme={theme}
             onChangeTheme={setTheme}
+            colorPreset={colorPreset}
+            onChangeColorPreset={setColorPreset}
             dateFormat={dateFormat}
             onChangeDateFormat={setDateFormat}
             layout={layout}

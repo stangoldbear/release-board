@@ -91,8 +91,6 @@ export type ProjectWithEnd = Project & { endDate: string };
 export interface ProjectChanges {
   title?: string;
   startDate?: string;
-  endDate?: string | null;
-  manDays?: number | null;
   deadline?: string | null;
   remindDaysBefore?: number | null;
   contingency?: ProjectContingency | null;
@@ -117,14 +115,13 @@ function canonicalFields(values: ProjectFieldValues | undefined): string {
 }
 
 /**
- * The rows of the roadmap when no other order is asked: by start, then planned end, then title;
- * the id breaks ties, for every copy.
+ * The rows of the roadmap when no other order is asked: by start, then title; the id breaks ties,
+ * for every copy.
  */
 export function sortProjects<T extends Project>(projects: readonly T[]): T[] {
   return [...projects].sort(
     (a, b) =>
       a.startDate.localeCompare(b.startDate) ||
-      (a.endDate ?? a.startDate).localeCompare(b.endDate ?? b.startDate) ||
       a.title.localeCompare(b.title) ||
       a.id.localeCompare(b.id),
   );
@@ -154,8 +151,6 @@ export function diffProject(before: Project, after: ProjectContent): ProjectChan
   const title = after.title.trim();
   if (title !== before.title) changes.title = title;
   if (after.startDate !== before.startDate) changes.startDate = after.startDate;
-  if (after.endDate !== before.endDate) changes.endDate = after.endDate ?? null;
-  if (after.manDays !== before.manDays) changes.manDays = after.manDays ?? null;
   if (after.deadline !== before.deadline) changes.deadline = after.deadline ?? null;
   if (after.remindDaysBefore !== before.remindDaysBefore) {
     changes.remindDaysBefore = after.remindDaysBefore ?? null;
@@ -201,21 +196,10 @@ export function parseProjectData(value: unknown, repairColor = false): ParsedPro
   const title = typeof value.title === 'string' && value.title.trim() ? value.title : null;
   if (!title) problems.push('manca il titolo');
   else if (title.length > PROJECT_TITLE_MAX) problems.push('titolo troppo lungo');
+  // The planned end and the days of the project of the versions before 0.16 are ignored.
   if (!isIsoDate(value.startDate)) problems.push('data di inizio non valida');
-  if (value.endDate !== undefined && !isIsoDate(value.endDate)) {
-    problems.push('data di fine non valida');
-  } else if (
-    isIsoDate(value.startDate) &&
-    isIsoDate(value.endDate) &&
-    value.endDate < value.startDate
-  ) {
-    problems.push("la fine precede l'inizio");
-  }
-  if (value.manDays !== undefined && !isValidManDays(value.manDays)) {
-    problems.push('giorni uomo non validi');
-  }
   if (value.deadline !== undefined && !isIsoDate(value.deadline)) {
-    problems.push('hard deadline non valida');
+    problems.push('deadline non valida');
   }
   if (value.contingency !== undefined && !isValidContingency(value.contingency)) {
     problems.push('contingency non valida');
@@ -248,8 +232,6 @@ export function parseProjectData(value: unknown, repairColor = false): ParsedPro
     colorId: knownColor ? (value.colorId as TaskColorId) : DEFAULT_PROJECT_COLOR_ID,
     status: value.status as ProjectStatus,
   };
-  if (isIsoDate(value.endDate)) content.endDate = value.endDate;
-  if (isValidManDays(value.manDays)) content.manDays = value.manDays;
   if (isIsoDate(value.deadline)) content.deadline = value.deadline;
   if (isPosition(value.position)) content.position = value.position;
   if (isRemindDays(value.remindDaysBefore)) content.remindDaysBefore = value.remindDaysBefore;

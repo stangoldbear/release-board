@@ -40,7 +40,7 @@ export interface WorkItem {
   /** The company closures the bar is scheduled around, as weekends. */
   closures: readonly DateRange[];
   schedule: WorkSchedule;
-  /** Its last day is past the hard deadline of the project. */
+  /** Its last day is past the deadline of the project. */
   late: boolean;
 }
 
@@ -87,8 +87,8 @@ export function workItemsOf(
 }
 
 /**
- * The days of a project without work, drawn faded: before the first bar, the gaps between the
- * bars, and after the last bar up to the end. Without bars the whole bar is work.
+ * The days of a project without work, drawn faded: before the first bar and the gaps between the
+ * bars; the project ends with its last bar. Without bars the whole bar is work.
  */
 export function fadedParts(span: ProjectSpan): DateRange[] {
   if (!span.work) return [];
@@ -97,7 +97,6 @@ export function fadedParts(span: ProjectSpan): DateRange[] {
     parts.push({ start: span.start, end: addDaysIso(span.work.start, -1) });
   }
   parts.push(...span.gaps);
-  if (span.end > span.work.end) parts.push({ start: addDaysIso(span.work.end, 1), end: span.end });
   return parts;
 }
 

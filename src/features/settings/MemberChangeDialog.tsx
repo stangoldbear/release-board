@@ -83,6 +83,7 @@ export function MemberChangeDialog({
           {member.avatarUrl ? (
             <img
               src={member.avatarUrl}
+              referrerPolicy="no-referrer"
               alt=""
               width={28}
               height={28}

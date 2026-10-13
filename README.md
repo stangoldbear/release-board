@@ -33,7 +33,7 @@ giornalieri.
   sue, può guardare quelle di tutti, raggruppate per autore, e può tenerne alcune private.
 - Roadmap: i progetti passati, in corso e futuri, una riga ciascuno con il titolo, lo stato come
   forma, i team al lavoro e l'etichetta della dimensione; tutto il resto, periodo, giorni uomo,
-  responsabile, hard deadline, descrizione, campi personalizzati (link a Jira, Figma e Confluence,
+  responsabile, deadline, descrizione, campi personalizzati (link a Jira, Figma e Confluence,
   stime…) e persone con i giorni, in una finestra spostabile che si apre dal pulsante «i» della
   riga. Un clic su un giorno dice in fondo alla pagina i giorni uomo di ogni team in quel giorno.
   Lo stato segue la data di oggi: un progetto pianificato di cui arriva il giorno è in corso, uno
@@ -42,7 +42,7 @@ giornalieri.
   Impostazioni, e i progetti si raggruppano per un campo e si ordinano a mano o per inizio, fine,
   deadline, stato o titolo. Ogni progetto ha il suo team: le persone con i giorni uomo in una tabella che le formule
   dei team (analisi, test, contingency) riempiono da sole, disposte nel Gantt in parallelo o in
-  sequenza, con la fine calcolata dal lavoro, una hard deadline segnata dove il lavoro la supera e
+  sequenza: un progetto dura quanto il lavoro del suo team, con una deadline segnata dove il lavoro la supera e
   un avviso qualche giorno prima; la barra mostra il lavoro come lane per persona, come fasi o da
   sola, e le note sulla timeline sono rombi su un giorno, di un progetto o liberi. Note con autore,
   scadenza e avviso; una vista Team con una barra per persona, che salta weekend, festività,
@@ -59,13 +59,15 @@ giornalieri.
 - Team e persone nelle Impostazioni: ordine dei team (quello della tabella dei giorni di ogni
   progetto) da trascinare, colori, formule dei giorni con esempi da copiare.
 - Tema chiaro e scuro, quello del dispositivo, oppure uno dei 32 temi ispirati ai temi più usati
-  di Visual Studio Code, tutti con il contrasto WCAG AA.
+  di Visual Studio Code, tutti con il contrasto WCAG AA; sopra il tema, i colori di attività,
+  progetti e team in quattro preset: Pastello (di serie), Morbido, Regolare e Solarized.
 - Backup e ripristino in un file JSON dalle Impostazioni, e un file a parte con le sole
   impostazioni (configurazione della roadmap, chiusure, aspetto) da esportare e reimportare.
-- Con un progetto Firebase: piano condiviso con il team in tempo reale, anche offline, con l'ora
-  dell'ultima sincronizzazione; accesso con GitHub, membri invitati per username, un proprietario
-  si toglie solo scrivendo il suo username; cronologia delle modifiche in una pagina con grafici e
-  filtri.
+- Con un progetto Firebase: piano condiviso con il team in tempo reale, con l'ora dell'ultima
+  sincronizzazione; accesso con GitHub, membri invitati per username, domini email ammessi a
+  scelta del proprietario, un proprietario si toglie solo scrivendo il suo username; cronologia di
+  ogni modifica, cancellazioni comprese, in una pagina con grafici e filtri. Il browser non tiene
+  nulla sul disco: l'accesso dura quanto la scheda.
 
 Senza progetto Firebase i dati restano nel browser che li ha creati. Per spostarli altrove usa
 Impostazioni → Backup.
@@ -84,7 +86,13 @@ merge; per una copia nata da un incolla c'è lo script `scripts/update-from-rele
 
 Un repository privato pubblica solo se il suo piano include GitHub Pages e se la variabile di
 repository `PAGES_DEPLOY` vale `true`. Un fork di un repository pubblico resta pubblico: per
-un'istanza privata non fare un fork, ma un clone.
+un'istanza privata non fare un fork, ma un clone. Il sito Pages di un repository privato può anche
+essere pubblico, perché i colleghi lo aprano senza accesso al repository: la guida, al capitolo
+3c, dice cosa cambia e in che ordine fare i passi.
+
+Il workflow pubblica solo da un commit che supera il controllo delle dipendenze (`npm audit`),
+lint, tipi e test. Un sito con un progetto Firebase chiede ai motori di ricerca di non
+indicizzarlo.
 
 ## Istanza condivisa con Firebase
 
@@ -104,8 +112,10 @@ variabili di repository lette al momento della build: `VITE_FIREBASE_API_KEY`,
 `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`. Sono
 identificativi pubblici: la protezione dei dati sono le regole.
 
-Chi fa il primo accesso crea il piano e ne è proprietario; invita gli altri per username GitHub. I
-dati stanno nel progetto Firebase dell'installazione, e in nessun altro posto.
+Chi fa il primo accesso crea il piano e ne è proprietario: fallo subito dopo la pubblicazione,
+prima di condividere il link. Poi nessun altro può creare piani nel progetto. Il proprietario
+invita gli altri per username GitHub, ed è il solo a ripristinare un backup. I dati stanno nel progetto
+Firebase dell'installazione, e in nessun altro posto.
 
 ## Sviluppo
 
@@ -128,6 +138,8 @@ con `demo-`) fa parlare l'app con gli emulatori Auth e Firestore della Firebase 
 - `.npmrc` disattiva gli script di installazione dei pacchetti e, da npm 11.10, ignora le versioni
   pubblicate da meno di 7 giorni.
 - Le dipendenze sono poche e fissate a versioni esatte. Le GitHub Actions sono fissate al commit.
+- La CI e la pubblicazione falliscono con un avviso di sicurezza di gravità alta o critica
+  (`npm audit --audit-level=high`); la CI gira anche una volta a settimana.
 
 Per segnalare una vulnerabilità leggi [SECURITY.md](SECURITY.md).
 

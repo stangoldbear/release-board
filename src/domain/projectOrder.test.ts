@@ -25,7 +25,8 @@ const project = (id: string, extra: Partial<Project> = {}): Project => ({
 
 const context = {
   today: '2026-10-12',
-  endOf: (item: Project) => item.endDate ?? item.startDate,
+  // The end of the work of each project; without work, its start.
+  endOf: (item: Project) => item.startDate,
   field: size,
 };
 

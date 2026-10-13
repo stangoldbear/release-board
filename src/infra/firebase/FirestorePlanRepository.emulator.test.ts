@@ -167,7 +167,7 @@ describe('access and setup', () => {
       PLAN_ID,
       actorOf(OWNER),
       ' Piano rilasci ',
-      'https://example.com/a.png',
+      'https://avatars.githubusercontent.com/u/1001?v=4',
       createId,
     );
     await expect(checkAccess(ownerDb, PLAN_ID, OWNER.githubId)).resolves.toEqual({
@@ -175,7 +175,7 @@ describe('access and setup', () => {
       planName: 'Piano rilasci',
       role: 'owner',
       login: OWNER.login,
-      avatarUrl: 'https://example.com/a.png',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1001?v=4',
     });
     await expect(checkAccess(clientAs(STRANGER), PLAN_ID, STRANGER.githubId)).resolves.toEqual({
       kind: 'not-member',
@@ -401,7 +401,7 @@ describe('changes', () => {
     const id = repository.createProject({
       title: 'Nuovo magazzino',
       startDate: '2026-11-01',
-      endDate: '2027-03-31',
+      deadline: '2027-03-31',
       colorId: 'gray',
       status: 'idea',
       owner: 'Marco',
@@ -411,22 +411,35 @@ describe('changes', () => {
       id,
       title: 'Nuovo magazzino',
       startDate: '2026-11-01',
-      endDate: '2027-03-31',
+      deadline: '2027-03-31',
       colorId: 'gray',
       status: 'idea',
       owner: 'Marco',
     });
+    // A version before 0.16 kept a planned end and days of the project: read, they are ignored.
+    const document = `plans/${PLAN_ID}/projects/${id}`;
+    await env.withSecurityRulesDisabled((context) =>
+      context.firestore().doc(document).update({ endDate: '2027-01-31', manDays: 20 }),
+    );
 
-    // Changes read the project from the plan of whoever makes them.
-    other.updateProject(id, { endDate: '2027-06-30', owner: null, description: 'Due sedi' });
+    // Changes read the project from the plan of whoever makes them, and drop the old fields.
+    other.updateProject(id, { deadline: '2027-06-30', owner: null, description: 'Due sedi' });
     const updated = await planWhere(repository, (plan) =>
-      plan.projects.some((item) => item.id === id && item.endDate === '2027-06-30'),
+      plan.projects.some((item) => item.id === id && item.deadline === '2027-06-30'),
     );
     expect(updated.projects.find((item) => item.id === id)).toMatchObject({
       description: 'Due sedi',
       startDate: '2026-11-01',
     });
     expect(updated.projects.find((item) => item.id === id)).not.toHaveProperty('owner');
+    expect(updated.projects.find((item) => item.id === id)).not.toHaveProperty('endDate');
+    await whenSynced(other);
+    await env.withSecurityRulesDisabled(async (context) => {
+      const stored = (await context.firestore().doc(document).get()).data() ?? {};
+      expect(stored).not.toHaveProperty('endDate');
+      expect(stored).not.toHaveProperty('manDays');
+      expect(stored.deadline).toBe('2027-06-30');
+    });
 
     repository.deleteProject(id);
     await planWhere(other, (plan) => plan.projects.every((item) => item.id !== id));
@@ -438,10 +451,10 @@ describe('changes', () => {
       .filter((data) => data.entity === 'project' && data.entityId === id);
     expect(entries.map((entry) => entry.action).sort()).toEqual(['create', 'delete', 'update']);
     const change = entries.find((entry) => entry.action === 'update');
-    expect(change?.before).toEqual({ endDate: '2027-03-31', owner: 'Marco' });
+    expect(change?.before).toEqual({ deadline: '2027-03-31', owner: 'Marco' });
     expect(change?.after).toEqual({
       title: 'Nuovo magazzino',
-      endDate: '2027-06-30',
+      deadline: '2027-06-30',
       description: 'Due sedi',
     });
   });
@@ -575,16 +588,36 @@ describe('changes', () => {
   });
 
   it('restores notes without an author over the same notes, keeping their authors', async () => {
+    // The plan has the notes of the sample, written by the editor.
+    await env.withSecurityRulesDisabled(async (context) => {
+      for (const memo of sample.memos) {
+        await context
+          .firestore()
+          .doc(`plans/${PLAN_ID}/memos/${memo.id}`)
+          .update({ author: { id: EDITOR.githubId, login: EDITOR.login } });
+      }
+    });
+    await planWhere(repository, (current) =>
+      current.memos.every((memo) => memo.author?.login === EDITOR.login),
+    );
+    // The sample of the local mode has no authors: the restore keeps the editor's.
+    repository.replacePlan(sample);
+    await whenSynced(repository);
+    const plan = await planWhere(repository, matchesSample);
+    expect(plan.memos.map((memo) => memo.author?.login)).toEqual(['editor', 'editor', 'editor']);
+    expect(
+      await new Promise((resolve) => repository.subscribeSync((state) => resolve(state.status))),
+    ).toBe('synced');
+  });
+
+  it('lets only the owner restore a backup, which keeps the authors of its notes', async () => {
     const other = repositoryFor(editorDb, EDITOR);
     await other.whenReady();
-    // The sample of the local mode has no authors; the plan has the same notes, by the owner.
     other.replacePlan(sample);
     await whenSynced(other);
-    const plan = await planWhere(other, (current) => current.memos.length === sample.memos.length);
-    expect(plan.memos.map((memo) => memo.author?.login)).toEqual(['owner', 'owner', 'owner']);
     expect(
       await new Promise((resolve) => other.subscribeSync((state) => resolve(state.status))),
-    ).toBe('synced');
+    ).toBe('error');
   });
 
   it('reports saving and synced, and records every change in the history', async () => {
@@ -750,7 +783,12 @@ describe('members', () => {
   it('lets the owner invite, change roles and remove, and reports unknown or repeated users', async () => {
     await bootstrap();
     const known = [
-      { id: '1003', login: 'stranger', avatarUrl: 'https://example.com/s.png', name: null },
+      {
+        id: '1003',
+        login: 'stranger',
+        avatarUrl: 'https://avatars.githubusercontent.com/u/1003?v=4',
+        name: null,
+      },
     ];
     const members = new FirestoreMembersRepository({
       db: ownerDb,
@@ -784,6 +822,52 @@ describe('members', () => {
       lookupUser: () => Promise.resolve(known[0] ?? null),
     });
     await expect(asEditor.remove('1003')).rejects.toThrow();
+  });
+
+  it('admits only the email domains the owner sets, and says so to the others', async () => {
+    await bootstrap();
+    const membersAs = (identity: Identity) =>
+      new FirestoreMembersRepository({
+        db: clientAs(identity),
+        planId: PLAN_ID,
+        actor: actorOf(identity),
+        createId,
+        lookupUser: () => Promise.resolve(null),
+      });
+    const atWork = { ...OWNER, email: 'owner@example.com', emailVerified: true };
+    const members = membersAs(atWork);
+    const seen: (string[] | null)[] = [];
+    const stop = members.subscribeDomains((domains) => seen.push(domains));
+    // Without a verified email of the list, the owner would leave themselves out.
+    await expect(membersAs(OWNER).setDomains(['example.com'])).rejects.toThrow();
+    await members.setDomains(['example.com']);
+    const editorAt = (email: string) => clientAs({ ...EDITOR, email, emailVerified: true });
+    await expect(
+      checkAccess(editorAt('editor@example.org'), PLAN_ID, EDITOR.githubId),
+    ).resolves.toEqual({ kind: 'not-admitted' });
+    await expect(
+      checkAccess(editorAt('editor@example.com'), PLAN_ID, EDITOR.githubId),
+    ).resolves.toMatchObject({ kind: 'member', role: 'editor' });
+    await members.setDomains(['example.com', 'example.org']);
+    await expect(
+      checkAccess(editorAt('editor@example.org'), PLAN_ID, EDITOR.githubId),
+    ).resolves.toMatchObject({ kind: 'member' });
+    await members.setDomains(null);
+    await expect(checkAccess(editorDb, PLAN_ID, EDITOR.githubId)).resolves.toMatchObject({
+      kind: 'member',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    stop();
+    expect(seen).toContainEqual(['example.com', 'example.org']);
+    expect(seen.at(-1)).toBeNull();
+
+    const history = await getDocs(collection(ownerDb, `plans/${PLAN_ID}/history`));
+    expect(
+      history.docs
+        .filter((item) => item.data().entity === 'access')
+        .map((item) => item.data().action as string)
+        .sort(),
+    ).toEqual(['create', 'delete', 'update']);
   });
 });
 

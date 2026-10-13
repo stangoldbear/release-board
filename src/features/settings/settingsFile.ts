@@ -7,6 +7,8 @@ import { TEXT_SCALES } from '../../shared/ui/textScale';
 import type { TextScale } from '../../shared/ui/textScale';
 import { THEME_PREFERENCES } from '../../themes';
 import type { ThemePreference } from '../../themes';
+import { COLOR_PRESET_IDS } from '../../themes/presets';
+import type { ColorPreset } from '../../themes/presets';
 import { DATE_FORMAT_IDS, formatDateToISO } from '../../utils/dateUtils';
 import type { DateFormat } from '../../utils/dateUtils';
 
@@ -23,6 +25,7 @@ export const MAX_SETTINGS_BYTES = 1024 * 1024;
 /** The choices of Settings → Aspetto, which this browser keeps. */
 export interface AppearanceSettings {
   theme: ThemePreference;
+  colorPreset: ColorPreset;
   dateFormat: DateFormat;
   layout: PageLayout;
   textScale: TextScale;
@@ -132,6 +135,7 @@ function readAppearance(value: unknown): {
     }
   };
   pick('theme', THEME_PREFERENCES, 'Tema non riconosciuto');
+  pick('colorPreset', COLOR_PRESET_IDS, 'Colori non riconosciuti');
   pick('dateFormat', DATE_FORMAT_IDS, 'Formato delle date non riconosciuto');
   pick('layout', PAGE_LAYOUT_IDS, 'Layout non riconosciuto');
   pick('textScale', TEXT_SCALES, 'Dimensione del testo non riconosciuta');

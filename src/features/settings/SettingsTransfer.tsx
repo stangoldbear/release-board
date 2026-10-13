@@ -6,6 +6,7 @@ import type { Assignment, RoadmapConfig } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { useToast } from '../../shared/ui/Toast';
 import { getTheme } from '../../themes';
+import { COLOR_PRESETS } from '../../themes/presets';
 import { DATE_FORMATS, formatDateTimeIT } from '../../utils/dateUtils';
 import { downloadTextFile } from '../../utils/download';
 import {
@@ -43,6 +44,10 @@ function appearanceSummary(appearance: Partial<AppearanceSettings>): string {
     parts.push(
       `Tema ${appearance.theme === 'system' ? 'come il sistema' : getTheme(appearance.theme).name}`,
     );
+  }
+  if (appearance.colorPreset) {
+    const preset = COLOR_PRESETS.find((item) => item.id === appearance.colorPreset);
+    parts.push(`Colori ${preset?.name ?? appearance.colorPreset}`);
   }
   if (appearance.dateFormat) {
     const format = DATE_FORMATS.find((item) => item.id === appearance.dateFormat);

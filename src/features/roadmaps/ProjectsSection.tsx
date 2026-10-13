@@ -178,7 +178,7 @@ export function ProjectsSection({
   const { barHeight, assignmentHeight, rowPadding } = metrics;
   const helpId = useId();
   const workHelpId = useId();
-  const { drag, startDrag, isClickAfterDrag } = useProjectDrag(dayWidth, onChange, onMove);
+  const { drag, startDrag, isClickAfterDrag } = useProjectDrag(dayWidth, onMove);
   // A bar of work changed by hand: an assignment goes to its own document, the contingency lives
   // on the project, and a start moved by hand makes the arrangement manual.
   const changeWork = (item: WorkItem, changes: WorkChanges) => {
@@ -281,8 +281,7 @@ export function ProjectsSection({
       </p>
       <p id={helpId} className="sr-only">
         Frecce sinistra e destra spostano il progetto di una settimana, con il lavoro del suo team;
-        con Maiusc cambiano la fine pianificata; con Alt, frecce su e giù lo spostano
-        nell&apos;ordine delle righe. Invio lo apre.
+        con Alt, frecce su e giù lo spostano nell&apos;ordine delle righe. Invio lo apre.
       </p>
       <p id={workHelpId} className="sr-only">
         Frecce sinistra e destra spostano l&apos;inizio del lavoro di un giorno; con Maiusc di una
@@ -416,7 +415,7 @@ export function ProjectsSection({
       )}
       {drag && (
         <DragHint>
-          {drag.kind === 'move' ? 'Sposta' : drag.kind === 'start' ? 'Inizio' : 'Fine pianificata'}{' '}
+          Sposta{' '}
           <strong className="tabular-nums">
             {drag.days > 0 ? `+${drag.days}` : drag.days}{' '}
             {Math.abs(drag.days) === 1 ? 'giorno' : 'giorni'}

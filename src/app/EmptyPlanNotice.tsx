@@ -4,11 +4,13 @@ import { Button } from '../shared/ui/Button';
 interface EmptyPlanNoticeProps {
   /** Shown when saved data could not be read. */
   warning: string | null;
-  onLoadSample: () => void;
-  onRestoreBackup: () => void;
+  /** The sample and the restore of a backup, for whoever may replace the plan. */
+  onLoadSample?: () => void;
+  onRestoreBackup?: () => void;
 }
 
 export function EmptyPlanNotice({ warning, onLoadSample, onRestoreBackup }: EmptyPlanNoticeProps) {
+  const canReplace = onLoadSample !== undefined && onRestoreBackup !== undefined;
   return (
     <section className="rounded-xl border border-line bg-surface px-6 py-5 text-center shadow-2xs">
       {warning && (
@@ -18,20 +20,29 @@ export function EmptyPlanNotice({ warning, onLoadSample, onRestoreBackup }: Empt
         </p>
       )}
       <h2 className="text-sm font-bold">Il piano è vuoto</h2>
-      <p className="mt-1 text-xs text-fg-muted">
-        Aggiungi un&apos;attività dal calendario, prova l&apos;app con dei dati di esempio oppure
-        ripristina un backup.
-      </p>
-      <div className="mt-4 flex flex-wrap justify-center gap-2">
-        <Button variant="primary" onClick={onLoadSample}>
-          <Sparkles className="h-4 w-4" aria-hidden="true" />
-          Carica un esempio
-        </Button>
-        <Button onClick={onRestoreBackup}>
-          <Upload className="h-4 w-4" aria-hidden="true" />
-          Ripristina un backup
-        </Button>
-      </div>
+      {canReplace ? (
+        <>
+          <p className="mt-1 text-xs text-fg-muted">
+            Aggiungi un&apos;attività dal calendario, prova l&apos;app con dei dati di esempio
+            oppure ripristina un backup.
+          </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <Button variant="primary" onClick={onLoadSample}>
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              Carica un esempio
+            </Button>
+            <Button onClick={onRestoreBackup}>
+              <Upload className="h-4 w-4" aria-hidden="true" />
+              Ripristina un backup
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="mt-1 text-xs text-fg-muted">
+          Aggiungi un&apos;attività dal calendario. I dati di esempio e il ripristino di un backup
+          li carica il proprietario del piano.
+        </p>
+      )}
     </section>
   );
 }

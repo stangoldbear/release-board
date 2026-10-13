@@ -191,6 +191,83 @@ aggiornamento diventa un "ricopia tutto", a mano o con lo script del capitolo 5,
 eventuali modifiche al codice vanno riportate a mano. Se hai già una copia così, il capitolo 6
 spiega come trasformarla in un clone, senza perdere niente.
 
+### 3c. Sito pubblico, repository privato
+
+GitHub Pages privato apre il sito solo a chi ha accesso al repository: ogni collega che deve
+usare l'istanza occupa un posto dell'organizzazione. Un'organizzazione può invece pubblicare il
+sito Pages di un repository privato come **pubblico**: il repository resta privato, il sito lo
+apre chiunque abbia il link. I dati non cambiano protezione: non è mai stata la visibilità del
+sito a proteggerli, ma l'accesso con GitHub, la lista dei membri e le regole di Firestore.
+
+Cosa diventa visibile a chiunque abbia il link:
+
+- i file del sito: il codice, che è già pubblico, e la configurazione web di Firebase (`apiKey`,
+  `authDomain`, `projectId`, `appId`), che identifica il progetto e non è un segreto (sta così in
+  ogni app Firebase). Mai mettere in una variabile `VITE_*` un token, una chiave di service account
+  o un segreto OAuth: finirebbero nel sito;
+- la pagina d'accesso. Chi entra con un account GitHub non invitato vede «Non sei ancora tra i
+  membri» e nessun dato;
+- il nome dell'organizzazione, nell'indirizzo. Il sito chiede ai motori di ricerca di non
+  indicizzarlo (`noindex`, dalla 0.16.0), ma il link non va pubblicato altrove.
+
+L'indirizzo cambia da `<casuale>.pages.github.io` a `<organizzazione>.github.io/<repository>/`,
+lo stesso dominio di tutti i siti Pages pubblici dell'organizzazione. Dalla 0.16.0 il sito non
+tiene l'accesso né il piano sul disco del browser (l'accesso dura quanto la scheda, il piano sta
+in memoria): un altro sito dello stesso dominio non li trova lì. La modalità «Prova in locale»
+invece salva il suo piano nel browser: su un sito pubblico non usarla per dati veri.
+
+**Il rischio del dominio condiviso.** Autorizzare `<organizzazione>.github.io` in Firebase vale per
+tutti i siti Pages pubblici dell'organizzazione. Uno di loro può avviare l'accesso al progetto con
+la configurazione del sito, che è pubblica: un membro che lì preme un pulsante di accesso con
+GitHub (con l'app OAuth già autorizzata la finestra si chiude da sola) gli consegna la sua
+sessione, e con lei quello che può fare sul piano. Le regole non lo distinguono, perché l'origine è
+la stessa; i domini email ammessi nemmeno, perché l'account è quello vero. Lo può tentare chi
+nell'organizzazione può pubblicare un sito Pages pubblico. Due modi di chiuderlo, il primo
+consigliato:
+
+- **un dominio proprio per il sito**: **Settings → Pages → Custom domain**, per esempio un
+  sottodominio del dominio aziendale con un record `CNAME` verso `<organizzazione>.github.io`
+  (senza costi se l'azienda ha già il dominio; il record lo aggiunge chi gestisce il DNS), con
+  **Enforce HTTPS**. Poi autorizza in Firebase e nella chiave API **solo** quel dominio, non
+  `<organizzazione>.github.io`;
+- **limitare chi pubblica siti Pages pubblici** nell'organizzazione (impostazioni
+  dell'organizzazione, sezione Pages), così che nessun altro sito possa nascere sullo stesso
+  dominio.
+
+Se nessuno dei due è possibile, è un rischio da accettare consapevolmente, per iscritto, con chi
+gestisce la sicurezza.
+
+Ordine dei passi, da non invertire:
+
+1. Aggiorna l'istanza almeno alla 0.16.0 (capitolo 4) e, subito dopo, **ripubblica le regole**
+   di `firestore/firestore.rules` nella console Firebase: sono quelle che impediscono a chi entra
+   di creare piani propri e che legano ogni modifica allo storico.
+2. Controlla che il piano esista: se nessuno è ancora entrato, entra tu adesso. Il primo che
+   entra in un'istanza senza piano ne diventa proprietario, e un sito pubblico lo raggiunge
+   chiunque.
+3. Console Firebase, **Authentication → Impostazioni → Domini autorizzati → Aggiungi dominio**:
+   il dominio proprio del sito, se lo hai (vedi sopra), altrimenti `<organizzazione>.github.io`;
+   solo il nome.
+4. Google Cloud, **API e servizi → Credenziali**, la chiave API dell'istanza: nelle
+   **Restrizioni delle applicazioni**, ai siti web aggiungi `https://<lo stesso dominio>/*`.
+   Tieni il dominio di prima finché il passaggio non è finito.
+5. Prima di cambiare la visibilità avvisa chi nell'organizzazione amministra GitHub e la sicurezza:
+   consentito non vuol dire approvato.
+6. Nel repository, **Settings → Pages → Visibility**: **Public**. Poi **Actions → Deploy Pages →
+   Run workflow** e attendi la fine.
+7. Prova da un browser senza sessione GitHub (una finestra anonima): la pagina d'accesso si apre,
+   i dati no. Poi entra con il tuo account e controlla la versione in fondo alla pagina.
+8. Comunica il nuovo indirizzo ai colleghi. Dopo una settimana togli il dominio
+   `*.pages.github.io` di prima dai domini autorizzati e dalle restrizioni della chiave.
+9. Facoltativo: **Impostazioni → Membri → Domini email ammessi**, il dominio email aziendale.
+   Entrano solo gli account GitHub con un'email principale verificata di quel dominio; gli altri
+   non vedono nemmeno il nome del piano, anche se invitati. L'app rifiuta una lista che lascerebbe
+   fuori il tuo account: se dice che la tua email non risulta verificata, il provider non la
+   certifica e il limite non si può usare. Se un giorno un proprietario restasse fuori (per
+   esempio cambiando l'email principale del suo account GitHub), lo sblocca chi ha accesso alla
+   console Firebase: **Firestore Database → Dati**, `plans` → `main` → `settings`, elimina il
+   documento `access`. Il limite sparisce e tutti gli invitati tornano a entrare.
+
 ## 4. Aggiornare un'istanza nata come clone
 
 Ogni volta che esce una versione (la pagina **Releases** del repository pubblico, o il CHANGELOG):
@@ -215,8 +292,13 @@ Note:
 - Dopo il push, controlla in **Actions** che "Deploy Pages" sia verde e, nel sito, che in fondo
   compaia la versione nuova.
 - Se il CHANGELOG della versione dice che le regole di Firestore sono cambiate, ripubblica
-  `firestore/firestore.rules` nella console Firebase: finché non lo fai, il sito dice quali parti
-  non sono disponibili nell'indicatore di sincronizzazione.
+  `firestore/firestore.rules` nella console Firebase subito dopo il push: finché il sito e le
+  regole non sono della stessa versione alcune modifiche vengono rifiutate, e il sito dice quali
+  parti non sono disponibili nell'indicatore di sincronizzazione. Chi tiene il sito aperto lo
+  ricarichi.
+- Dalla 0.16.0 il workflow Deploy Pages controlla le dipendenze (`npm audit`), lint, tipi e test
+  prima di pubblicare: se si ferma su un avviso di sicurezza nuovo di una dipendenza, il sito
+  resta com'era; aggiorna alla versione che lo corregge.
 
 ## 5. Aggiornare un'istanza nata come copia: lo script
 
@@ -338,6 +420,14 @@ valga `true`. Se è rosso, il log dice quale passo è fallito.
 
 **Nel sito mancano i progetti, le note libere o i dettagli dei progetti** dopo un aggiornamento:
 le regole pubblicate in Firebase sono quelle vecchie. Ripubblica `firestore/firestore.rules`.
+
+**«Modifica rifiutata» su cancellazioni o membri** dopo l'aggiornamento alla 0.16.0: le regole
+pubblicate non sono ancora quelle della 0.16.0, o il sito aperto è ancora quello di prima.
+Ripubblica le regole e ricarica la pagina.
+
+**Deploy Pages rosso al passo `npm audit`**: una dipendenza ha un avviso di sicurezza di gravità
+alta uscito dopo la versione che usi. Il sito pubblicato resta quello di prima; aggiorna alla
+versione di Release Board che lo corregge.
 
 ## 9. Glossario minimo
 

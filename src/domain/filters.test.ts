@@ -176,7 +176,6 @@ describe('searchResults', () => {
           id: 'p',
           title: 'App',
           startDate: '2026-10-01',
-          endDate: '2026-12-31',
           colorId: 'blue',
           status: 'planned',
         },

@@ -9,11 +9,13 @@ import rules from '../../../firestore/firestore.rules?raw';
 
 export const PROJECT_ID = 'demo-release-board';
 
-/** A signed-in GitHub user, as the rules see it. */
+/** A signed-in GitHub user, as the rules see it, with the email of the token when it has one. */
 export interface Identity {
   uid: string;
   githubId: string;
   login: string;
+  email?: string;
+  emailVerified?: boolean;
 }
 
 export const OWNER: Identity = { uid: 'uid-owner', githubId: '1001', login: 'owner' };
@@ -58,6 +60,9 @@ export function clientAs(identity: Identity | null, projectId = PROJECT_ID): Fir
       ? {
           mockUserToken: {
             sub: identity.uid,
+            ...(identity.email
+              ? { email: identity.email, email_verified: identity.emailVerified ?? false }
+              : {}),
             firebase: {
               sign_in_provider: 'github.com',
               identities: { 'github.com': [identity.githubId] },

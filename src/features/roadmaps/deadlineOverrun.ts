@@ -5,7 +5,7 @@ import type { Project } from '../../domain/types';
 import { addDaysIso } from '../../utils/dateUtils';
 import type { WorkItem } from './barRendering';
 
-/** How a project goes past its hard deadline: what the sign on the deadline tells. */
+/** How a project goes past its deadline: what the sign on the deadline tells. */
 export interface DeadlineOverrun {
   deadline: string;
   /** The last day of the project, past the deadline. */
@@ -16,7 +16,7 @@ export interface DeadlineOverrun {
   late: WorkItem[];
 }
 
-/** The overrun of a project past its hard deadline; null when it has none, or no deadline. */
+/** The overrun of a project past its deadline; null when it has none, or no deadline. */
 export function deadlineOverrun(
   project: Pick<Project, 'deadline'>,
   span: ProjectSpan,

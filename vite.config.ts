@@ -2,8 +2,10 @@
 import { execFileSync } from 'node:child_process';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
+import type { Plugin } from 'vite';
 import pkg from './package.json' with { type: 'json' };
+import { readFirebaseConfig } from './src/infra/firebase/config.ts';
 
 /** Short commit of the build: from CI when available, otherwise from the local git checkout. */
 function buildCommit(): string {
@@ -18,10 +20,35 @@ function buildCommit(): string {
   }
 }
 
-export default defineConfig({
+/**
+ * A build with a Firebase project is the instance of a team: search engines are asked to leave it
+ * out. The demo without Firebase stays indexable.
+ */
+function noindex(enabled: boolean): Plugin {
+  return {
+    name: 'release-board-noindex',
+    transformIndexHtml: () =>
+      enabled
+        ? [
+            {
+              tag: 'meta',
+              attrs: { name: 'robots', content: 'noindex, nofollow' },
+              injectTo: 'head',
+            },
+          ]
+        : [],
+  };
+}
+
+export default defineConfig(({ mode }) => ({
   // Relative asset paths: the same build works at a domain root and under /<repo>/ on GitHub Pages.
   base: './',
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // The same variables, and the same test, that make the app an instance.
+    noindex(readFirebaseConfig(loadEnv(mode, process.cwd(), 'VITE_')) !== null),
+  ],
   build: {
     // The Firebase SDK, loaded only by configured instances, is one chunk of about 640 kB.
     chunkSizeWarningLimit: 700,
@@ -41,4 +68,4 @@ export default defineConfig({
     // Dates are checked in the time zone of the app's users, where UTC-based mistakes show up.
     env: { TZ: 'Europe/Rome' },
   },
-});
+}));

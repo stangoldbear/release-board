@@ -1,11 +1,13 @@
 import { History } from 'lucide-react';
 import { HAS_BETA_FEATURES } from '../../app/areas';
+import { canReplacePlan } from '../../app/Instance';
 import type { Instance } from '../../app/Instance';
 import type { PlanSnapshot } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import type { TextScale } from '../../shared/ui/textScale';
 import type { ThemePreference } from '../../themes';
+import type { ColorPreset } from '../../themes/presets';
 import type { DateFormat } from '../../utils/dateUtils';
 import type { PageLayout } from '../../app/layout';
 import { AboutSection } from './AboutSection';
@@ -25,6 +27,8 @@ interface SettingsDialogProps {
   instance: Instance;
   theme: ThemePreference;
   onChangeTheme: (theme: ThemePreference) => void;
+  colorPreset: ColorPreset;
+  onChangeColorPreset: (preset: ColorPreset) => void;
   /** How the dates are written in full, in this browser. */
   dateFormat: DateFormat;
   onChangeDateFormat: (format: DateFormat) => void;
@@ -52,6 +56,8 @@ export function SettingsDialog({
   instance,
   theme,
   onChangeTheme,
+  colorPreset,
+  onChangeColorPreset,
   dateFormat,
   onChangeDateFormat,
   layout,
@@ -72,6 +78,8 @@ export function SettingsDialog({
         <AppearanceSection
           theme={theme}
           onChangeTheme={onChangeTheme}
+          colorPreset={colorPreset}
+          onChangeColorPreset={onChangeColorPreset}
           dateFormat={dateFormat}
           onChangeDateFormat={onChangeDateFormat}
           layout={layout}
@@ -91,6 +99,8 @@ export function SettingsDialog({
           <MembersSection
             members={instance.members}
             selfGithubId={instance.user.githubId}
+            selfEmail={instance.user.email}
+            selfEmailVerified={instance.user.emailVerified}
             plan={plan}
           />
         )}
@@ -123,19 +133,24 @@ export function SettingsDialog({
         />
         <BackupSection
           plan={plan}
-          onReplacePlan={(next) => {
-            onReplacePlan(next);
-            onClose();
-          }}
+          onReplacePlan={
+            canReplacePlan(instance)
+              ? (next) => {
+                  onReplacePlan(next);
+                  onClose();
+                }
+              : undefined
+          }
         >
           <SettingsTransfer
             roadmap={plan.roadmap}
             roadmapUnavailable={roadmapUnavailable}
             onReplaceRoadmap={roadmapActions.onReplaceConfig}
             assignments={plan.assignments}
-            appearance={{ theme, dateFormat, layout, textScale }}
+            appearance={{ theme, colorPreset, dateFormat, layout, textScale }}
             onChangeAppearance={(next) => {
               if (next.theme) onChangeTheme(next.theme);
+              if (next.colorPreset) onChangeColorPreset(next.colorPreset);
               if (next.dateFormat) onChangeDateFormat(next.dateFormat);
               if (next.layout) onChangeLayout(next.layout);
               if (next.textScale) onTextScaleChange(next.textScale);

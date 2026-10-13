@@ -138,23 +138,19 @@ export interface ProjectContingency {
 
 /**
  * A project of the roadmap, past, current or future: one row, with a bar from its start to the
- * furthest of its planned end, its own days of effort and the work of its team.
+ * end of the work of its team, and a deadline when it has one.
  */
 export interface Project {
   id: string;
   title: string;
-  /** YYYY-MM-DD: the day the work of the team starts. */
-  startDate: string;
   /**
-   * YYYY-MM-DD, inclusive: the planned end, when one was given. The work of the team may end
-   * before it, and the bar shows the days without work faded.
+   * YYYY-MM-DD: the day the work of the team starts. The project ends with the last day of that
+   * work (versions before 0.16 also had a planned end and days of their own: they are ignored).
    */
-  endDate?: string;
-  /** The effort of the whole project in working days, when its team is not broken down. */
-  manDays?: number;
+  startDate: string;
   /** YYYY-MM-DD: the project must be online by this day; the roadmap warns where the work goes past it. */
   deadline?: string;
-  /** An alert so many days before the hard deadline, or the end of the work: 0 is the day itself. */
+  /** An alert so many days before the deadline, or the end of the work: 0 is the day itself. */
   remindDaysBefore?: number;
   contingency?: ProjectContingency;
   /** Absent: standard. */

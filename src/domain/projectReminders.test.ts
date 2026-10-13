@@ -19,14 +19,16 @@ const project = (id: string, extra: Partial<Project>): Project => ({
 describe('the alerts of the projects', () => {
   const projects = [
     project('deadline', { deadline: '2026-10-20', remindDaysBefore: 7 }),
-    project('go-live', { endDate: '2026-10-14', remindDaysBefore: 1 }),
+    project('go-live', { remindDaysBefore: 1 }),
     project('later', { deadline: '2026-11-30', remindDaysBefore: 3 }),
     project('silent', { deadline: '2026-10-12' }),
     project('done', { deadline: '2026-10-12', remindDaysBefore: 0, status: 'completed' }),
   ];
-  const endOf = (item: Project) => item.endDate ?? item.startDate;
+  // The end of the work of each project; "go-live" has no deadline.
+  const ends: Record<string, string> = { 'go-live': '2026-10-14' };
+  const endOf = (item: Project) => ends[item.id] ?? item.startDate;
 
-  it('come the days before the hard deadline, or the end of the work, once per browser', () => {
+  it('come the days before the deadline, or the end of the work, once per browser', () => {
     const due = dueProjects(projects, endOf, '2026-10-13', {});
     expect(due.map((item) => [item.project.id, item.date, item.deadline])).toEqual([
       ['deadline', '2026-10-20', true],

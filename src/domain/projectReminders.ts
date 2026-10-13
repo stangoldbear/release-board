@@ -2,7 +2,7 @@ import type { SeenReminders } from './memos';
 import type { Project } from './types';
 import { addDaysIso } from '../utils/dateUtils';
 
-// The alert of a project: some days before its hard deadline, or without one before its go-live,
+// The alert of a project: some days before its deadline, or without one before its go-live,
 // the end of its work; shown once per browser, as the alerts of the notes.
 
 /** The most days before the date an alert can be asked for. */
@@ -34,15 +34,15 @@ export function describeRemindDays(days: number): string {
 /** A project whose alert has come, with the day it is about. */
 export interface DueProject {
   project: Project;
-  /** The hard deadline, or the end of the work. */
+  /** The deadline, or the end of the work. */
   date: string;
-  /** The alert is about the hard deadline rather than the end of the work. */
+  /** The alert is about the deadline rather than the end of the work. */
   deadline: boolean;
 }
 
 /**
  * The projects whose alert has come today or before: those that asked for one and are not
- * completed, from the days before their hard deadline, or their end without one, that this
+ * completed, from the days before their deadline, or their end without one, that this
  * browser has not dismissed yet for that day.
  */
 export function dueProjects(

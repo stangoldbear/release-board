@@ -17,7 +17,6 @@ const project: Project = {
   id: 'p1',
   title: 'Prova',
   startDate: '2026-11-02',
-  endDate: '2026-12-11',
   colorId: 'blue',
   status: 'planned',
   deadline: '2026-11-27',
@@ -67,13 +66,12 @@ describe('the bars of the work of a project', () => {
     expect(items.map((item) => item.late)).toEqual([false, false, false, false, false, true]);
   });
 
-  it('fade the days before the first bar, the gaps and the days after the last bar', () => {
+  it('fade the days before the first bar and the gaps; the project ends with its work', () => {
     expect(fadedParts(span)).toEqual([
       // Friday the 6th, between the analysis and the development, with its weekend.
       { start: '2026-11-06', end: '2026-11-08' },
-      // The 1st of December is worked by the contingency; the planned end is the 11th.
-      { start: '2026-12-02', end: '2026-12-11' },
     ]);
+    expect(span.end).toBe('2026-12-01');
     const late = projectSpan(
       { ...project, startDate: '2026-10-26', contingency: undefined },
       assignments.filter((item) => item.id !== 'a-qa'),
@@ -82,7 +80,6 @@ describe('the bars of the work of a project', () => {
     expect(fadedParts(late)).toEqual([
       { start: '2026-10-26', end: '2026-11-01' },
       { start: '2026-11-06', end: '2026-11-08' },
-      { start: '2026-11-25', end: '2026-12-11' },
     ]);
     const bare = projectSpan({ ...project, contingency: undefined }, [], config);
     expect(fadedParts(bare)).toEqual([]);

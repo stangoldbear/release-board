@@ -29,6 +29,12 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
       - run: npm ci
+      # The site is published only from a commit that passes the same checks as CI: no advisory
+      # of high or critical severity, lint, types and tests.
+      - run: npm audit --audit-level=high
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
       # The Firebase project of this copy, from the repository variables; without them the site
       # runs in local mode and shows the setup guide.
       - run: npm run build

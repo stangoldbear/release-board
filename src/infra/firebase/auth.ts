@@ -16,6 +16,9 @@ export interface Account {
   login: string | null;
   name: string | null;
   avatarUrl: string | null;
+  /** The email of the account, which the admitted domains of a plan check, and its state. */
+  email: string | null;
+  emailVerified: boolean;
 }
 
 const LOGIN_KEY = 'release-board:github-login';
@@ -48,6 +51,8 @@ export function toAccount(user: User): Account {
     login: rememberedLogin(user.uid),
     name: user.displayName,
     avatarUrl: user.photoURL,
+    email: user.email,
+    emailVerified: user.emailVerified,
   };
 }
 
@@ -125,8 +130,13 @@ export function installEmulatorSignIn(auth: Auth): void {
   ).__releaseBoardEmulatorSignIn = hook;
 }
 
-export function signOutFromFirebase(auth: Auth): Promise<void> {
-  return signOut(auth);
+/**
+ * Signs out, then reloads the page: the plan read so far lives in the memory of the page, and
+ * the next person at this computer starts from nothing.
+ */
+export async function signOutFromFirebase(auth: Auth): Promise<void> {
+  await signOut(auth);
+  window.location.reload();
 }
 
 function authErrorCode(error: unknown): string {

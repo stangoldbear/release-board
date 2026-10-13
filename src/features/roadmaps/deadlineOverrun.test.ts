@@ -10,7 +10,6 @@ const project: Project = {
   id: 'p1',
   title: 'Prova',
   startDate: '2026-11-02',
-  endDate: '2026-11-27',
   colorId: 'blue',
   status: 'planned',
   deadline: '2026-11-27',
@@ -30,12 +29,14 @@ describe('deadlineOverrun', () => {
   });
 
   it('leaves out the holidays, and is null in time or without a deadline', () => {
-    const planned = { ...project, endDate: '2026-12-11', contingency: undefined };
-    const span = projectSpan(planned, assignments, config);
-    // From the 30th to the 11th: ten working days but the 8th of December, a holiday.
+    const planned = { ...project, contingency: undefined };
+    const longer = [{ ...assignments[0]!, manDays: 12 }];
+    const span = projectSpan(planned, longer, config);
+    // Twelve days from the 25th end on the 11th, past the 8th of December, a holiday: from the
+    // 30th to the 11th, ten working days but the holiday.
     expect(deadlineOverrun(planned, span, workItemsOf(planned, span, config), [])).toMatchObject({
+      end: '2026-12-11',
       workingDays: 9,
-      late: [],
     });
     const inTime = { ...project, contingency: undefined };
     const spanInTime = projectSpan(inTime, assignments, config);

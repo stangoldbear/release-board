@@ -88,8 +88,13 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
             <Key>←</Key> <Key>→</Key> spostano la barra col focus
             {releases ? ' di un giorno' : ''}
             {releases && projects ? ' (attività) o' : ''}
-            {projects ? ' di una settimana (progetti)' : ''}; con <Key>Maiusc</Key> cambiano la
-            fine.
+            {projects ? ' di una settimana (progetti)' : ''}
+            {releases ? (
+              <>
+                ; con <Key>Maiusc</Key> cambiano la fine di un&apos;attività
+              </>
+            ) : null}
+            .
           </li>
           {projects && (
             <li>
@@ -141,7 +146,7 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
           </Sign>
           {projects && (
             <>
-              <Sign label="Hard deadline superata: il segno dice di quanto e chi la supera">
+              <Sign label="Deadline superata: il segno dice di quanto e chi la supera">
                 <span className="flex items-center gap-0.5">
                   <span className="block h-4 border-l-2 border-dashed border-danger" />
                   <span className="flex h-4 w-4 items-center justify-center rounded-full bg-danger text-on-danger">

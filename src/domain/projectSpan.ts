@@ -4,8 +4,8 @@ import type { WorkSchedule } from './assignments';
 import type { DateRange } from './schedule';
 import type { Assignment, Project, RoadmapConfig } from './types';
 
-// Where a project falls on the calendar: its start, the furthest of its planned end, its own
-// days of effort and the work of its team, and the days in between without any work.
+// Where a project falls on the calendar: from its start to the end of the work of its team, and
+// the days in between without any work.
 
 /** A bar of the work of a project: the assignment of a person, or the contingency of the project. */
 export interface WorkBar {
@@ -22,16 +22,14 @@ export interface WorkBar {
 export interface ProjectSpan {
   /** The start of the project. */
   start: string;
-  /** The furthest day of the project: planned end, own effort or the work of the team. */
+  /** The last day of the project: the end of the work of the team, or the start without work. */
   end: string;
   /** From the first to the last day worked by the bars; null without bars. */
   work: DateRange | null;
   /** Days within the work with no work at all, in runs that hold at least a working day. */
   gaps: DateRange[];
-  /** Days of effort: the sum of the bars, or the project's own days when it has no bars. */
+  /** Days of effort: the sum of the bars. */
   totalManDays: number;
-  /** The planned end, when one was given. */
-  plannedEnd?: string;
   /** The end goes past the deadline. */
   late: boolean;
   bars: WorkBar[];
@@ -39,15 +37,6 @@ export interface ProjectSpan {
 
 /** What the work of a project is scheduled on: the calendars of the people and of the company. */
 export type WorkCalendar = Pick<RoadmapConfig, 'stakeholders' | 'closures'>;
-
-/** The last day of an effort that starts on a day, on working days. */
-export function endFromManDays(
-  startDate: string,
-  manDays: number,
-  closures: readonly DateRange[],
-): string {
-  return scheduleAssignment({ startDate, manDays }, [], closures).end;
-}
 
 /** The bars of the work of a project: its assignments, then its contingency. */
 export function workBarsOf(
@@ -130,27 +119,16 @@ export function projectSpan(
               .at(-1) ?? project.startDate,
         }
       : null;
-  const ownEnd =
-    bars.length === 0 && project.manDays
-      ? endFromManDays(project.startDate, project.manDays, closures)
-      : null;
-  const end = [project.startDate, project.endDate, work?.end, ownEnd]
-    .filter((day): day is string => typeof day === 'string')
-    .sort()
-    .at(-1) as string;
-  const totalManDays =
-    bars.length > 0 ? bars.reduce((sum, bar) => sum + bar.manDays, 0) : (project.manDays ?? 0);
-  const span: ProjectSpan = {
+  const end = work && work.end > project.startDate ? work.end : project.startDate;
+  return {
     start: project.startDate,
     end,
     work,
     gaps: work ? gapsWithin(work, bars, closures) : [],
-    totalManDays,
+    totalManDays: bars.reduce((sum, bar) => sum + bar.manDays, 0),
     late: project.deadline !== undefined && end > project.deadline,
     bars,
   };
-  if (project.endDate) span.plannedEnd = project.endDate;
-  return span;
 }
 
 /** The project with its effective end, as the roadmap and the search see it. */

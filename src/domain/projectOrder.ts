@@ -31,7 +31,7 @@ export function isRoadmapSort(value: unknown): value is RoadmapSort {
   return (ROADMAP_SORTS as readonly unknown[]).includes(value);
 }
 
-type Positioned = Pick<Project, 'id' | 'title' | 'startDate' | 'endDate' | 'position'>;
+type Positioned = Pick<Project, 'id' | 'title' | 'startDate' | 'position'>;
 
 /** The order the members gave: by position, the projects without one last in the order of their start. */
 function compareCustom(a: Positioned, b: Positioned): number {
@@ -40,7 +40,6 @@ function compareCustom(a: Positioned, b: Positioned): number {
   return (
     pa - pb ||
     a.startDate.localeCompare(b.startDate) ||
-    (a.endDate ?? a.startDate).localeCompare(b.endDate ?? b.startDate) ||
     a.title.localeCompare(b.title) ||
     a.id.localeCompare(b.id)
   );
@@ -53,7 +52,7 @@ export function customOrder<T extends Positioned>(projects: readonly T[]): T[] {
 /** What a criterion needs besides the projects. */
 export interface SortContext {
   today: string;
-  /** The effective end of a project: planned end, own days or the work of its team. */
+  /** The end of a project: the end of the work of its team. */
   endOf: (project: Project) => string;
   /** The field whose values order the projects, in the order of its options; null without. */
   field: ProjectField | null;

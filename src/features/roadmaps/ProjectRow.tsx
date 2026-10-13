@@ -21,7 +21,6 @@ import { useStableCallback } from '../../shared/useStableCallback';
 import { diffDays } from '../../utils/dateUtils';
 import { LABEL_CELL } from '../calendar/timelineLayout';
 import type { Column } from '../calendar/timelineLayout';
-import type { DragKind } from '../calendar/useTaskDrag';
 import { formatManDays, projectRowGeometry, teamsOf } from './barRendering';
 import type { WorkItem } from './barRendering';
 import { DaysEditor } from './DaysEditor';
@@ -42,10 +41,10 @@ import { draggedWork } from './useWorkDrag';
 import type { WorkChanges, WorkDrag, WorkDragKind } from './useWorkDrag';
 import { WorkBar, workBarId } from './WorkBar';
 
-/** The bar whose days are being typed: the project itself, or a bar of its work. */
+/** The bar of the work whose days are being typed. */
 export interface Editing {
-  kind: 'project' | 'assignment' | 'contingency';
-  /** The id of the project, or of the assignment. */
+  kind: 'assignment' | 'contingency';
+  /** The id of the assignment; for the contingency, the id of the project. */
   id: string;
 }
 
@@ -274,7 +273,7 @@ export interface ProjectRowProps {
   workHelpId: string;
   ignoreProjectClick: () => boolean;
   ignoreWorkClick: () => boolean;
-  onStartProjectDrag: (event: PointerEvent, project: ProjectWithEnd, kind: DragKind) => void;
+  onStartProjectDrag: (event: PointerEvent, project: ProjectWithEnd) => void;
   onStartWorkDrag: (event: PointerEvent, item: WorkItem, kind: WorkDragKind) => void;
   onEdit: (editing: Editing | null) => void;
   onOpen: () => void;
@@ -307,7 +306,7 @@ export interface ProjectRowProps {
  * The row of a project: in the column, the rail in the color of its bar, the shape of its state,
  * its title and the tag of its size, and under them the teams at work, two lines and no more,
  * with everything else in the card; its bar over the days, with
- * the hard deadline as a dashed red line; at the "Team" level a row for each bar of the work,
+ * the deadline as a dashed red line; at the "Team" level a row for each bar of the work,
  * the people in the color of their team and the contingency in grey, with a row that adds a person.
  */
 export function ProjectRow({
@@ -406,16 +405,13 @@ export function ProjectRow({
       titleHeight={geometry.titleHeight}
       height={encloses ? 'calc(100% - 1px)' : geometry.barHeight}
       lanes={geometry.lanes}
-      resizableStart={work.length === 0}
       // The title on one line, as the titles alone have it, whoever chose the level.
       overflowTitle={level === 'titles'}
       dragging={projectDrag?.project.id === project.id}
       describedBy={helpId}
       ignoreClick={ignoreProjectClick}
-      onPointerDown={(event, kind) => onStartProjectDrag(event, project, kind)}
+      onPointerDown={(event) => onStartProjectDrag(event, project)}
       onOpen={onOpen}
-      onEditDays={work.length === 0 ? () => onEdit({ kind: 'project', id: project.id }) : undefined}
-      onChange={onChange}
       onMove={onMove}
       onMoveRow={onMoveRow}
     />
@@ -595,27 +591,6 @@ export function ProjectRow({
             left={todayOffset}
             onConfirm={() => onChange({ status: project.statusChange!.to })}
             onOpen={onOpen}
-          />
-        )}
-        {placed && editing?.kind === 'project' && editing.id === project.id && (
-          <DaysEditor
-            value={project.manDays ?? 0}
-            label={`Giorni uomo di «${project.title}»`}
-            style={{
-              left: placed.first * dayWidth + 1,
-              top: `calc(50% - ${geometry.barHeight / 2}px)`,
-              height: geometry.titleHeight,
-              minWidth: EDITOR_MIN_WIDTH,
-            }}
-            onSave={(manDays) => {
-              onChange({ manDays });
-              onEdit(null);
-              focusBack(projectBarId(project.id));
-            }}
-            onCancel={() => {
-              onEdit(null);
-              focusBack(projectBarId(project.id));
-            }}
           />
         )}
       </div>
