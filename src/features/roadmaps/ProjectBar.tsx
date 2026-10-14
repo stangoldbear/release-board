@@ -29,7 +29,7 @@ interface ProjectBarProps {
   /** The project, with its effective end, cut to the days the roadmap holds. */
   placed: PlacedTask<ProjectWithEnd>;
   span: ProjectSpan;
-  /** The bars of the work, in the order of the teams: a lane each inside the bar. */
+  /** The bars of the work, in the order of the teams: a lane each inside the bar, if any. */
   work: WorkItem[];
   /** The color of the bar: from the value of a field, or the project's own. */
   colorId: TaskColorId;
@@ -41,7 +41,7 @@ interface ProjectBarProps {
   titleHeight: number;
   /** Pixels, or a CSS length such as one that reaches down around the rows of the people. */
   height: number | string;
-  /** The lanes under the title, one for each bar of the work; null for none. */
+  /** The slivers under the title, one for each bar of the work; null for none. */
   lanes: Lanes | null;
   /** The title on one line, out of the bar when longer, rather than cut. */
   overflowTitle: boolean;
@@ -60,10 +60,9 @@ interface ProjectBarProps {
 
 /**
  * A project on the roadmap, from its start to the end of the work of its team: solid where the
- * team works, faded and dashed where nobody does, with a lane for each bar of the work under the
- * title, with the name of its person when the lane is a line of text tall. Click or Enter opens
- * it; with a mouse it moves by dragging its title, with the work of its team; the lanes do not
- * move on their own. The arrows move it by a week.
+ * team works, faded and dashed where nobody does, with the titles alone a sliver for each bar of
+ * the work under the title. Click or Enter opens it; with a mouse it moves by dragging its title,
+ * with the work of its team; the slivers do not move on their own. The arrows move it by a week.
  */
 export function ProjectBar({
   placed,
@@ -199,18 +198,10 @@ export function ProjectBar({
               top: titleHeight - 2 + index * (lanes.height + lanes.gap),
               height: lanes.height,
             }}
-            className={`pointer-events-auto absolute z-[1] flex cursor-default items-center overflow-clip rounded-[2px] border text-xs leading-none font-semibold whitespace-nowrap ${
-              item.colorId ? '' : 'border-line-strong bg-surface-strong text-fg'
+            className={`pointer-events-auto absolute z-[1] cursor-default rounded-[2px] border ${
+              item.colorId ? '' : 'border-line-strong bg-surface-strong'
             }`}
-          >
-            {lanes.labeled && (
-              // In view while the start of a long lane scrolls past the column of the names.
-              <span className="sticky left-[calc(var(--gantt-label-width)+4px)] min-w-0 truncate px-1">
-                {item.name}
-                <span className="font-normal tabular-nums"> · {formatManDays(item.manDays)}</span>
-              </span>
-            )}
-          </span>
+          />
         ))}
     </button>
   );

@@ -12,7 +12,7 @@ import {
   Trash,
   X,
 } from 'lucide-react';
-import { TASK_COLORS, isKnownColorId } from '../../domain/colors';
+import type { TaskColorId } from '../../domain/colors';
 import {
   FIELD_DESCRIPTION_MAX,
   FIELD_FLAG_INFO,
@@ -35,6 +35,7 @@ import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
 import { taskColorStyle } from '../../themes';
 import { FieldTag } from '../roadmaps/fieldUi';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
+import { ColorMenu } from './ColorMenu';
 
 /** A word of the model in English, as the editor names types and flags, with its translation. */
 function Term({ name, label }: { name: string; label: string }) {
@@ -54,10 +55,10 @@ interface Explained {
 /** The flags a field can have, with their English name. */
 const FLAGS = ['multiple', 'required', 'main', 'group', 'quick'] as const;
 
-/** An option with another color, or none when the value is not a color. */
-function withColor(option: FieldOption, colorId: string): FieldOption {
+/** An option with another color, or none. */
+function withColor(option: FieldOption, colorId: TaskColorId | undefined): FieldOption {
   const next: FieldOption = { id: option.id, label: option.label };
-  if (isKnownColorId(colorId)) next.colorId = colorId;
+  if (colorId) next.colorId = colorId;
   return next;
 }
 
@@ -321,25 +322,17 @@ function FieldDialog({ field, config, onSave, onClose }: FieldDialogProps) {
                     <code className="text-xs text-fg-muted" title="Chiave del valore">
                       {option.id}
                     </code>
-                    <select
-                      aria-label={`Colore di «${option.label}»`}
-                      value={option.colorId ?? ''}
-                      onChange={(event) =>
+                    <ColorMenu
+                      label={`Colore di «${option.label}»`}
+                      value={option.colorId}
+                      onChange={(colorId) =>
                         setOptions(
                           options.map((item) =>
-                            item.id === option.id ? withColor(item, event.target.value) : item,
+                            item.id === option.id ? withColor(item, colorId) : item,
                           ),
                         )
                       }
-                      className="rounded-lg border border-line-strong bg-surface px-2 py-1 text-xs"
-                    >
-                      <option value="">Nessun colore</option>
-                      {TASK_COLORS.map((color) => (
-                        <option key={color.id} value={color.id}>
-                          {color.name}
-                        </option>
-                      ))}
-                    </select>
+                    />
                     <Button
                       variant="ghost"
                       size="icon"

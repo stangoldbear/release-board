@@ -95,7 +95,7 @@ export const FIELD_FLAG_INFO = {
   main: {
     label: 'Principale',
     description:
-      'Il valore compare sotto il titolo nella roadmap, al livello «Info principali», e non solo nella finestra del progetto.',
+      'Il valore compare nelle informazioni del progetto nella roadmap (pulsante «i»), e non solo nella sua finestra.',
   },
   group: {
     label: 'Raggruppa',

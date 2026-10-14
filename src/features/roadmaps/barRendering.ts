@@ -9,8 +9,8 @@ import { addDaysIso } from '../../utils/dateUtils';
 import type { DetailLevel } from './projectUi';
 import type { RoadmapMetrics } from './roadmapLayout';
 
-// How the roadmap draws the work of the team of a project: a lane inside its bar for each bar of
-// the work, or, at the Team level, a row for each. Pure: the components only place what is here.
+// How the roadmap draws the work of the team of a project: a sliver inside its bar for each bar of
+// the work with the titles alone, or a row for each. Pure: the components only place what is here.
 
 /** Days as the bars show them: "12 gg", "3,5 gg", "1 g". */
 export function formatManDays(manDays: number): string {
@@ -100,15 +100,6 @@ export function fadedParts(span: ProjectSpan): DateRange[] {
   return parts;
 }
 
-/** The teams at work on a project, in the order of the teams, each once; the contingency has none. */
-export function teamsOf(items: readonly WorkItem[]): Team[] {
-  const teams: Team[] = [];
-  for (const item of items) {
-    if (item.team && !teams.some((team) => team.id === item.team?.id)) teams.push(item.team);
-  }
-  return teams;
-}
-
 /** Space between the lanes of a bar, and around them. */
 export const LANE_GAP = 2;
 /** The sliver under the title that the lanes share with the titles alone: no room for words. */
@@ -120,12 +111,10 @@ export function laneLayout(band: number, bars: number): { height: number; gap: n
   return { height: Math.max(1, Math.floor((band - (bars - 1) * gap) / bars)), gap };
 }
 
-/** The lanes inside the bar of a project: the height of each, the space between, and their words. */
+/** The lanes inside the bar of a project with the titles alone: a sliver each, without words. */
 export interface Lanes {
   height: number;
   gap: number;
-  /** Each lane carries the name of its person: it is a line of text tall. */
-  labeled: boolean;
 }
 
 /** The row of a project at a level: the line of the title in its bar, the lanes, the bar, the row. */
@@ -141,11 +130,9 @@ export interface ProjectRowGeometry {
  * The row of a project with `bars` bars of work, by its level, whether the timeline or the project
  * alone chose it, tight at every level so that many projects fit the screen: a tight line of
  * title and little room around the bar. With the titles alone, the title over a sliver that the
- * lanes share, the same for every project, bars or not; with the main information, under the
- * title a lane for each bar of the work, a line of text tall with the name of the person, so that
- * the row grows with the team, and two lines in the column, the title and the teams; at the Team
- * level the people have rows of their own under it, and the row of the title is the line of the
- * bar, which goes on around the people, with a pixel above.
+ * lanes share, the same for every project, bars or not; at «Info principali» and Team the people
+ * have rows of their own under it, and the row of the title is the line of the bar, which goes on
+ * around the people, with a pixel above.
  */
 export function projectRowGeometry(
   level: DetailLevel,
@@ -154,30 +141,55 @@ export function projectRowGeometry(
 ): ProjectRowGeometry {
   const { lineHeight, cellPadding } = metrics;
   const titleHeight = metrics.tightBarHeight;
-  const padding = Math.round(metrics.rowPadding / 2);
-  const rowHeight = (barHeight: number, lines: number) =>
-    Math.max(barHeight + padding * 2, lineHeight * lines + cellPadding * 2);
   if (level === 'titles') {
     const barHeight = titleHeight + TITLES_BAND + LANE_GAP;
+    const padding = Math.round(metrics.rowPadding / 2);
     return {
       titleHeight,
-      lanes: bars > 0 ? { ...laneLayout(TITLES_BAND, bars), labeled: false } : null,
+      lanes: bars > 0 ? laneLayout(TITLES_BAND, bars) : null,
       barHeight,
-      rowHeight: rowHeight(barHeight, 1),
+      rowHeight: Math.max(barHeight + padding * 2, lineHeight + cellPadding * 2),
     };
   }
-  const labeled = level === 'main' && bars > 0;
-  const band = labeled ? bars * metrics.laneHeight + (bars - 1) * LANE_GAP : 0;
-  const barHeight = labeled ? titleHeight + band + LANE_GAP : titleHeight;
+  // The row of the title is as tight as the bar, and its cell has half the padding.
   return {
     titleHeight,
-    lanes: labeled ? { height: metrics.laneHeight, gap: LANE_GAP, labeled: true } : null,
-    barHeight,
-    // At the Team level the bar goes on around the people: the row of its title is as tight as
-    // the bar, and its cell has half the padding.
-    rowHeight:
-      level === 'team'
-        ? Math.max(barHeight + 2, lineHeight + cellPadding)
-        : rowHeight(barHeight, level === 'main' ? 2 : 1),
+    lanes: null,
+    barHeight: titleHeight,
+    rowHeight: Math.max(titleHeight + 2, lineHeight + cellPadding),
+  };
+}
+
+/** The rows of the people of a project, under its title. */
+export interface PeopleRows {
+  rowHeight: number;
+  /** The bar of the work across the middle of the row. */
+  barHeight: number;
+  /** The bar carries the name and the days of its person, in a border. */
+  labeled: boolean;
+  /** The rows are as thin as their bars, their words shrunk to fit («Compatta»). */
+  thin: boolean;
+}
+
+/**
+ * The people of a project by level: none with the titles alone; at «Info principali» a thin row
+ * each, with a bar in the color of the team, many projects in view; at the Team level a roomier
+ * row each, with the name and the days on a bar with a border, to move and stretch the work.
+ */
+export function peopleRows(level: DetailLevel, metrics: RoadmapMetrics): PeopleRows | null {
+  if (level === 'titles') return null;
+  if (level === 'main') {
+    return {
+      rowHeight: metrics.personRowHeight,
+      barHeight: metrics.workBarHeight,
+      labeled: false,
+      thin: metrics.thinPeople,
+    };
+  }
+  return {
+    rowHeight: metrics.labeledRowHeight,
+    barHeight: metrics.labeledBarHeight,
+    labeled: true,
+    thin: false,
   };
 }

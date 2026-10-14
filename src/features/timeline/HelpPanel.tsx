@@ -52,7 +52,7 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
             {releases && projects ? ', ' : ''}
             {projects ? 'un progetto, dal titolo,' : ''} o una nota per spostarli; dai bordi cambi
             le date
-            {projects ? ', al livello Team i giorni uomo di una persona' : ''}.
+            {projects ? ', a «Info principali» e Team i giorni uomo di una persona' : ''}.
           </li>
           <li>Un clic su un giorno vuoto aggiunge lì; un clic su una barra la apre.</li>
           {releases && (
@@ -72,8 +72,8 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
           {projects && (
             <li>
               Sulla riga di un progetto, sotto il mouse: «i» apre le informazioni del progetto in
-              una finestra che si sposta dalla sua barra e si chiude con la X, poi al livello Team
-              «Aggiungi una persona» e le righe da mostrare.
+              una finestra che si sposta dalla sua barra e si chiude con la X, poi a «Info
+              principali» e Team «Aggiungi una persona» e le righe da mostrare.
             </li>
           )}
           <li>

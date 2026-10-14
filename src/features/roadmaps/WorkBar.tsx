@@ -7,6 +7,8 @@ import { useDateFormat, useFormatDate } from '../../shared/dateFormat';
 import { diffDays, formatDate } from '../../utils/dateUtils';
 import type { DateFormat } from '../../utils/dateUtils';
 import { Tooltip } from '../../shared/ui/Tooltip';
+import { taskColorStyle } from '../../themes';
+import { formatManDays } from './barRendering';
 import type { WorkItem } from './barRendering';
 import { useClickOrDoubleClick } from './useClickOrDoubleClick';
 import type { WorkChanges, WorkDragKind } from './useWorkDrag';
@@ -62,6 +64,8 @@ interface WorkBarProps {
   height: number;
   /** The bar that shows, across the middle of the row. */
   barHeight: number;
+  /** The bar has a border and carries the name and the days, at the Team level. */
+  labeled: boolean;
   dragging: boolean;
   /** Id of the text that explains the keyboard commands. */
   describedBy: string;
@@ -78,8 +82,8 @@ interface WorkBarProps {
  * The work of a person on a project, a bar in the color of their team almost as tall as its row,
  * so that the bars of a team nearly touch, or the contingency of the project in grey, from the
  * first working day to the last, with the days away hatched; name and days are beside it in the
- * column, and over it in a tip on the mouse and the focus. The whole height of the row takes the
- * pointer. Click or Enter opens it, a double click types its days; with a mouse it moves by
+ * column, over it in a tip on the mouse and the focus, and, when `labeled`, on the bar itself,
+ * in the colors and the border of the team. The whole height of the row takes the pointer. Click or Enter opens it, a double click types its days; with a mouse it moves by
  * dragging and its right edge, marked by a grip, changes the days; the arrows move its start by a
  * day, and with Shift by a week.
  */
@@ -89,6 +93,7 @@ export function WorkBar({
   dayWidth,
   height,
   barHeight,
+  labeled,
   dragging,
   describedBy,
   ignoreClick,
@@ -125,10 +130,14 @@ export function WorkBar({
   };
 
   // The color of the team fills the bar, with no edge around it (the owner's choice): the name of
-  // the person is beside it in the column and over it in the tip, and the grip marks its end.
+  // the person is beside it in the column and over it in the tip, and the grip marks its end. With
+  // its words on it, the bar takes the colors of the team as a task does, border and text.
   const fill = item.colorId
-    ? { backgroundColor: `var(--rb-task-${item.colorId}-border)` }
+    ? labeled
+      ? taskColorStyle(item.colorId)
+      : { backgroundColor: `var(--rb-task-${item.colorId}-border)` }
     : undefined;
+  const neutral = labeled ? 'border-line-strong bg-surface-strong text-fg' : 'bg-line-strong';
 
   return (
     <Tooltip text={`${item.name}: ${words}`}>
@@ -157,9 +166,9 @@ export function WorkBar({
         <span
           aria-hidden="true"
           style={{ ...fill, height: barHeight }}
-          className={`absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-clip ${
-            item.colorId ? '' : 'bg-line-strong'
-          } ${continuesBefore ? 'rounded-l-none' : 'rounded-l-xs'} ${
+          className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center overflow-clip ${
+            labeled ? 'border text-xs leading-none font-semibold whitespace-nowrap' : ''
+          } ${item.colorId ? '' : neutral} ${continuesBefore ? 'rounded-l-none' : 'rounded-l-xs'} ${
             continuesAfter ? 'rounded-r-none' : 'rounded-r-xs'
           } ${
             dragging
@@ -183,6 +192,14 @@ export function WorkBar({
               />
             );
           })}
+          {labeled && (
+            // In view while the start of a long bar scrolls past the column of the names, on the
+            // color of the bar over the days away; clear of the grip on the right.
+            <span className="sticky left-[calc(var(--gantt-label-width)+4px)] z-[1] min-w-0 truncate bg-inherit pr-3 pl-1">
+              {item.name}
+              <span className="font-normal tabular-nums"> · {formatManDays(item.manDays)}</span>
+            </span>
+          )}
         </span>
         {resizable && !continuesAfter && (
           <span
@@ -190,10 +207,14 @@ export function WorkBar({
             onPointerDown={(event) => onPointerDown(event, 'end')}
             className="absolute inset-y-0 right-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center rounded-xs hover:bg-current/15"
           >
-            {/* The grip that says the edge can be dragged, stronger under the mouse. */}
+            {/*
+              The grip that says the edge can be dragged, stronger under the mouse: a line in the
+              color of the text with a halo in the color of the page, so that one of the two
+              stands out on any bar, light or deep, in every theme.
+            */}
             <span
               style={{ height: Math.min(10, barHeight - 2) }}
-              className="w-0.5 rounded-full bg-current opacity-50 group-hover/work:opacity-100"
+              className="w-0.5 rounded-full bg-current opacity-80 shadow-[0_0_0_1px_var(--color-surface)] group-hover/work:opacity-100"
             />
           </span>
         )}

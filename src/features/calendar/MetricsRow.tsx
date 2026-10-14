@@ -146,8 +146,12 @@ export const MetricsRow = memo(function MetricsRow({
           DAILY_METRIC.decimals,
           showIcon ? roomBeside : roomAlone,
         );
-        // When even the shortest number does not fit beside the icon, the icon goes above it.
-        const stacked = showIcon && beside.length > roomBeside;
+        // When even the shortest number does not fit beside the icon, the icon goes above it;
+        // when it does not fit at all, as in the narrowest days, the cell shows the icon alone and
+        // the card the value, rather than a cut number that would read as another.
+        const alone = formatShortNumber(total, DAILY_METRIC.decimals, roomAlone);
+        const shown = alone.length * digitWidth <= columnWidth;
+        const stacked = shown && showIcon && beside.length > roomBeside;
         return (
           <button
             key={column.start}
@@ -163,7 +167,9 @@ export const MetricsRow = memo(function MetricsRow({
             className={`${base} ${tone} ${stacked ? 'flex-col' : ''} scroll-ml-(--gantt-label-width) cursor-pointer hover:brightness-95 focus-visible:-outline-offset-2`}
           >
             {showIcon && <ApprovalIcon light={light} />}
-            {stacked ? formatShortNumber(total, DAILY_METRIC.decimals, roomAlone) : beside}
+            {shown && (stacked ? alone : beside)}
+            {/* A value too long for its day, without a light: a dot says that there is one. */}
+            {!shown && !showIcon && <span aria-hidden="true">·</span>}
           </button>
         );
       })}

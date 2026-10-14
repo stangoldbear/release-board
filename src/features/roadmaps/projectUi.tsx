@@ -1,16 +1,9 @@
-import {
-  CircleCheck,
-  CircleDashed,
-  CircleDot,
-  CirclePause,
-  Lightbulb,
-  Rows2,
-  Rows3,
-  Rows4,
-} from 'lucide-react';
+import type { ComponentType, SVGProps } from 'react';
+import { CircleCheck, CircleDashed, CircleDot, CirclePause, Lightbulb } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PROJECT_STATUS_LABELS } from '../../domain/projects';
 import type { ProjectStatus } from '../../domain/types';
+import { MainLevelIcon, TeamLevelIcon, TitlesLevelIcon } from './levelIcons';
 
 /** A shape for each state, so that the color of a project is never the only cue. */
 export const PROJECT_STATUS_ICONS: Record<ProjectStatus, LucideIcon> = {
@@ -48,8 +41,8 @@ export function ProjectStatusMark({
 }
 
 /**
- * How much a row of the roadmap shows of its project: the title alone, the main information
- * (description, state, owner and the main custom fields), or those and the people who work on it.
+ * How much a row of the roadmap shows of its project: the title alone, the people who work on it
+ * in thin rows, or the same people in roomier rows with their names on the bars, to adjust them.
  */
 export type DetailLevel = 'titles' | 'main' | 'team';
 
@@ -57,30 +50,30 @@ export const DETAIL_LEVELS: readonly {
   id: DetailLevel;
   label: string;
   title: string;
-  /** One, two or three lines: the icon of the level, on the roadmap and on each project. */
-  icon: LucideIcon;
+  /** Two thin bars, three thin ones, three thick ones: the icon of the level, on the roadmap and on each project. */
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   rows: 1 | 2 | 3;
 }[] = [
   {
     id: 'titles',
     label: 'Solo titoli',
     title: 'Il titolo di ogni progetto, e nulla più',
-    icon: Rows2,
+    icon: TitlesLevelIcon,
     rows: 1,
   },
   {
     id: 'main',
     label: 'Info principali',
-    title: 'Sotto il titolo: descrizione, stato, responsabile e i campi principali',
-    icon: Rows3,
+    title: 'Sotto il titolo una riga sottile per ogni persona che lavora al progetto',
+    icon: MainLevelIcon,
     rows: 2,
   },
   {
     id: 'team',
     label: 'Team',
     title:
-      'Le informazioni principali e una riga per ogni persona che lavora al progetto, e per la contingency',
-    icon: Rows4,
+      'Una riga più alta per ogni persona, con nome e giorni sulla barra: per spostare e allungare il lavoro',
+    icon: TeamLevelIcon,
     rows: 3,
   },
 ];

@@ -1,4 +1,9 @@
-import { FIXED_ZOOM_LEVELS, ZOOM_DAY_WIDTH, weekRange } from '../../domain/schedule';
+import {
+  FIXED_ZOOM_LEVELS,
+  ZOOM_DAY_WIDTH,
+  isFixedZoomLevel,
+  weekRange,
+} from '../../domain/schedule';
 import type { DateRange, ZoomLevel } from '../../domain/schedule';
 import {
   ITALIAN_MONTHS,
@@ -132,11 +137,23 @@ export function maxFitDays(viewport: number): number {
   return Math.max(MIN_FIT_DAYS, Math.floor(viewport / MIN_FIT_DAY_WIDTH));
 }
 
-/** Pixels per day of the view: fixed at each level, a share of the viewport at the fitted one. */
+/**
+ * The narrowest day of «Più giorni»: each of its cells, the day, the note, the revenue, stays a
+ * target of 24 pixels, the least of WCAG 2.2; narrower days would still have a column each.
+ */
+export const MAX_DAYS_MIN_WIDTH = 24;
+
+/** The most whole days a viewport shows with a column each, at least MAX_DAYS_MIN_WIDTH wide. */
+export function maxDays(viewport: number): number {
+  return Math.max(1, Math.floor(viewport / MAX_DAYS_MIN_WIDTH));
+}
+
+/** Pixels per day of the view: fixed at each level, a share of the viewport at the fitted ones. */
 export function dayWidthOf(view: Pick<CalendarView, 'zoom' | 'viewport' | 'fitDays'>): number {
-  if (view.zoom !== 'fit') return ZOOM_DAY_WIDTH[view.zoom];
-  // Before the window is measured, the fitted level looks like two months.
-  return view.viewport === null ? ZOOM_DAY_WIDTH.bimester : view.viewport / view.fitDays;
+  if (isFixedZoomLevel(view.zoom)) return ZOOM_DAY_WIDTH[view.zoom];
+  // Before the window is measured, the fitted levels look like two months.
+  if (view.viewport === null) return ZOOM_DAY_WIDTH.bimester;
+  return view.viewport / (view.zoom === 'max' ? maxDays(view.viewport) : view.fitDays);
 }
 
 /** The whole days the viewport shows at the view's level; null before the window is measured. */
@@ -145,16 +162,17 @@ export function daysInView(
 ): number | null {
   if (view.viewport === null) return null;
   if (view.zoom === 'fit') return view.fitDays;
+  if (view.zoom === 'max') return maxDays(view.viewport);
   return Math.max(1, Math.floor(view.viewport / dayWidthOf(view)));
 }
 
 /** The fixed level a step away from the view's width: closer with -1, wider with 1, or none. */
 function fixedLevelFrom(view: CalendarView, step: -1 | 1): ZoomLevel | undefined {
-  if (view.zoom !== 'fit') {
+  if (isFixedZoomLevel(view.zoom)) {
     const index = FIXED_ZOOM_LEVELS.indexOf(view.zoom) + step;
     return FIXED_ZOOM_LEVELS[Math.min(Math.max(index, 0), FIXED_ZOOM_LEVELS.length - 1)];
   }
-  // From the fitted level, the nearest fixed one in the direction of the step.
+  // From a fitted level, the nearest fixed one in the direction of the step.
   const width = dayWidthOf(view);
   const candidates = FIXED_ZOOM_LEVELS.filter((level) =>
     step === -1 ? ZOOM_DAY_WIDTH[level] > width : ZOOM_DAY_WIDTH[level] < width,

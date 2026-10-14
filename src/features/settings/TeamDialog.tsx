@@ -44,6 +44,7 @@ import type { MenuItem } from '../../shared/ui/Menu';
 import { useListDrag } from '../../shared/useListDrag';
 import { taskColorStyle } from '../../themes';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
+import { ColorSwatch } from './ColorMenu';
 import { StakeholderDialog } from '../roadmaps/StakeholderDialog';
 
 const OPTION =
@@ -432,13 +433,7 @@ export function TeamDialog({ config, actions, onClose }: TeamDialogProps) {
       kind: 'radio',
       label: color.name,
       checked: team.colorId === color.id,
-      leading: (
-        <span
-          aria-hidden="true"
-          className="h-4 w-4 shrink-0 rounded-sm border-2"
-          style={taskColorStyle(color.id)}
-        />
-      ),
+      leading: <ColorSwatch colorId={color.id} />,
       onSelect: () => actions.onSaveTeam({ ...team, colorId: color.id }),
     }));
 

@@ -6,6 +6,44 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-14
+
+Le regole di Firestore e i backup non cambiano: un'istanza si aggiorna al tag senza ripubblicare
+le regole. Chi usava il livello «Team» ritrova le stesse righe a «Info principali».
+
+### Cambiato
+
+- Roadmap, livelli delle righe: «Info principali» mostra ora sotto il titolo una riga sottile per
+  ogni persona che lavora al progetto, con nome, team e giorni nella colonna e la barra nel colore
+  del team (era il livello «Team»). «Team» diventa la vista per gli aggiustamenti fini: righe più
+  alte (24 px alla dimensione normale del testo), barre con bordo, nome e giorni, che si spostano
+  trascinandole, si allungano dal bordo destro e cambiano giorni con il doppio clic. Le lane con i
+  nomi dentro la barra del progetto e la riga dei team sotto il titolo non ci sono più; «Solo
+  titoli» resta com'è. Nella densità «Compatta» le righe da 8 px sono quelle di «Info
+  principali»; «Team» tiene le sue righe.
+- «Aggiungi una persona» è tra i comandi della riga di un progetto sia a «Info principali» sia a
+  «Team».
+- Icone nuove per i livelli, nella barra della timeline e su ogni riga: due barre sottili, tre
+  barre sottili e vicine, tre barre spesse.
+- La barretta del bordo destro delle barre del lavoro ha un alone nel colore della pagina e resta
+  visibile su ogni colore, anche in tema scuro.
+- Un menu di scelte, come «Ordina» e «Raggruppa», si apre sulla voce scelta.
+
+### Aggiunto
+
+- Vista «Più giorni», tra «2 mesi» e «Trimestre»: tutti i giorni interi che entrano nella
+  finestra, uno per colonna e mai più stretti di 24 px; il numero segue la larghezza della
+  finestra. I titoli delle attività e le note dei giorni stanno su una riga.
+- Impostazioni → Roadmap → «Modifica i campi…»: il colore di ogni valore di una lista si sceglie da
+  un menu che mostra il rettangolo del colore accanto al nome, sul pulsante e su ogni voce.
+
+### Corretto
+
+- Nei giorni troppo stretti per il fatturato la cella mostra solo il semaforo e il valore è nella
+  scheda: prima il numero veniva tagliato e poteva leggersi come un altro.
+- L'opzione «Principale» di un campo diceva che il valore compare a «Info principali»: ora dice
+  che compare nelle informazioni del progetto (pulsante «i»).
+
 ## [0.16.0] - 2026-10-13
 
 **Le regole di Firestore cambiano**: in un'istanza condivisa ripubblica `firestore/firestore.rules`

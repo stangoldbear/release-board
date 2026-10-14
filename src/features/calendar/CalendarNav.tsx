@@ -4,7 +4,7 @@ import type { ZoomLevel } from '../../domain/schedule';
 import { Button } from '../../shared/ui/Button';
 import { SEGMENT, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from '../../shared/ui/segmented';
 import { startOfMonth, todayIso } from '../../utils/dateUtils';
-import { MIN_FIT_DAYS, daysInView, maxFitDays, periodLabel } from './calendarView';
+import { MIN_FIT_DAYS, daysInView, maxDays, maxFitDays, periodLabel } from './calendarView';
 import type { CalendarAction, CalendarView } from './calendarView';
 
 interface CalendarNavProps {
@@ -18,7 +18,7 @@ interface CalendarNavProps {
   board?: boolean;
 }
 
-/** The four fixed zoom levels, the fitted one, then the board of one week. */
+/** The zoom levels from the closest to the widest, the fitted one, then the board of one week. */
 const VIEW_OPTIONS: {
   key: ZoomLevel | 'week';
   label: string;
@@ -27,6 +27,12 @@ const VIEW_OPTIONS: {
   { key: 'detail', label: 'Dettaglio', title: 'Colonne larghe, un giorno per colonna' },
   { key: 'month', label: 'Mese', title: 'Un giorno per colonna' },
   { key: 'bimester', label: '2 mesi', title: 'Un giorno per colonna, largo la metà' },
+  {
+    key: 'max',
+    label: 'Più giorni',
+    title:
+      'Tutti i giorni che entrano nella finestra, uno per colonna: il numero segue la larghezza della finestra',
+  },
   { key: 'quarter', label: 'Trimestre', title: 'Una settimana per colonna' },
   {
     key: 'fit',
@@ -140,7 +146,12 @@ export function CalendarNav({
         aria-label={`Vista: ${name.toLowerCase()}`}
         className={`${SEGMENTED} flex-wrap gap-y-1`}
       >
-        {options.map(({ key, label, title }) => {
+        {options.map(({ key, label, title: hint }) => {
+          // The level that fills the window with days says how many it shows now.
+          const title =
+            key === 'max' && view.viewport !== null
+              ? `${hint} (ora ${maxDays(view.viewport)})`
+              : hint;
           if (key === 'fit' && activeView === 'fit') {
             // The chosen fitted level: its button, then the number of days to change.
             return (
@@ -183,6 +194,10 @@ export function CalendarNav({
             >
               {activeView === key && <Check className="h-3 w-3 shrink-0" aria-hidden="true" />}
               {key === 'fit' ? `Mostra ${days} giorni` : label}
+              {/* The days of «Più giorni», which its title gives the mouse, for the screen reader. */}
+              {key === 'max' && view.viewport !== null && (
+                <span className="sr-only">, {maxDays(view.viewport)} giorni</span>
+              )}
             </button>
           );
         })}

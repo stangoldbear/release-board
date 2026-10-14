@@ -3,13 +3,13 @@ import { addDaysIso, diffDays, startOfWeek } from '../utils/dateUtils';
 
 /**
  * How much of the calendar is visible at once: wide days, a month of days, two months of days
- * half as wide, a quarter of weeks, or as many whole days as the user asks for, fitted to the
- * window ("fit").
+ * half as wide, as many days as the window holds with a column each ("max"), a quarter of weeks,
+ * or as many whole days as the user asks for, fitted to the window ("fit").
  */
-export type ZoomLevel = 'detail' | 'month' | 'bimester' | 'quarter' | 'fit';
+export type ZoomLevel = 'detail' | 'month' | 'bimester' | 'max' | 'quarter' | 'fit';
 
 /** The levels with a fixed width per day, from the closest to the widest. */
-export type FixedZoomLevel = Exclude<ZoomLevel, 'fit'>;
+export type FixedZoomLevel = Exclude<ZoomLevel, 'max' | 'fit'>;
 
 export const FIXED_ZOOM_LEVELS: readonly FixedZoomLevel[] = [
   'detail',
@@ -18,9 +18,14 @@ export const FIXED_ZOOM_LEVELS: readonly FixedZoomLevel[] = [
   'quarter',
 ];
 
-export const ZOOM_LEVELS: readonly ZoomLevel[] = [...FIXED_ZOOM_LEVELS, 'fit'];
+export const ZOOM_LEVELS: readonly ZoomLevel[] = [...FIXED_ZOOM_LEVELS, 'max', 'fit'];
 
-/** Pixels per day at each fixed level; the fitted level takes them from the window. */
+/** True for a level with a fixed width per day. */
+export function isFixedZoomLevel(zoom: ZoomLevel): zoom is FixedZoomLevel {
+  return (FIXED_ZOOM_LEVELS as readonly ZoomLevel[]).includes(zoom);
+}
+
+/** Pixels per day at each fixed level; the fitted levels take them from the window. */
 export const ZOOM_DAY_WIDTH: Record<FixedZoomLevel, number> = {
   detail: 112,
   month: 56,

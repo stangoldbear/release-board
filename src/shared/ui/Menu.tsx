@@ -85,10 +85,16 @@ export function Menu({
       (item) => !item.disabled,
     );
   const focusItem = (at: 'first' | 'last') => {
-    // After the panel is in the document.
+    // After the panel is in the document. A menu of choices opens on the one chosen, as a list
+    // does: the arrows go on from there.
     window.requestAnimationFrame(() => {
       const list = enabledItems();
-      (at === 'first' ? list[0] : list.at(-1))?.focus();
+      const chosen = list.find(
+        (item) =>
+          item.getAttribute('role') === 'menuitemradio' &&
+          item.getAttribute('aria-checked') === 'true',
+      );
+      (at === 'first' ? (chosen ?? list[0]) : list.at(-1))?.focus();
     });
   };
   const openAt = (at: 'first' | 'last') => {

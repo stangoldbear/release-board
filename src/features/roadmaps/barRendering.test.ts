@@ -6,8 +6,8 @@ import {
   fadedParts,
   formatManDays,
   laneLayout,
+  peopleRows,
   projectRowGeometry,
-  teamsOf,
   workItemsOf,
 } from './barRendering';
 import { roadmapMetrics } from './roadmapLayout';
@@ -91,29 +91,46 @@ describe('the bars of the work of a project', () => {
     const four = projectRowGeometry('titles', 4, metrics);
     expect(none).toMatchObject({ titleHeight: 24, lanes: null, barHeight: 32, rowHeight: 38 });
     expect(four).toMatchObject({ barHeight: 32, rowHeight: 38 });
-    expect(four.lanes).toEqual({ height: 1, gap: 2, labeled: false });
+    expect(four.lanes).toEqual({ height: 1, gap: 2 });
   });
 
-  it('give the main information a lane a line of text tall for each bar, with its name', () => {
+  it('leave the bar alone where the people have rows, at the main information and Team', () => {
     const metrics = roadmapMetrics(56, 1, 'large');
-    expect(metrics.laneHeight).toBeGreaterThanOrEqual(10);
-    const one = projectRowGeometry('main', 1, metrics);
-    const four = projectRowGeometry('main', 4, metrics);
-    expect(one.lanes).toEqual({ height: 16, gap: 2, labeled: true });
-    expect(four.lanes).toEqual(one.lanes);
-    expect(one.barHeight).toBe(24 + 16 + 2);
-    expect(four.barHeight).toBe(24 + 4 * 16 + 3 * 2 + 2);
-    expect(four.rowHeight).toBe(four.barHeight + 2 * 3);
-    // Without work, the two lines of the column set the height.
-    expect(projectRowGeometry('main', 0, metrics)).toMatchObject({ lanes: null, rowHeight: 48 });
-    // Even the smallest text keeps the lanes at least 10 pixels tall.
-    expect(roadmapMetrics(56, 0.75, 'standard').laneHeight).toBeGreaterThanOrEqual(10);
+    for (const level of ['main', 'team'] as const) {
+      // The column has the title alone: the people are listed in their rows.
+      expect(projectRowGeometry(level, 4, metrics)).toMatchObject({
+        titleHeight: 24,
+        lanes: null,
+        barHeight: 24,
+        rowHeight: 26,
+      });
+    }
   });
 
-  it('leave the bar alone at the Team level, where the people have rows', () => {
-    const geometry = projectRowGeometry('team', 4, roadmapMetrics(56, 1, 'large'));
-    // The column has the title alone: the people are listed in their rows.
-    expect(geometry).toMatchObject({ titleHeight: 24, lanes: null, barHeight: 24, rowHeight: 26 });
+  it('give the people thin rows at the main information and roomy labeled ones at Team', () => {
+    const metrics = roadmapMetrics(56, 1, 'large');
+    expect(peopleRows('titles', metrics)).toBeNull();
+    expect(peopleRows('main', metrics)).toEqual({
+      rowHeight: 16,
+      barHeight: 14,
+      labeled: false,
+      thin: false,
+    });
+    const team = peopleRows('team', metrics);
+    expect(team).toEqual({ rowHeight: 26, barHeight: 20, labeled: true, thin: false });
+    expect(team!.rowHeight).toBeGreaterThan(peopleRows('main', metrics)!.rowHeight);
+  });
+
+  it('keep the Team level roomy at «Compatta», where the main information is thin', () => {
+    const metrics = roadmapMetrics(56, 1, 'compact');
+    expect(peopleRows('main', metrics)).toMatchObject({ rowHeight: 8, thin: true, labeled: false });
+    // A row of 24 pixels, the least target of WCAG 2.2, at the standard and compact densities.
+    expect(peopleRows('team', metrics)).toEqual({
+      rowHeight: 24,
+      barHeight: 18,
+      labeled: true,
+      thin: false,
+    });
   });
 
   it('share the band among the lanes, thinner with more of them', () => {
@@ -121,11 +138,6 @@ describe('the bars of the work of a project', () => {
     expect(laneLayout(16, 3)).toEqual({ height: 4, gap: 2 });
     expect(laneLayout(16, 8)).toEqual({ height: 1, gap: 1 });
     expect(laneLayout(6, 4)).toEqual({ height: 1, gap: 2 });
-  });
-
-  it('name the teams at work once each, in the order of the work', () => {
-    const items = workItemsOf(project, projectSpan(project, assignments, config), config);
-    expect(teamsOf(items).map((team) => team.tag)).toEqual(['BA', 'ServerSide', 'iOSDev', 'QA']);
   });
 
   it('write the days as the bars show them', () => {

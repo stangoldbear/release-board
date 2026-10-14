@@ -7,6 +7,7 @@ import {
   initialRange,
   initialView,
   isNearEnd,
+  maxDays,
   maxFitDays,
   parseFitDays,
   periodLabel,
@@ -207,5 +208,35 @@ describe('the fitted level', () => {
     expect(parseFitDays(6)).toBeNull();
     expect(parseFitDays(12.5)).toBeNull();
     expect(parseFitDays('45')).toBeNull();
+  });
+});
+
+describe('the level with the most days', () => {
+  const measured = calendarViewReducer(opened, { type: 'resized', viewport: 1240 });
+  const most = calendarViewReducer(measured, { type: 'setZoom', zoom: 'max' });
+
+  it('fills the window with whole days, each a column of at least 24 pixels', () => {
+    expect(maxDays(1248)).toBe(52);
+    expect(daysInView({ ...most, viewport: 1248 })).toBe(52);
+    expect(dayWidthOf({ ...most, viewport: 1248 })).toBe(24);
+    // The days are as narrow as a target can be: 24 pixels, never under.
+    expect(maxDays(1240)).toBe(51);
+    expect(dayWidthOf(most)).toBeCloseTo(1240 / 51);
+    expect(dayWidthOf(most)).toBeGreaterThanOrEqual(24);
+    // Before the measure it looks like two months, and a phone still has its days.
+    expect(dayWidthOf({ ...most, viewport: null })).toBe(28);
+    expect(maxDays(10)).toBe(1);
+  });
+
+  it('follows the window: a wider one shows more days', () => {
+    const wider = calendarViewReducer(most, { type: 'resized', viewport: 2400 });
+    expect(daysInView(wider)).toBe(100);
+    expect(dayWidthOf(wider)).toBe(24);
+  });
+
+  it('hands its days to «Mostra N giorni», and zooms to the nearest fixed level', () => {
+    expect(calendarViewReducer(most, { type: 'setZoom', zoom: 'fit' }).fitDays).toBe(51);
+    expect(calendarViewReducer(most, { type: 'zoomBy', step: -1 }).zoom).toBe('bimester');
+    expect(calendarViewReducer(most, { type: 'zoomBy', step: 1 }).zoom).toBe('quarter');
   });
 });

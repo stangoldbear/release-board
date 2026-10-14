@@ -21,7 +21,7 @@ import { useStableCallback } from '../../shared/useStableCallback';
 import { diffDays } from '../../utils/dateUtils';
 import { LABEL_CELL } from '../calendar/timelineLayout';
 import type { Column } from '../calendar/timelineLayout';
-import { formatManDays, projectRowGeometry, teamsOf } from './barRendering';
+import { formatManDays, peopleRows, projectRowGeometry } from './barRendering';
 import type { WorkItem } from './barRendering';
 import { DaysEditor } from './DaysEditor';
 import { DeadlineSign } from './DeadlineSign';
@@ -49,7 +49,7 @@ export interface Editing {
 }
 
 const ROW_STYLE = { gridTemplateColumns: 'var(--gantt-label-width) auto' };
-/** At the Team level, room under the last person for the edge of the bar around them. */
+/** With the people in rows, room under the last one for the edge of the bar around them. */
 const ROOM_UNDER_THE_PEOPLE = 4;
 /** The least width of the field that types the days of a bar. */
 const EDITOR_MIN_WIDTH = 88;
@@ -76,8 +76,8 @@ const RAIL_PART: Record<RailPart, string> = {
 
 /**
  * The piece of the rail of a project in one cell of the column, in the color of its bar: alone in
- * the cell of the title, or at the Team level down the left edge from the title to the last person,
- * so that the block reads as one. The words are the tag beside the title.
+ * the cell of the title, or with the people in rows down the left edge from the title to the last
+ * person, so that the block reads as one. The words are the tag beside the title.
  */
 function RailPiece({ colorId, part }: { colorId: TaskColorId; part: RailPart }) {
   return (
@@ -90,7 +90,7 @@ function RailPiece({ colorId, part }: { colorId: TaskColorId; part: RailPart }) 
 }
 
 /**
- * At the Team level the names of a project are a rectangle: the color of its bar at a quarter over
+ * With the people in rows the names of a project are a rectangle: the color of its bar at a quarter over
  * the surface below, with an edge in the color of the bar. Over the days only the bar has the
  * color of the project: the days before its start and after its end stay as the grid draws them.
  */
@@ -145,8 +145,8 @@ function personLine(item: WorkItem, manDays: number): string {
 
 /**
  * The tools of the row of a project, under the mouse and the focus: first the button that shows
- * everything about the project in a small window, then at the Team level a button that adds a
- * person, then the rows of the project, one, two or three, the same choice as «Informazioni
+ * everything about the project in a small window, then, with the people in rows, a button that
+ * adds a person, then the rows of the project, one, two or three, the same choice as «Informazioni
  * visibili» at the top, for this project alone. The choice of the timeline is not an exception.
  */
 function LevelButtons({
@@ -304,10 +304,10 @@ export interface ProjectRowProps {
 
 /**
  * The row of a project: in the column, the rail in the color of its bar, the shape of its state,
- * its title and the tag of its size, and under them the teams at work, two lines and no more,
- * with everything else in the card; its bar over the days, with
- * the deadline as a dashed red line; at the "Team" level a row for each bar of the work,
- * the people in the color of their team and the contingency in grey, with a row that adds a person.
+ * its title and the tag of its size, with everything else in the card; its bar over the days, with
+ * the deadline as a dashed red line; at «Info principali» and Team a row for each bar of the work
+ * under the title, the people in the color of their team and the contingency in grey: thin rows
+ * at «Info principali», roomier ones with the name on the bar at the Team level.
  */
 export function ProjectRow({
   project,
@@ -363,12 +363,14 @@ export function ProjectRow({
   const noteTitle = useStableCallback(
     (date: string) => `Nuova nota sulla timeline il ${formatDate(date)}`,
   );
-  const { personRowHeight, workBarHeight, thinPeople } = metrics;
+  // The people in rows of their own, at «Info principali» and Team; none with the titles alone.
+  const peopleRow = peopleRows(level, metrics);
+  const personRowHeight = peopleRow?.rowHeight ?? 0;
   // The field that types the days of a person: a line of text tall, over a thin row as well.
   const editorHeight = Math.max(personRowHeight, metrics.lineHeight + 4);
   const shown = projectDrag?.project.id === project.id ? draggedProject(projectDrag) : project;
   const placed = placeTasks([shown], range).placed[0];
-  const people = level === 'team' ? work : [];
+  const people = peopleRow ? work : [];
   const rows = 1 + people.length;
   // The bar with its lanes, and the lines of the column: the row takes the taller.
   const geometry = projectRowGeometry(level, work.length, metrics);
@@ -376,7 +378,6 @@ export function ProjectRow({
   const colorId = projectColorOf(project, config);
   // The tag keeps the color of its value, also when the colors of the bars are free.
   const sizeValue = tagField ? coloredValueOf(project, tagField) : null;
-  const teams = teamsOf(work);
   const overrun = deadlineOverrun(project, span, work, config.closures ?? []);
   const deadlineLeft =
     project.deadline && project.deadline >= range.start && project.deadline <= range.end
@@ -389,7 +390,7 @@ export function ProjectRow({
   const isEdited = (item: WorkItem) => editing?.kind === item.kind && editing.id === item.id;
 
   const dropLine = dropBefore ? 'top-0' : dropAfter ? 'bottom-0' : null;
-  // The bar of the project: at the Team level it reaches down around its people, so that the bars
+  // The bar of the project: with the people in rows it reaches down around them, so that the bars
   // of the projects nearly touch; elsewhere it is in the row of its title.
   const encloses = people.length > 0;
   const rowHeightOf = (last: boolean) => personRowHeight + (last ? ROOM_UNDER_THE_PEOPLE : 0);
@@ -464,13 +465,13 @@ export function ProjectRow({
       <div
         // The grip and the rail take the left of the cell at every density.
         className={`${LABEL_CELL} flex flex-col justify-center overflow-hidden pr-2 pl-7 transition-colors group-hover/row:bg-surface-strong in-data-compact:pl-7 ${
-          level === 'team' ? 'bg-(--block-tint) py-1!' : 'bg-surface-muted'
+          peopleRow ? 'bg-(--block-tint) py-1!' : 'bg-surface-muted'
         }`}
         style={{
           gridColumn: 1,
           gridRow: 1,
           height: projectRowHeight,
-          ...(level === 'team' ? blockCellStyle(colorId, true, people.length === 0) : undefined),
+          ...(peopleRow ? blockCellStyle(colorId, true, people.length === 0) : undefined),
         }}
         draggable
         {...dragSource}
@@ -518,30 +519,6 @@ export function ProjectRow({
             </span>
           )}
         </button>
-        {level === 'main' && (
-          <span
-            title={teams.map((team) => team.name).join(', ') || undefined}
-            className="block overflow-hidden text-xs leading-snug text-ellipsis whitespace-nowrap text-fg-muted"
-          >
-            {teams.length > 0 && <span className="sr-only">Team: </span>}
-            {teams.map((team, index) => (
-              <span key={team.id} className="inline-flex items-center gap-1">
-                {index > 0 && (
-                  <span className="mx-0.5 opacity-60" aria-hidden="true">
-                    ·
-                  </span>
-                )}
-                <span
-                  aria-hidden="true"
-                  className="inline-block h-2 w-2 shrink-0 rounded-full border border-line-strong"
-                  style={{ backgroundColor: `var(--rb-task-${team.colorId}-border)` }}
-                />
-                {team.tag}
-              </span>
-            ))}
-            {teams.length === 0 && ' '}
-          </span>
-        )}
         <LevelButtons
           title={project.title}
           level={level}
@@ -550,10 +527,10 @@ export function ProjectRow({
           infoOpen={infoOpen}
           onShowInfo={onShowInfo}
           onSetLevel={onSetLevel}
-          onAddPerson={level === 'team' && !searching ? onAddAssignment : undefined}
+          onAddPerson={peopleRow && !searching ? onAddAssignment : undefined}
         />
       </div>
-      {/* At the Team level the bar goes around the work of its people, from the title down. */}
+      {/* With the people in rows the bar goes around their work, from the title down. */}
       {encloses && (
         <div
           className="pointer-events-none relative"
@@ -603,17 +580,17 @@ export function ProjectRow({
           <div key={`${item.kind}-${item.id}`} className="contents">
             {/*
               One line, under the title and in its rail: the person, the team and the days. At
-              «Compatta» the row is as thin as the bar, and the words shrink until they fit in it
-              (the owner's choice), whole in the tip of the row.
+              «Info principali» in «Compatta» the row is as thin as the bar, and the words shrink
+              until they fit in it (the owner's choice), whole in the tip of the row.
             */}
             <div
               className={`${LABEL_CELL} flex items-center bg-(--block-tint) py-0! pl-11! text-xs ${
-                thinPeople ? 'gap-1 overflow-hidden' : 'gap-1.5 border-t border-line/60'
+                peopleRow?.thin ? 'gap-1 overflow-hidden' : 'gap-1.5 border-t border-line/60'
               }`}
               style={{
                 gridColumn: 1,
                 gridRow,
-                ...(thinPeople
+                ...(peopleRow?.thin
                   ? {
                       height: rowHeightOf(last),
                       fontSize: personRowHeight,
@@ -622,14 +599,14 @@ export function ProjectRow({
                   : { minHeight: rowHeightOf(last) }),
                 ...blockCellStyle(colorId, false, last),
               }}
-              title={thinPeople ? personLine(item, moving.manDays) : undefined}
+              title={peopleRow?.thin ? personLine(item, moving.manDays) : undefined}
             >
               <RailPiece colorId={colorId} part={last ? 'last' : 'middle'} />
               <TreeBranch last={last} />
               <span
                 aria-hidden="true"
                 className={`shrink-0 rounded-full border border-line-strong ${
-                  thinPeople ? 'h-1.5 w-1.5' : 'h-2 w-2'
+                  peopleRow?.thin ? 'h-1.5 w-1.5' : 'h-2 w-2'
                 }`}
                 style={{
                   backgroundColor: item.colorId
@@ -675,7 +652,8 @@ export function ProjectRow({
                 range={range}
                 dayWidth={dayWidth}
                 height={personRowHeight}
-                barHeight={workBarHeight}
+                barHeight={peopleRow?.barHeight ?? 0}
+                labeled={peopleRow?.labeled ?? false}
                 dragging={isDragged(item)}
                 describedBy={workHelpId}
                 ignoreClick={ignoreWorkClick}

@@ -1,4 +1,5 @@
 import { ROADMAP_SORTS } from '../../domain/projectOrder';
+import type { ZoomLevel } from '../../domain/schedule';
 import type { RoadmapSort } from '../../domain/projectOrder';
 import { isRoadmapId } from '../../domain/roadmapConfig';
 import type { RowVisibility } from '../../domain/types';
@@ -61,9 +62,12 @@ export interface TimelineDisplayControls {
   setLabelWidth: (width: number) => void;
 }
 
-/** Titles on one line, out of their bars when longer: the level that shows the titles alone. */
-export function oneLineTitlesOf(display: Pick<TimelineDisplay, 'level'>): boolean {
-  return display.level === 'titles';
+/**
+ * Titles on one line, out of their bars when longer: at the level that shows the titles alone,
+ * and in «Più giorni», whose days are too narrow for a title that wraps.
+ */
+export function oneLineTitlesOf(display: Pick<TimelineDisplay, 'level'>, zoom: ZoomLevel): boolean {
+  return display.level === 'titles' || zoom === 'max';
 }
 
 /** The column of the names, in pixels at the normal size of the text: its limits and its default. */

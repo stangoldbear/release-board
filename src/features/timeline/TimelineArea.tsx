@@ -229,7 +229,7 @@ export function TimelineArea({
   const title = both ? 'Timeline' : parts.releases ? PART_TITLES.releases : PART_TITLES.roadmaps;
   const releasesRowsId = useId();
   const roadmapRowsId = useId();
-  const oneLineTitles = oneLineTitlesOf(display);
+  const oneLineTitles = oneLineTitlesOf(display, view.zoom);
   const dayWidth = dayWidthOf(view);
   const compact = isTight(density);
   const sizes = timelineMetrics(dayWidth, textScale, compact, oneLineTitles);
