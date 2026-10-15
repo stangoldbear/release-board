@@ -43,6 +43,23 @@ describe('describeHistoryEntry', () => {
   });
 });
 
+describe('the rows of the tasks in the history', () => {
+  const laneEntry = (changes: Partial<HistoryEntry>) =>
+    noteEntry({ entity: 'lane', entityId: 'lane-4', ...changes });
+
+  it('names a row, and tells a row put in another place', () => {
+    expect(
+      describeChange(laneEntry({ action: 'create', after: { name: 'QA', position: 3 } })),
+    ).toBe('ha aggiunto la corsia «QA»');
+    expect(describeChange(laneEntry({ before: { name: 'QA' }, after: { name: 'Test' } }))).toBe(
+      'ha modificato la corsia «Test»',
+    );
+    expect(
+      describeChange(laneEntry({ before: { position: 3 }, after: { name: 'QA', position: 0 } })),
+    ).toBe('ha spostato la corsia «QA»');
+  });
+});
+
 describe('describeChange', () => {
   it('says what was done without who did it', () => {
     expect(describeChange(noteEntry({ after: { text: 'Rilascio' } }))).toBe(

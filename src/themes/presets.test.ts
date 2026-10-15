@@ -40,6 +40,16 @@ describe('the color presets', () => {
         }
       });
 
+      // The symbols of the notes with a day are outlined with the text color of their color: the
+      // outline stands out from the page, the board and the cards it sits on.
+      it('outlines the symbols of the notes at 3:1 on the page', () => {
+        for (const [color, tint] of Object.entries(tasks)) {
+          for (const page of [theme.colors.surface, theme.colors['surface-muted']]) {
+            expect(contrast(tint.fg, page), color).toBeGreaterThanOrEqual(3);
+          }
+        }
+      });
+
       // «Regolare» keeps the sets of the themes as they were.
       it.skipIf(preset === 'regular')(
         'draws every bar apart from the surface, and a deep color apart from the light one',

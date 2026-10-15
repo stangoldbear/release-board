@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import type { ChangeEvent, ReactNode } from 'react';
+import type { ChangeEvent } from 'react';
 import { Download, TriangleAlert, Upload } from 'lucide-react';
 import { MAX_BACKUP_BYTES, parseBackupText } from '../../domain/backup';
 import type { BackupSource } from '../../domain/backup';
@@ -17,8 +17,6 @@ interface BackupSectionProps {
    * for whoever may not replace the plan, who only exports it.
    */
   onReplacePlan?: (plan: PlanSnapshot) => void;
-  /** More to save and restore, under the data: the settings. */
-  children?: ReactNode;
 }
 
 type ImportState =
@@ -42,7 +40,7 @@ function countSummary(plan: PlanSnapshot): string {
 }
 
 /** Export to a JSON file, and import one after validation, preview and confirmation. */
-export function BackupSection({ plan, onReplacePlan, children }: BackupSectionProps) {
+export function BackupSection({ plan, onReplacePlan }: BackupSectionProps) {
   const dateFormat = useDateFormat();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importState, setImportState] = useState<ImportState>({ step: 'idle' });
@@ -80,11 +78,10 @@ export function BackupSection({ plan, onReplacePlan, children }: BackupSectionPr
   };
 
   return (
-    <section aria-labelledby="settings-backup" className="space-y-3">
-      <h3 id="settings-backup" className="text-sm font-bold">
-        Backup
-      </h3>
-      <p className="text-xs text-fg-muted">{countSummary(plan)}</p>
+    <div className="space-y-3">
+      <p className="text-xs text-fg-muted">
+        Tutti i dati del piano in un file JSON: {countSummary(plan)}.
+      </p>
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" onClick={() => downloadBackup(plan)}>
           <Download className="h-4 w-4" aria-hidden="true" />
@@ -155,7 +152,6 @@ export function BackupSection({ plan, onReplacePlan, children }: BackupSectionPr
           </div>
         </div>
       )}
-      {children}
-    </section>
+    </div>
   );
 }

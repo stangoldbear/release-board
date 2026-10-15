@@ -70,7 +70,7 @@ giornalieri.
   nulla sul disco: l'accesso dura quanto la scheda.
 
 Senza progetto Firebase i dati restano nel browser che li ha creati. Per spostarli altrove usa
-Impostazioni → Backup.
+Impostazioni → Dati → Backup.
 
 ## Pubblicare la tua copia
 
@@ -97,7 +97,7 @@ indicizzarlo.
 ## Istanza condivisa con Firebase
 
 Il sito pubblicato spiega da solo come fare, passo per passo, nella schermata "Configura la tua
-istanza" e in Impostazioni → Istanza condivisa. Ogni passo dice se si fa nella console Firebase,
+istanza" e in Impostazioni → Dati → Istanza condivisa. Ogni passo dice se si fa nella console Firebase,
 nella console Google Cloud o su GitHub. La guida ha due percorsi:
 
 - **Progetto nuovo**, la strada più semplice: un progetto Firebase sul piano gratuito, solo per

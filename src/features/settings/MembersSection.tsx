@@ -8,7 +8,6 @@ import { Button } from '../../shared/ui/Button';
 import { FIELD_CLASS } from '../../shared/ui/field';
 import { useToast } from '../../shared/ui/Toast';
 import { downloadBackup } from './downloadBackup';
-import { EmailDomainsSection } from './EmailDomainsSection';
 import { MemberChangeDialog } from './MemberChangeDialog';
 import type { MemberChange } from './MemberChangeDialog';
 
@@ -16,9 +15,6 @@ interface MembersSectionProps {
   members: MembersRepository;
   /** The signed-in owner, who cannot change their own membership. */
   selfGithubId: string;
-  /** The email of the owner's account, which the admitted domains must keep in. */
-  selfEmail: string | null;
-  selfEmailVerified: boolean;
   /** The whole plan, for the backup offered before removing someone. */
   plan: PlanSnapshot;
 }
@@ -30,13 +26,7 @@ const INVITE_MESSAGES = {
 };
 
 /** Who can enter the plan. Owners invite by GitHub username, change roles and remove members. */
-export function MembersSection({
-  members,
-  selfGithubId,
-  selfEmail,
-  selfEmailVerified,
-  plan,
-}: MembersSectionProps) {
+export function MembersSection({ members, selfGithubId, plan }: MembersSectionProps) {
   const showToast = useToast();
   const [list, setList] = useState<Member[]>([]);
   const [login, setLogin] = useState('');
@@ -73,10 +63,7 @@ export function MembersSection({
   };
 
   return (
-    <section aria-labelledby="settings-members" className="space-y-3">
-      <h3 id="settings-members" className="text-sm font-bold">
-        Membri
-      </h3>
+    <div className="space-y-3">
       <ul className="divide-y divide-line rounded-lg border border-line">
         {list.map((member) => {
           const self = member.githubId === selfGithubId;
@@ -146,11 +133,6 @@ export function MembersSection({
         Gli invitati entrano come editor: vedono e modificano tutto, ma non i membri. Un
         proprietario può anche invitare e rimuovere.
       </p>
-      <EmailDomainsSection
-        members={members}
-        selfEmail={selfEmail}
-        selfEmailVerified={selfEmailVerified}
-      />
       {pending && (
         <MemberChangeDialog
           member={pending.member}
@@ -171,6 +153,6 @@ export function MembersSection({
           onCancel={() => setPending(null)}
         />
       )}
-    </section>
+    </div>
   );
 }

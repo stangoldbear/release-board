@@ -22,8 +22,8 @@ export function ColorSwatch({ colorId }: { colorId: TaskColorId | undefined }) {
 
 const NO_COLOR = 'Nessun colore';
 
-function colorName(colorId: TaskColorId | undefined): string {
-  return TASK_COLORS.find((color) => color.id === colorId)?.name ?? NO_COLOR;
+function colorName(colorId: TaskColorId | undefined, noneLabel: string): string {
+  return TASK_COLORS.find((color) => color.id === colorId)?.name ?? noneLabel;
 }
 
 /**
@@ -34,21 +34,32 @@ export function ColorMenu({
   label,
   value,
   onChange,
+  noneLabel = NO_COLOR,
+  allowNone = true,
 }: {
   /** What the color is for, as «Colore di «Big project»»: the name of the menu. */
   label: string;
   value: TaskColorId | undefined;
   onChange: (colorId: TaskColorId | undefined) => void;
+  /** What the choice without a color means, as «Il colore di ogni nota». */
+  noneLabel?: string;
+  /** Whether that choice is offered at all. */
+  allowNone?: boolean;
 }) {
+  const none: MenuItem[] = allowNone
+    ? [
+        {
+          kind: 'radio',
+          label: noneLabel,
+          leading: <ColorSwatch colorId={undefined} />,
+          checked: value === undefined,
+          onSelect: () => onChange(undefined),
+        },
+        { kind: 'separator' },
+      ]
+    : [];
   const items: MenuItem[] = [
-    {
-      kind: 'radio',
-      label: NO_COLOR,
-      leading: <ColorSwatch colorId={undefined} />,
-      checked: value === undefined,
-      onSelect: () => onChange(undefined),
-    },
-    { kind: 'separator' },
+    ...none,
     ...TASK_COLORS.map((color): MenuItem => ({
       kind: 'radio',
       label: color.name,
@@ -61,11 +72,11 @@ export function ColorMenu({
     <Menu
       label={label}
       items={items}
-      aria-label={`${label}: ${colorName(value)}`}
+      aria-label={`${label}: ${colorName(value, noneLabel)}`}
       className="gap-1.5 text-xs"
     >
       <ColorSwatch colorId={value} />
-      <span>{colorName(value)}</span>
+      <span>{colorName(value, noneLabel)}</span>
     </Menu>
   );
 }

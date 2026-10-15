@@ -2,6 +2,7 @@ import { INITIAL_SYNC } from '../app/PlanRepository';
 import type { PlanRepository, SyncState } from '../app/PlanRepository';
 import type { AssignmentChanges, AssignmentContent } from '../domain/assignments';
 import { createBackupFile, parseBackupText, serializeBackup } from '../domain/backup';
+import { addLane, moveLane, removeLane, renameLane } from '../domain/lanes';
 import { endPosition } from '../domain/memos';
 import type { MemoChanges, MemoContent } from '../domain/memos';
 import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
@@ -118,6 +119,24 @@ export class LocalPlanRepository implements PlanRepository {
 
   deleteTask(taskId: string): void {
     this.change(removeTask(this.plan, taskId));
+  }
+
+  createLane(name: string): string {
+    const id = this.createId();
+    this.change(addLane(this.plan, { id, name }));
+    return id;
+  }
+
+  renameLane(laneId: string, name: string): void {
+    this.change(renameLane(this.plan, laneId, name));
+  }
+
+  moveLane(laneId: string, beforeId: string | null): void {
+    this.change(moveLane(this.plan, laneId, beforeId));
+  }
+
+  deleteLane(laneId: string): void {
+    this.change(removeLane(this.plan, laneId));
   }
 
   setNote(date: string, text: string): void {

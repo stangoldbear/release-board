@@ -29,8 +29,11 @@ import type { ProjectOfDay } from '../../domain/projectStatus';
 import { isGroupable, projectColorField } from '../../domain/roadmapConfig';
 import { isInRange, weekRange } from '../../domain/schedule';
 import { countByStatus } from '../../domain/stats';
+import type { TaskColorId } from '../../domain/colors';
+import type { TimelineNotesLook } from '../../domain/timelineNotes';
 import type {
   Closure,
+  Memo,
   MemoAuthor,
   Milestone,
   PlanSnapshot,
@@ -57,7 +60,6 @@ import { LanesSection } from '../calendar/LanesSection';
 import { NotesSection } from '../calendar/NotesSection';
 import { columnUnit, timelineMetrics } from '../calendar/timelineLayout';
 import { WeekBoard } from '../calendar/WeekBoard';
-import { MilestonesRow } from '../roadmaps/MilestonesRow';
 import { ProjectsSection } from '../roadmaps/ProjectsSection';
 import { DETAIL_LEVELS, PROJECT_STATUS_ICONS, PROJECT_STATUS_PLURALS } from '../roadmaps/projectUi';
 import type { DetailLevel } from '../roadmaps/projectUi';
@@ -76,11 +78,15 @@ import { TASK_STATUS_ICONS, TASK_STATUS_PLURALS } from '../tasks/taskUi';
 import { HelpPanel } from './HelpPanel';
 import { SectionHeader } from './SectionHeader';
 import { TimelineFrame } from './TimelineFrame';
+import { TimelineNotesRow } from './TimelineNotesRow';
 import { LABEL_WIDTH, oneLineTitlesOf } from './useTimelineDisplay';
 import type { TimelineDisplay, TimelineDisplayControls, TimelinePart } from './useTimelineDisplay';
 
 /** No company closures: one list, so that the columns of the days are not built again. */
 const NO_CLOSURES: readonly Closure[] = [];
+
+/** The least height of a line of the notes with a day, when each kind has its own. */
+const NOTE_LANE_MIN = 22;
 
 /** The button that adds things, where the focus goes when a task or a project is deleted. */
 export const NEW_ITEM_ID = 'new-item';
@@ -100,6 +106,8 @@ export interface ReleasesProps {
   onDuplicateTask: (task: TaskItem) => void;
   onDeleteTask: (taskId: string) => void;
   onAddTaskAt: (date: string, laneId: string) => void;
+  /** Puts a lane right before another one, or last when `beforeId` is null. */
+  onMoveLane: (laneId: string, beforeId: string | null) => void;
   onSaveNote: (date: string, text: string) => void;
   /** Moves the note of a day to another day, with a new text when one is given. */
   onMoveNote: (from: string, to: string, text?: string) => void;
@@ -148,6 +156,18 @@ interface TimelineAreaProps {
   searching: boolean;
   releases: ReleasesProps;
   roadmap: RoadmapProps;
+  timelineNotes: TimelineNotesProps;
+}
+
+/** What the row «Note sulla timeline» gathers beyond the plan, how it looks, and what it opens. */
+export interface TimelineNotesProps {
+  look: TimelineNotesLook;
+  /** The free notes the user sees, as the search keeps them. */
+  memos: readonly Memo[];
+  /** The color of the free notes without one, as Notes shows them. */
+  paperColor: TaskColorId | undefined;
+  onOpenDayNote: (date: string) => void;
+  onOpenMemo: (memo: Memo) => void;
 }
 
 const PART_TITLES: Record<TimelinePart, string> = {
@@ -224,6 +244,7 @@ export function TimelineArea({
   searching,
   releases,
   roadmap,
+  timelineNotes,
 }: TimelineAreaProps) {
   const both = parts.releases && parts.roadmaps;
   const title = both ? 'Timeline' : parts.releases ? PART_TITLES.releases : PART_TITLES.roadmaps;
@@ -298,7 +319,21 @@ export function TimelineArea({
     (lane) => !display.visibility.hiddenLaneIds.includes(lane.id),
   );
   const noLaneShown = visibleLanes.length === 0;
-  const free = freeMilestones(roadmap.milestones);
+  // The row of the notes with a day shows what the search finds, as every part does.
+  const noteMatches = releases.noteMatches;
+  const dayNotes = useMemo(
+    () =>
+      noteMatches
+        ? Object.fromEntries(
+            Object.entries(plan.dailyNotes).filter(([date]) => noteMatches.has(date)),
+          )
+        : plan.dailyNotes,
+    [plan.dailyNotes, noteMatches],
+  );
+  const freeShown = useMemo(
+    () => (roadmap.unavailable ? [] : freeMilestones(roadmap.milestones)),
+    [roadmap.unavailable, roadmap.milestones],
+  );
 
   // The menus of the bar.
   const newItems: MenuItem[] = [];
@@ -341,15 +376,13 @@ export function TimelineArea({
       onToggle: controls.toggleMetrics,
     },
   ];
-  if (parts.roadmaps) {
-    rowItems.push({
-      kind: 'check',
-      label: 'Note sulla timeline',
-      icon: Diamond,
-      checked: display.showFreeNotes,
-      onToggle: controls.toggleFreeNotes,
-    });
-  }
+  rowItems.push({
+    kind: 'check',
+    label: 'Note sulla timeline',
+    icon: Diamond,
+    checked: display.showFreeNotes,
+    onToggle: controls.toggleFreeNotes,
+  });
   if (parts.releases) {
     rowItems.push({
       kind: 'check',
@@ -382,7 +415,7 @@ export function TimelineArea({
   }
   const someRowHidden =
     !display.showMetrics ||
-    (parts.roadmaps && !display.showFreeNotes) ||
+    !display.showFreeNotes ||
     (parts.releases &&
       (!display.visibility.showNotes || display.visibility.hiddenLaneIds.length > 0));
   if (someRowHidden) {
@@ -520,7 +553,7 @@ export function TimelineArea({
                 disabled={groupable.length === 0}
                 title={
                   groupable.length === 0
-                    ? 'Serve una lista di valori esclusivi con «Raggruppa»: Impostazioni → Roadmap → «Modifica i campi…»'
+                    ? 'Serve una lista di valori esclusivi con «Raggruppa»: Impostazioni → Roadmap → Campi, team e persone'
                     : 'Le righe dei progetti raggruppate per un campo'
                 }
               >
@@ -614,13 +647,29 @@ export function TimelineArea({
             >
               {(geometry) => (
                 <>
-                  {parts.roadmaps && !roadmap.unavailable && display.showFreeNotes && (
-                    <MilestonesRow
+                  {display.showFreeNotes && (
+                    <TimelineNotesRow
                       geometry={geometry}
-                      milestones={free}
+                      look={timelineNotes.look}
+                      sources={{
+                        dailyNotes: dayNotes,
+                        memos: timelineNotes.memos,
+                        milestones: freeShown,
+                      }}
+                      paperColor={timelineNotes.paperColor}
+                      actions={{
+                        onOpenDayNote: timelineNotes.onOpenDayNote,
+                        onOpenMemo: timelineNotes.onOpenMemo,
+                        onOpenMilestone: dialogs.openMilestone,
+                      }}
                       tools={milestone.tools}
-                      minHeight={metrics.assignmentHeight + metrics.rowPadding * 2}
-                      onAdd={searching ? undefined : (date) => dialogs.addMilestone(date)}
+                      lineHeight={metrics.assignmentHeight + metrics.rowPadding * 2}
+                      laneHeight={Math.max(NOTE_LANE_MIN, metrics.assignmentHeight + 4)}
+                      onAdd={
+                        searching || roadmap.unavailable
+                          ? undefined
+                          : (date) => dialogs.addMilestone(date)
+                      }
                     />
                   )}
                   {parts.releases && (
@@ -678,6 +727,7 @@ export function TimelineArea({
                                 onDuplicateTask={releases.onDuplicateTask}
                                 onDeleteTask={releases.onDeleteTask}
                                 onAddTaskAt={releases.onAddTaskAt}
+                                onMoveLane={releases.onMoveLane}
                               />
                             )}
                             {display.visibility.showNotes && (

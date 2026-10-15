@@ -132,7 +132,8 @@ export function MemberChangeDialog({
             <span>
               Scarica prima un backup di tutto il piano
               <span className="block text-xs text-fg-muted">
-                Un file JSON con attività, note e valori, da ripristinare in Impostazioni → Backup.
+                Un file JSON con attività, note e valori, da ripristinare in Impostazioni → Dati →
+                Backup.
               </span>
             </span>
           </label>

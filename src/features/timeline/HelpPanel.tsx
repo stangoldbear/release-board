@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { Diamond, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import { TASK_STATUSES, TASK_STATUS_LABELS } from '../../domain/plan';
 import { PROJECT_STATUSES, PROJECT_STATUS_LABELS } from '../../domain/projects';
+import { DiamondSymbol, FlagSymbol, PostitSymbol } from '../notes/noteSymbols';
 import { FADED_STRIPES } from '../roadmaps/ProjectBar';
 import { PROJECT_STATUS_ICONS } from '../roadmaps/projectUi';
 import { ABSENCE_STRIPES } from '../roadmaps/WorkBar';
@@ -57,6 +58,13 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
           <li>Un clic su un giorno vuoto aggiunge lì; un clic su una barra la apre.</li>
           {releases && (
             <li>
+              Trascina il nome di una corsia per cambiarne l&apos;ordine; un&apos;attività passa a
+              un&apos;altra corsia trascinandola in su o in giù. Le corsie si aggiungono e si
+              rinominano da Impostazioni → Next Releases → Corsie.
+            </li>
+          )}
+          {releases && (
+            <li>
               Le note dei giorni stanno sotto le corsie di Next Releases e restano dentro il loro
               giorno: «Espandi», nella loro riga, ne mostra più righe; una nota che non ci sta
               intera si legge nella scheda che si apre fermandoci sopra il mouse, o con un clic.
@@ -96,10 +104,13 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
             ) : null}
             .
           </li>
-          {projects && (
+          {(projects || releases) && (
             <li>
-              <Key>Alt</Key> + <Key>↑</Key> <Key>↓</Key> spostano un progetto nell&apos;ordine delle
-              righe.
+              <Key>Alt</Key> + <Key>↑</Key> <Key>↓</Key> spostano
+              {projects ? ' un progetto' : ''}
+              {projects && releases ? ', o una corsia dalla sua maniglia,' : ''}
+              {!projects && releases ? ' una corsia, dalla sua maniglia,' : ''} nell&apos;ordine
+              delle righe.
             </li>
           )}
           <li>
@@ -141,8 +152,14 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
           <Sign label="Chiusura aziendale: nessuno lavora, come nel weekend">
             <span className="block h-3 w-7 rounded-xs border border-line-strong bg-closure" />
           </Sign>
-          <Sign label="Nota sulla timeline">
-            <Diamond className="h-3.5 w-3.5" />
+          <Sign label="Nota sulla timeline: un clic su un giorno della riga ne aggiunge una">
+            <DiamondSymbol colorId="yellow" size={14} />
+          </Sign>
+          <Sign label="Nota del giorno di Next Releases, nella riga «Note sulla timeline»">
+            <FlagSymbol colorId="amber" size={16} />
+          </Sign>
+          <Sign label="Note di Notes con il promemoria in quel giorno: una pila se sono più di una">
+            <PostitSymbol colorIds={['yellow', 'blue']} size={16} />
           </Sign>
           {projects && (
             <>

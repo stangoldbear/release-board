@@ -20,7 +20,7 @@ export function NotMemberScreen({ planName, login, error, onSignOut }: NotMember
           <>
             Il piano <strong>{planName || 'di questa istanza'}</strong> esiste già, ma il tuo
             account non è nella lista dei membri. Chiedi al proprietario di invitarti da
-            Impostazioni → Membri con il tuo username GitHub.
+            Impostazioni → Account e membri → Membri con il tuo username GitHub.
           </>
         )
       }

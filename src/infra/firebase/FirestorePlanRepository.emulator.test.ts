@@ -200,8 +200,13 @@ describe('access and setup', () => {
     });
 
     repository.replacePlan(createEmptyPlan());
-    const empty = await planWhere(repository, (plan) => plan.lanes.length === 3);
-    expect(empty.lanes.map((lane) => lane.name)).toEqual(['Frontend', 'Backend', 'Contenuti']);
+    const empty = await planWhere(repository, (plan) => plan.lanes.length === 4);
+    expect(empty.lanes.map((lane) => lane.name)).toEqual([
+      'Frontend',
+      'Backend',
+      'Contenuti',
+      'QA',
+    ]);
 
     repository.replacePlan(sample);
     const imported = await planWhere(repository, matchesSample);
@@ -281,6 +286,51 @@ describe('changes', () => {
 
     repository.deleteTask(id);
     await planWhere(other, (plan) => !plan.tasks.some((item) => item.id === id));
+  });
+
+  it('adds, renames, orders and deletes the rows of the tasks, keeping their tasks', async () => {
+    const other = repositoryFor(editorDb, EDITOR);
+    await other.whenReady();
+    const names = (plan: { lanes: { name: string }[] }) => plan.lanes.map((lane) => lane.name);
+    const before = await planWhere(repository, () => true);
+    const tasksBefore = before.tasks.length;
+
+    const qa = other.createLane(' QA ');
+    const added = await planWhere(repository, (plan) => plan.lanes.some((lane) => lane.id === qa));
+    expect(names(added)).toEqual([...names(before), 'QA']);
+
+    // QA goes first, then the first row is renamed: the tasks stay in their rows.
+    repository.moveLane(qa, before.lanes[0]?.id ?? null);
+    const moved = await planWhere(other, (plan) => plan.lanes[0]?.id === qa);
+    expect(names(moved)).toEqual(['QA', ...names(before)]);
+    other.renameLane('lane-1', 'CLIENT');
+    const renamed = await planWhere(repository, (plan) =>
+      plan.lanes.some((lane) => lane.id === 'lane-1' && lane.name === 'CLIENT'),
+    );
+    expect(renamed.tasks).toHaveLength(tasksBefore);
+
+    // A row with tasks stays; an empty one goes.
+    repository.deleteLane('lane-1');
+    repository.deleteLane(qa);
+    const deleted = await planWhere(other, (plan) => !plan.lanes.some((lane) => lane.id === qa));
+    expect(deleted.lanes.some((lane) => lane.id === 'lane-1')).toBe(true);
+    await whenSynced(repository);
+
+    const entries = await new Promise<HistoryEntry[]>((resolve) => {
+      const stop = repository.subscribeHistory({ limit: 50 }, (items) => {
+        const lanes = items.filter((item) => item.entity === 'lane');
+        if (lanes.length === 4 && lanes.every((item) => item.at !== null)) {
+          stop();
+          resolve(lanes);
+        }
+      });
+    });
+    expect(entries.map((entry) => describeHistoryEntry(entry))).toEqual([
+      'owner ha eliminato la corsia «QA»',
+      'editor ha modificato la corsia «CLIENT»',
+      'owner ha spostato la corsia «QA»',
+      'editor ha aggiunto la corsia «QA»',
+    ]);
   });
 
   it('sets notes and values, and removes them when cleared', async () => {
@@ -640,7 +690,7 @@ describe('changes', () => {
       actor: actorOf(OWNER),
       after: { text: 'Rilascio' },
     });
-    expect(entries[1]?.summary).toMatch(/3 corsie, 11 attività/);
+    expect(entries[1]?.summary).toMatch(/4 corsie, 11 attività/);
 
     const history = await getDocs(collection(ownerDb, `plans/${PLAN_ID}/history`));
     expect(

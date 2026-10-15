@@ -1,8 +1,12 @@
 import { memo, useId, useState } from 'react';
+import type { KeyboardEvent } from 'react';
+import { GripVertical } from 'lucide-react';
+import { laneFollowerAt } from '../../domain/lanes';
 import type { TaskChanges } from '../../domain/plan';
 import { placeTasks } from '../../domain/schedule';
 import type { Lane, TaskItem } from '../../domain/types';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
+import { useListDrag } from '../../shared/useListDrag';
 import { useStableCallback } from '../../shared/useStableCallback';
 import type { TimelineGeometry } from '../timeline/TimelineFrame';
 import { DragHint } from './DragHint';
@@ -44,6 +48,16 @@ interface LanesSectionProps {
   onDuplicateTask: (task: TaskItem) => void;
   onDeleteTask: (taskId: string) => void;
   onAddTaskAt: (date: string, laneId: string) => void;
+  /** Puts a lane right before another one, or last when `beforeId` is null. */
+  onMoveLane: (laneId: string, beforeId: string | null) => void;
+}
+
+/** The lanes travel with their own type, so that nothing else lands among them. */
+const LANE_ROW_TYPE = 'application/x-release-board-lane-row';
+
+/** The handle that moves a lane, to give it the focus back after a move. */
+function laneHandleId(laneId: string): string {
+  return `lane-handle-${laneId}`;
 }
 
 /**
@@ -62,6 +76,7 @@ export function LanesSection({
   onDuplicateTask,
   onDeleteTask,
   onAddTaskAt,
+  onMoveLane,
 }: LanesSectionProps) {
   const { range, dayWidth, today, columns, todayOffset } = geometry;
   const { barHeight, trackGap, lanePadding } = sizes;
@@ -69,6 +84,24 @@ export function LanesSection({
   const [menu, setMenu] = useState<{ task: TaskItem; x: number; y: number } | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<TaskItem | null>(null);
   const { drag, startDrag, isClickAfterDrag } = useTaskDrag(dayWidth, onChangeTask);
+  const laneHelpId = useId();
+  const [announcement, setAnnouncement] = useState('');
+  const laneIds = lanes.map((lane) => lane.id);
+  // A lane dragged by its name lands before the lane under the pointer, or after the last one.
+  const moveLaneTo = (laneId: string, index: number) => {
+    const lane = lanes.find((item) => item.id === laneId);
+    if (!lane) return;
+    onMoveLane(laneId, laneFollowerAt(lanes, laneId, index));
+    setAnnouncement(`Corsia ${lane.name} in posizione ${index + 1} di ${lanes.length}`);
+    window.requestAnimationFrame(() => document.getElementById(laneHandleId(laneId))?.focus());
+  };
+  const laneDrag = useListDrag(LANE_ROW_TYPE, (laneId, _list, index) => moveLaneTo(laneId, index));
+  const moveLaneByKey = (event: KeyboardEvent, laneId: string, index: number) => {
+    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+    event.preventDefault();
+    const target = index + (event.key === 'ArrowUp' ? -1 : 1);
+    if (target >= 0 && target < lanes.length) moveLaneTo(laneId, target);
+  };
 
   // Stable handler for the memoized cells, which a drag or a scroll does not redraw.
   const addTaskAt = useStableCallback((date: string, laneId: string) => {
@@ -88,8 +121,14 @@ export function LanesSection({
         Frecce sinistra e destra spostano l&apos;attività di un giorno; con Maiusc cambiano la data
         di fine. Invio la apre, il tasto menu mostra le altre azioni.
       </p>
-      <div className="divide-y divide-line">
-        {lanes.map((lane) => {
+      <p id={laneHelpId} className="sr-only">
+        Alt e le frecce su e giù spostano la corsia prima o dopo le altre.
+      </p>
+      <p role="status" className="sr-only">
+        {announcement}
+      </p>
+      <div {...laneDrag.container} className="divide-y divide-line">
+        {lanes.map((lane, index) => {
           const laneTasks = shownTasks.filter((task) => task.laneId === lane.id);
           const { placed, tracks } = placeTasks(laneTasks, range);
           const height = Math.max(1, tracks) * (barHeight + trackGap) + lanePadding * 2;
@@ -99,13 +138,42 @@ export function LanesSection({
             <div
               key={lane.id}
               data-lane-id={lane.id}
-              className={`group/row flex ${isDropTarget ? 'bg-accent-soft' : ''}`}
+              {...laneDrag.target('lanes', laneIds, index, 'y')}
+              className={`group/row relative flex ${isDropTarget ? 'bg-accent-soft' : ''} ${
+                laneDrag.dragged === lane.id ? 'opacity-50' : ''
+              }`}
               style={{ minHeight: height }}
             >
+              {(laneDrag.slot('lanes') === index ||
+                (index === lanes.length - 1 && laneDrag.slot('lanes') === lanes.length)) && (
+                <div
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute inset-x-0 z-[701] h-0.5 bg-link ${
+                    laneDrag.slot('lanes') === index ? '-top-px' : '-bottom-px'
+                  }`}
+                />
+              )}
+              {/* The name moves the lane by dragging; its handle, with Alt and the arrows. */}
               <div
-                className={`${LABEL_CELL} flex flex-col justify-center bg-surface-muted transition-colors group-hover/row:bg-surface-strong`}
+                className={`${LABEL_CELL} flex flex-col justify-center bg-surface-muted pl-7 transition-colors group-hover/row:bg-surface-strong in-data-compact:pl-7`}
                 title={lane.name}
+                draggable={lanes.length > 1}
+                {...(lanes.length > 1 ? laneDrag.source(lane.id, 'lanes') : {})}
               >
+                {lanes.length > 1 && (
+                  <button
+                    type="button"
+                    id={laneHandleId(lane.id)}
+                    aria-label={`Sposta la corsia ${lane.name}`}
+                    aria-describedby={laneHelpId}
+                    aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                    title="Trascina per cambiare l’ordine; Alt e le frecce lo cambiano da tastiera"
+                    onKeyDown={(event) => moveLaneByKey(event, lane.id, index)}
+                    className="absolute top-1/2 left-0.5 flex h-6 w-6 -translate-y-1/2 cursor-grab items-center justify-center rounded text-fg-muted opacity-60 group-hover/row:opacity-100 hover:bg-surface hover:text-fg focus-visible:opacity-100 active:cursor-grabbing"
+                  >
+                    <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
                 <span className="text-xs font-bold tracking-wide break-words uppercase">
                   {lane.name}
                 </span>

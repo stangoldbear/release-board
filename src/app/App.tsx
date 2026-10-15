@@ -50,6 +50,7 @@ import type {
   DailyMetric,
   Memo,
   MemoAuthor,
+  Milestone,
   PlanSnapshot,
   Project,
   ProjectField,
@@ -76,6 +77,7 @@ import { ProjectNoteReminders } from '../features/roadmaps/ProjectNoteReminders'
 import { ProjectReminders } from '../features/roadmaps/ProjectReminders';
 import { rememberProjectReminders } from '../domain/projectReminders';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
+import type { SettingsSectionId } from '../features/settings/settingsSections';
 import { TaskDialog } from '../features/tasks/TaskDialog';
 import { isBoolean, oneOf, usePreference } from '../infra/preferences';
 import { SCROLL_DURATION_MS } from '../features/calendar/scrollMotion';
@@ -106,7 +108,9 @@ import type { Instance } from './Instance';
 import type { PlanRepository } from './PlanRepository';
 import { SearchResultsBar, describeFound } from './SearchResultsBar';
 import type { FoundCount } from './SearchResultsBar';
+import { describeChange } from '../domain/history';
 import { SyncIndicator } from './SyncIndicator';
+import { useLastChange } from './useLastChange';
 import { useDateFormatSetting } from './DateFormatProvider';
 import {
   ALL_TAB,
@@ -121,7 +125,16 @@ import { DayEffortLine } from './DayEffortLine';
 import { useThemeSetting } from './ThemeProvider';
 import { useHashPage } from './useHashPage';
 import { useSyncState } from './useSyncState';
-import { rememberMilestoneReminders } from '../domain/milestones';
+import {
+  DEFAULT_MILESTONE_COLOR_ID,
+  diffMilestone,
+  freeMilestones,
+  rememberMilestoneReminders,
+} from '../domain/milestones';
+import { DEFAULT_NOTES_LOOK, parseNotesLook } from '../domain/notesLook';
+import { DEFAULT_TIMELINE_NOTES_LOOK, parseTimelineNotesLook } from '../domain/timelineNotes';
+import { DailyNoteDialog } from '../features/notes/DailyNoteDialog';
+import { MilestoneDialog } from '../features/roadmaps/MilestoneDialog';
 import type { MilestoneChanges, MilestoneContent } from '../domain/milestones';
 import { milestoneElementId } from '../features/roadmaps/MilestoneDiamond';
 
@@ -143,9 +156,14 @@ type OpenDialog =
   /** A new task, with suggested date and lane. */
   | { kind: 'task'; task: null; date: string; laneId: string }
   | { kind: 'memo'; memo: Memo }
+  /** The note of a day, from the row of the notes with a day or the agenda of Notes. */
+  | { kind: 'dayNote'; date: string }
+  /** A note on the timeline, from the agenda of Notes, where the timeline may not be. */
+  | { kind: 'milestone'; milestone: Milestone }
   | { kind: 'metrics' }
   | { kind: 'import' }
-  | { kind: 'settings' };
+  /** The settings, on a section when one is asked for. */
+  | { kind: 'settings'; section?: SettingsSectionId };
 
 function oneLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
@@ -199,6 +217,15 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const [memoScope, setMemoScope] = usePreference('memos-scope', oneOf(MEMO_SCOPES), 'mine');
   const [memosGrouped, setMemosGrouped] = usePreference('memos-grouped', isBoolean, false);
   const [groupOrder, setGroupOrder] = usePreference('memo-group-order', readGroupOrder, []);
+  // How this browser draws the notes with a day on the timeline, and the board of Notes.
+  const [timelineNotesLook, setTimelineNotesLook] = usePreference(
+    'timeline-notes',
+    parseTimelineNotesLook,
+    DEFAULT_TIMELINE_NOTES_LOOK,
+  );
+  const [notesLook, setNotesLook] = usePreference('notes-look', parseNotesLook, DEFAULT_NOTES_LOOK);
+  // The free notes without a color are yellow post-its, or take the colors of the theme.
+  const paperColor = notesLook.paper === 'yellow' ? ('yellow' as const) : undefined;
   const [seenReminders, setSeenReminders] = usePreference(
     'memo-reminders-seen',
     readSeenReminders,
@@ -303,12 +330,17 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const me: MemoAuthor | null =
     instance.kind === 'cloud' ? { id: instance.user.githubId, login: instance.user.login } : null;
   const allMemos = plan?.memos ?? [];
+  // Who made the last change to the plan, for the synchronization indicator.
+  const lastEntry = useLastChange(instance.kind === 'cloud' ? instance.history : null);
   // Authors go by their full name: the user's own from the sign-in, the others' from GitHub.
   const names = useAuthorNames(
     me
-      ? allMemos.flatMap((memo) =>
-          memo.author && memo.author.id !== me.id ? [memo.author.id] : [],
-        )
+      ? [
+          ...allMemos.flatMap((memo) =>
+            memo.author && memo.author.id !== me.id ? [memo.author.id] : [],
+          ),
+          ...(lastEntry && lastEntry.actor.githubId !== me.id ? [lastEntry.actor.githubId] : []),
+        ]
       : [],
     instance.kind === 'cloud' ? instance.lookupName : null,
   );
@@ -565,6 +597,20 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       showToast('Persona tolta dal progetto');
     },
   };
+  // The rows of the tasks of Next Releases, for every member.
+  const laneActions = {
+    onCreate: (name: string) => {
+      repository.createLane(name);
+      showToast(`Corsia «${name}» aggiunta`);
+    },
+    onRename: (laneId: string, name: string) => repository.renameLane(laneId, name),
+    onMove: (laneId: string, beforeId: string | null) => repository.moveLane(laneId, beforeId),
+    onDelete: (laneId: string) => {
+      repository.deleteLane(laneId);
+      showToast('Corsia eliminata');
+    },
+  };
+
   const milestoneActions = {
     onCreate: (content: MilestoneContent) => {
       const id = repository.createMilestone(content);
@@ -804,7 +850,19 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           searchAnnouncement={searching ? describeFound(searchCounts, results.length) : ''}
           syncIndicator={
             instance.kind === 'cloud' && (
-              <SyncIndicator repository={repository} hiddenParts={hiddenParts} />
+              <SyncIndicator
+                repository={repository}
+                hiddenParts={hiddenParts}
+                lastChange={
+                  lastEntry && {
+                    name: nameOf({ id: lastEntry.actor.githubId, login: lastEntry.actor.login }),
+                    mine: lastEntry.actor.githubId === me?.id,
+                    what: describeChange(lastEntry, dateFormat),
+                    at: lastEntry.at,
+                  }
+                }
+                onOpenHistory={() => goToPage('history')}
+              />
             )
           }
           onOpenSettings={() => setDialog({ kind: 'settings' })}
@@ -835,7 +893,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
               warning={loadWarning}
               {...(canReplacePlan(instance) && {
                 onLoadSample: handleLoadSample,
-                onRestoreBackup: () => setDialog({ kind: 'settings' }),
+                onRestoreBackup: () => setDialog({ kind: 'settings', section: 'backup' }),
               })}
             />
           )}
@@ -865,6 +923,23 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
               }
               searching={searching}
               expanded={memosExpanded}
+              alwaysExpanded={layout === 'tabs' && tab === 'notes'}
+              look={notesLook}
+              dated={{
+                sources: {
+                  dailyNotes: plan.dailyNotes,
+                  memos: scopedMemos,
+                  milestones: sync.missing.includes('projects')
+                    ? []
+                    : freeMilestones(plan.milestones),
+                },
+                look: timelineNotesLook,
+                actions: {
+                  onOpenDayNote: (date) => setDialog({ kind: 'dayNote', date }),
+                  onOpenMemo: (memo) => setDialog({ kind: 'memo', memo }),
+                  onOpenMilestone: (milestone) => setDialog({ kind: 'milestone', milestone }),
+                },
+              }}
               textScale={textScale}
               compact={compact}
               onToggleExpanded={() => setMemosExpanded((value) => !value)}
@@ -901,6 +976,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
                 onDuplicateTask: handleDuplicateTask,
                 onDeleteTask: handleDeleteTask,
                 onAddTaskAt: handleAddTaskAt,
+                onMoveLane: laneActions.onMove,
                 onSaveNote: (date, text) => repository.setNote(date, text),
                 onMoveNote: (from, to, text) => repository.moveNote(from, to, text),
                 onEditMetrics: () => setDialog({ kind: 'metrics' }),
@@ -929,6 +1005,13 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
                 noteActions,
                 assignmentActions,
                 stakeholderActions,
+              }}
+              timelineNotes={{
+                look: timelineNotesLook,
+                memos: shownMemos,
+                paperColor,
+                onOpenDayNote: (date) => setDialog({ kind: 'dayNote', date }),
+                onOpenMemo: (memo) => setDialog({ kind: 'memo', memo }),
               }}
             />
           )}
@@ -995,6 +1078,34 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             gone={!plan.memos.some((memo) => memo.id === dialog.memo.id)}
             onSave={(content, beforeId) => handleSaveMemo(dialog.memo, content, beforeId)}
             onDelete={() => handleDeleteMemo(dialog.memo)}
+            onClose={() => setDialog(null)}
+          />
+        )}
+
+        {dialog?.kind === 'dayNote' && (
+          <DailyNoteDialog
+            date={dialog.date}
+            note={plan.dailyNotes[dialog.date] ?? ''}
+            isDayFree={(date) => plan.dailyNotes[date] === undefined}
+            onSave={(text) => repository.setNote(dialog.date, text)}
+            onMove={(to, text) => repository.moveNote(dialog.date, to, text)}
+            onClose={() => setDialog(null)}
+          />
+        )}
+
+        {dialog?.kind === 'milestone' && (
+          <MilestoneDialog
+            milestone={dialog.milestone}
+            date={dialog.milestone.date}
+            projects={plan.projects}
+            defaultColorId={DEFAULT_MILESTONE_COLOR_ID}
+            onSubmit={(content) =>
+              milestoneActions.onUpdate(
+                dialog.milestone.id,
+                diffMilestone(dialog.milestone, content),
+              )
+            }
+            onDelete={() => milestoneActions.onDelete(dialog.milestone.id)}
             onClose={() => setDialog(null)}
           />
         )}
@@ -1066,10 +1177,12 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
           <SettingsDialog
             plan={plan}
             instance={instance}
+            initialSection={dialog.section}
             betaFeatures={betaFeatures}
             onToggleBetaFeatures={setBetaFeatures}
             roadmapUnavailable={sync.missing.includes('roadmap')}
             roadmapActions={configActions}
+            laneActions={laneActions}
             theme={theme}
             onChangeTheme={setTheme}
             colorPreset={colorPreset}
@@ -1080,6 +1193,12 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             onChangeLayout={setLayout}
             textScale={textScale}
             onTextScaleChange={setTextScale}
+            density={density}
+            onDensityChange={setDensity}
+            timelineNotesLook={timelineNotesLook}
+            onTimelineNotesLookChange={setTimelineNotesLook}
+            notesLook={notesLook}
+            onNotesLookChange={setNotesLook}
             onClose={() => setDialog(null)}
             onReplacePlan={handleReplacePlan}
             onOpenHistory={() => {

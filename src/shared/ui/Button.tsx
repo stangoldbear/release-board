@@ -13,6 +13,8 @@ const SIZES = {
   md: 'gap-1.5 px-3.5 py-2 text-sm',
   /** Square, for a button that shows only an icon: give it an aria-label. */
   icon: 'p-2',
+  /** No room of its own: what it holds, as a symbol on the timeline, sets its size. */
+  bare: '',
 } as const;
 
 interface ButtonProps extends ComponentProps<'button'> {

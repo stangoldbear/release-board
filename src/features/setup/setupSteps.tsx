@@ -961,7 +961,7 @@ const STEPS: Record<StepId, GuideStep> = {
           </li>
           <li>
             Entra per primo: il primo accesso crea il piano e ti rende proprietario. Poi invita i
-            colleghi da <strong>Impostazioni → Membri</strong>.
+            colleghi da <strong>Impostazioni → Account e membri → Membri</strong>.
           </li>
         </Actions>
         <More title="il primo accesso">
@@ -972,8 +972,8 @@ const STEPS: Record<StepId, GuideStep> = {
           </p>
           <p>Il piano può partire vuoto, dai dati di questo browser o da un backup JSON.</p>
           <p>
-            I colleghi si invitano da <strong>Impostazioni → Membri</strong> con il loro username
-            GitHub. Chi non è invitato vede un messaggio e nessun dato.
+            I colleghi si invitano da <strong>Impostazioni → Account e membri → Membri</strong> con
+            il loro username GitHub. Chi non è invitato vede un messaggio e nessun dato.
           </p>
         </More>
       </>

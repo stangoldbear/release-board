@@ -52,10 +52,7 @@ export function ClosuresSection({ closures, unavailable, onChange }: ClosuresSec
   };
 
   return (
-    <section aria-labelledby="settings-closures" className="space-y-3">
-      <h3 id="settings-closures" className="text-sm font-bold">
-        Chiusure aziendali
-      </h3>
+    <div className="space-y-3">
       <p className="text-xs text-fg-muted">
         I giorni in cui l&apos;azienda è chiusa: sulla timeline sono a righe rosse e, come i sabati
         e le domeniche, nessuno lavora, così le barre del lavoro dei progetti li saltano. Vale per
@@ -176,6 +173,6 @@ export function ClosuresSection({ closures, unavailable, onChange }: ClosuresSec
           )}
         </>
       )}
-    </section>
+    </div>
   );
 }

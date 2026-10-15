@@ -4,6 +4,7 @@ import { APPROVAL_LIGHTS } from '../../domain/approval';
 import { ASSIGNMENT_NOTE_MAX, MAN_DAYS_MAX } from '../../domain/assignments';
 import { TASK_COLOR_IDS } from '../../domain/colors';
 import { HISTORY_ACTIONS, HISTORY_ENTITIES, HISTORY_SUMMARY_MAX } from '../../domain/history';
+import { LANE_NAME_MAX } from '../../domain/lanes';
 import { MEMO_BODY_MAX, MEMO_TITLE_MAX } from '../../domain/memos';
 import {
   NOTE_LIST_ITEM_MAX,
@@ -85,6 +86,11 @@ describe('the security rules', () => {
   it('know the one plan and the one metric of the app', () => {
     expect(rules).toContain(`return planId == '${PLAN_ID}';`);
     expect(rules.match(new RegExp(`metricId == '${METRIC_ID}'`, 'g'))).toHaveLength(2);
+  });
+
+  it('limit the names of the lanes as the app does', () => {
+    const lanes = rules.slice(rules.indexOf('match /lanes/'), rules.indexOf('match /tasks/'));
+    expect(lanes).toContain(`isText(data.name, ${LANE_NAME_MAX})`);
   });
 
   it('limit the free notes as the app does', () => {

@@ -2,6 +2,8 @@ import { Bell, BellRing, Lock } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { splitMemoTitle } from '../../domain/memos';
 import { Highlight } from '../../shared/ui/Highlight';
+import type { TaskColorId } from '../../domain/colors';
+import type { NoteShape, NotesBoard } from '../../domain/notesLook';
 import type { Memo } from '../../domain/types';
 import { taskColorStyle } from '../../themes';
 import { formatDate } from '../../utils/dateUtils';
@@ -9,14 +11,72 @@ import type { DateFormat } from '../../utils/dateUtils';
 import { dayName } from '../calendar/timelineLayout';
 import { useDateFormat } from '../..//shared/dateFormat';
 
-/** The colors of a note: those of a task color, or the plain surface with its border. */
-export function memoSurface(memo: Pick<Memo, 'colorId'>): {
+/**
+ * The colors of a note: those of a task color, or, without one, those of `paperColor` (the yellow
+ * of the post-its on the board of Notes) or the plain surface with its border.
+ */
+export function memoSurface(
+  memo: Pick<Memo, 'colorId'>,
+  paperColor?: TaskColorId,
+): {
   style?: CSSProperties;
   className: string;
 } {
-  return memo.colorId
-    ? { style: taskColorStyle(memo.colorId), className: '' }
+  const colorId = memo.colorId ?? paperColor;
+  return colorId
+    ? { style: taskColorStyle(colorId), className: '' }
     : { className: 'border-line-strong bg-surface text-fg' };
+}
+
+/**
+ * How a note is drawn in each shape: a post-it with sharp corners, a shadow and a folded corner,
+ * tilted a little, one way or the other; a card with round corners; or plain, on the surface of
+ * the page with a band of its color on the left (`plainEdge`).
+ */
+export function noteShapeClass(shape: NoteShape, index: number): string {
+  if (shape === 'card') return 'rounded-xl shadow-xs';
+  if (shape === 'plain') return 'rounded-md border-l-4';
+  const tilt = ['rotate-[-0.6deg]', 'rotate-[0.5deg]', ''][index % 3] ?? '';
+  return `relative rounded-[3px] shadow-md ${tilt} after:pointer-events-none after:absolute after:right-0 after:bottom-0 after:size-3.5 after:bg-[linear-gradient(135deg,transparent_50%,color-mix(in_srgb,currentColor_22%,transparent)_50%)]`;
+}
+
+/** The band of a plain note: the strong tone of its color, or the strong line of the page. */
+export function plainEdge(memo: Pick<Memo, 'colorId'>, paperColor?: TaskColorId): CSSProperties {
+  const colorId = memo.colorId ?? paperColor;
+  return {
+    borderColor: 'var(--color-line)',
+    borderLeftColor: colorId ? `var(--rb-task-${colorId}-border)` : 'var(--color-line-strong)',
+  };
+}
+
+/**
+ * What is behind the notes of Notes: cork, the muted surface, a grid of dots, or slate. No text sits
+ * right on it: titles, names and messages of the board have the surface of the page behind them,
+ * so that they keep their contrast whatever the board and the theme.
+ */
+export function boardStyle(board: NotesBoard): { style?: CSSProperties; className: string } {
+  const dots = (color: string, step: number): CSSProperties => ({
+    backgroundImage: `radial-gradient(color-mix(in srgb, ${color} 45%, transparent) 1px, transparent 1.5px)`,
+    backgroundSize: `${step}px ${step}px`,
+  });
+  switch (board) {
+    case 'cork':
+      // The strong brown over the page, a third of it: tan in light themes, dark brown in dark ones.
+      return {
+        style: {
+          backgroundColor:
+            'color-mix(in oklab, var(--rb-task-brown-border) 32%, var(--color-surface))',
+          ...dots('var(--rb-task-brown-border)', 9),
+        },
+        className: '',
+      };
+    case 'slate':
+      return { style: { backgroundColor: 'var(--rb-task-slate-bg)' }, className: '' };
+    case 'dots':
+      return { style: dots('var(--color-line-strong)', 16), className: 'bg-surface' };
+    case 'neutral':
+      return { className: 'bg-surface-muted' };
+  }
 }
 
 /** When the reminder of a note comes, in words, for its label and for screen readers. */

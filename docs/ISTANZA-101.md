@@ -85,7 +85,7 @@ Due conseguenze pratiche:
 - un aggiornamento sostituisce i file versionati e basta: niente da "ricopiare a mano" dopo;
 - `firestore/firestore.rules` arriva aggiornato con i file, ma le regole **in vigore** sono quelle
   pubblicate nella console Firebase. Quando il CHANGELOG di una versione dice che le regole sono
-  cambiate, ripubblicale (Impostazioni → Istanza condivisa nel sito spiega dove).
+  cambiate, ripubblicale (Impostazioni → Dati → Istanza condivisa nel sito spiega dove).
 
 Se un giorno la tua istanza avrà un file tutto suo (per esempio `public/CNAME` per un dominio
 proprio), dillo allo script di aggiornamento con `.update-ignore` (capitolo 5) e tienilo a mente
@@ -259,7 +259,7 @@ Ordine dei passi, da non invertire:
    i dati no. Poi entra con il tuo account e controlla la versione in fondo alla pagina.
 8. Comunica il nuovo indirizzo ai colleghi. Dopo una settimana togli il dominio
    `*.pages.github.io` di prima dai domini autorizzati e dalle restrizioni della chiave.
-9. Facoltativo: **Impostazioni → Membri → Domini email ammessi**, il dominio email aziendale.
+9. Facoltativo: **Impostazioni → Account e membri → Domini email ammessi**, il dominio email aziendale.
    Entrano solo gli account GitHub con un'email principale verificata di quel dominio; gli altri
    non vedono nemmeno il nome del piano, anche se invitati. L'app rifiuta una lista che lascerebbe
    fuori il tuo account: se dice che la tua email non risulta verificata, il provider non la

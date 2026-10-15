@@ -1,4 +1,6 @@
 import type { DragEvent, KeyboardEvent } from 'react';
+import type { TaskColorId } from '../../domain/colors';
+import type { NoteShape, NotesLayout } from '../../domain/notesLook';
 import type { Memo } from '../../domain/types';
 import { CURRENT_RESULT, Highlight, useIsCurrentResult } from '../../shared/ui/Highlight';
 import {
@@ -9,6 +11,8 @@ import {
   ReminderBadge,
   memoOwnership,
   memoSurface,
+  noteShapeClass,
+  plainEdge,
   reminderText,
 } from './memoUi';
 import { useDateFormat } from '../..//shared/dateFormat';
@@ -22,6 +26,14 @@ interface MemoCardProps {
   memo: Memo;
   /** With its text, rather than the title alone on one line. */
   expanded: boolean;
+  /** Post-it, card or plain, as this browser draws the notes. */
+  shape: NoteShape;
+  /** How the board lays the notes out: in a grid or a list the text is cut after a few lines. */
+  layout: NotesLayout;
+  /** The color of a note without one: the yellow of the post-its, or none. */
+  paperColor: TaskColorId | undefined;
+  /** Its place among the notes shown, which tilts a post-it one way or the other. */
+  index: number;
   today: string;
   /** Who wrote it, in full; null in the local mode, where notes have no author. */
   authorName: string | null;
@@ -46,6 +58,10 @@ interface MemoCardProps {
 export function MemoCard({
   memo,
   expanded,
+  shape,
+  layout,
+  paperColor,
+  index,
   today,
   authorName,
   meId,
@@ -58,7 +74,18 @@ export function MemoCard({
   onDragEnd,
 }: MemoCardProps) {
   const dateFormat = useDateFormat();
-  const surface = memoSurface(memo);
+  // A plain note keeps the page's colors, with a band of its own.
+  const surface =
+    shape === 'plain'
+      ? { style: plainEdge(memo, paperColor), className: 'bg-surface text-fg' }
+      : memoSurface(memo, paperColor);
+  const clamp = !expanded
+    ? ''
+    : layout === 'grid'
+      ? 'line-clamp-6'
+      : layout === 'list'
+        ? 'line-clamp-3'
+        : '';
   const current = useIsCurrentResult('memo', memo.id);
   return (
     <button
@@ -83,11 +110,19 @@ export function MemoCard({
         .filter(Boolean)
         .join('; ')}
       style={surface.style}
-      className={`flex w-full cursor-pointer flex-col gap-0.5 rounded-lg border px-2 py-1 text-left text-xs shadow-2xs hover:shadow-md in-data-compact:px-1.5 in-data-compact:py-0.5 ${
-        surface.className
-      } ${movable ? 'active:cursor-grabbing' : ''} ${dragging ? 'opacity-50' : ''} ${
-        current ? CURRENT_RESULT : ''
-      }`}
+      className={`flex w-full cursor-pointer flex-col border text-left text-xs ${
+        expanded
+          ? `gap-1 px-3 py-2 in-data-compact:px-2 in-data-compact:py-1.5 ${layout === 'grid' ? 'h-full' : ''} ${noteShapeClass(shape, index)}`
+          : `gap-0.5 px-2 py-1 shadow-2xs in-data-compact:px-1.5 in-data-compact:py-0.5 ${
+              shape === 'postit'
+                ? 'rounded-[3px]'
+                : shape === 'plain'
+                  ? 'rounded-md border-l-4'
+                  : 'rounded-lg'
+            }`
+      } hover:shadow-md ${surface.className} ${movable ? 'active:cursor-grabbing' : ''} ${
+        dragging ? 'opacity-50' : ''
+      } ${current ? CURRENT_RESULT : ''}`}
     >
       <span className="flex w-full items-center gap-1.5">
         {memo.private && <PrivateMark />}
@@ -99,7 +134,7 @@ export function MemoCard({
       </span>
       {authorName && <MemoAuthorLine name={authorName} />}
       {expanded && memo.body && (
-        <span className="whitespace-pre-line wrap-break-word">
+        <span className={`whitespace-pre-line wrap-break-word ${clamp}`}>
           <Highlight text={memo.body} />
         </span>
       )}

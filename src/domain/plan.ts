@@ -33,6 +33,7 @@ export const DEFAULT_LANES: readonly Lane[] = [
   { id: 'lane-1', name: 'Frontend' },
   { id: 'lane-2', name: 'Backend' },
   { id: 'lane-3', name: 'Contenuti' },
+  { id: 'lane-4', name: 'QA' },
 ];
 
 /** The single daily metric of this version. Label and unit become configurable per plan later. */

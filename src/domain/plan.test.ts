@@ -189,7 +189,7 @@ describe('planContentSummary', () => {
       '0 note sulla timeline',
     ]);
     expect(planContentSummary(createEmptyPlan())).toEqual([
-      '3 corsie',
+      '4 corsie',
       '0 attività',
       '0 valori giornalieri',
       '0 note',

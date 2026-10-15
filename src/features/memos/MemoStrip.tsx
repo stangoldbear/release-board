@@ -1,14 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
-import {
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  GripVertical,
-  Users,
-} from 'lucide-react';
+import type { KeyboardEvent, ReactNode } from 'react';
+import { Check, ChevronDown, ChevronUp, GripVertical, Users } from 'lucide-react';
 import {
   MEMO_SCOPES,
   followerAt,
@@ -17,16 +9,22 @@ import {
   moveGroup,
 } from '../../domain/memos';
 import type { MemoGroup, MemoScope } from '../../domain/memos';
-import type { Memo, MemoAuthor } from '../../domain/types';
+import type { NotesLayout, NotesLook } from '../../domain/notesLook';
+import type { TimelineNotesLook } from '../../domain/timelineNotes';
+import type { DailyNotes, Memo, MemoAuthor, Milestone } from '../../domain/types';
 import { Area } from '../../shared/ui/Area';
 import { Button } from '../../shared/ui/Button';
 import { RulesNotice } from '../../shared/ui/RulesNotice';
 import { scaledTextStyle } from '../../shared/ui/textScale';
 import type { TextScale } from '../../shared/ui/textScale';
 import { ToggleChip } from '../../shared/ui/ToggleChip';
+import { useMasonry } from '../../shared/masonry';
 import { useListDrag } from '../../shared/useListDrag';
 import type { Axis } from '../../shared/useListDrag';
+import { DatedNotes } from '../notes/DatedNotes';
+import type { NoteMarkActions } from '../notes/NoteMarks';
 import { MemoCard, memoElementId } from './MemoCard';
+import { boardStyle } from './memoUi';
 import { NewMemoForm } from './NewMemoForm';
 
 /** Free notes travel with their own type, so that nothing else can be dropped among them. */
@@ -70,8 +68,21 @@ interface MemoStripProps {
   unavailable?: boolean;
   /** While searching the strip shows only some notes, and they do not move. */
   searching: boolean;
-  /** One line that scrolls, or every note with its text, one under the other. */
+  /** One line that scrolls, or the board with every note and its text. */
   expanded: boolean;
+  /**
+   * In the tab of Notes alone the board is always expanded, as tall as its notes, without the
+   * command that reduces it.
+   */
+  alwaysExpanded: boolean;
+  /** How this browser draws the board: what is on top, the shape and the layout of the notes, the board. */
+  look: NotesLook;
+  /** The notes that have a day, on top of the board, as the row «Note sulla timeline» shows them. */
+  dated: {
+    sources: { dailyNotes: DailyNotes; memos: readonly Memo[]; milestones: readonly Milestone[] };
+    look: TimelineNotesLook;
+    actions: NoteMarkActions;
+  };
   /** Size of the notes' text, 1 being the normal one, and whether they are compact. */
   textScale: TextScale;
   compact: boolean;
@@ -106,6 +117,45 @@ function DropLine({ axis, side }: { axis: Axis; side: 'before' | 'after' }) {
   return <span aria-hidden="true" className={`absolute rounded-full bg-link ${place}`} />;
 }
 
+/** The room between the notes of the board, in pixels: the masonry needs it as a number. */
+const NOTE_GAP = 12;
+
+/**
+ * The notes of one list, the whole strip or a group: in a row that scrolls, or on the board as its
+ * layout says. Dragged, a note lands before or after another by the half under the pointer: left
+ * or right on the board, above or under in a list.
+ */
+function NoteList({
+  notes,
+  expanded,
+  layout,
+  drag,
+  renderNote,
+}: {
+  notes: Memo[];
+  expanded: boolean;
+  layout: NotesLayout;
+  drag: ReturnType<typeof useListDrag>;
+  renderNote: (memo: Memo, index: number, ids: string[], axis: Axis) => ReactNode;
+}) {
+  const ref = useMasonry<HTMLUListElement>(expanded && layout === 'masonry', NOTE_GAP);
+  const axis: Axis = expanded && layout === 'list' ? 'y' : 'x';
+  const ids = notes.map((memo) => memo.id);
+  const columns = 'grid-cols-[repeat(auto-fill,minmax(min(13rem,100%),1fr))]';
+  const classes = !expanded
+    ? 'flex min-w-0 flex-1 items-start gap-1.5 overflow-x-auto px-1 pt-1 pb-1.5'
+    : layout === 'masonry'
+      ? `grid min-w-0 ${columns} auto-rows-[4px] items-start gap-x-3`
+      : layout === 'grid'
+        ? `grid min-w-0 ${columns} gap-3`
+        : 'flex min-w-0 flex-col gap-2';
+  return (
+    <ul ref={ref} {...drag.container} className={classes}>
+      {notes.map((memo, index) => renderNote(memo, index, ids, axis))}
+    </ul>
+  );
+}
+
 /**
  * The area of the free notes: on one line that scrolls, or expanded with their text, one under
  * the other. In a shared instance they can be grouped by author, in groups whose order the user
@@ -120,7 +170,10 @@ export function MemoStrip({
   sharing,
   unavailable = false,
   searching,
-  expanded,
+  expanded: expandedChoice,
+  alwaysExpanded,
+  look,
+  dated,
   textScale,
   compact,
   onToggleExpanded,
@@ -131,6 +184,8 @@ export function MemoStrip({
 }: MemoStripProps) {
   const [announcement, setAnnouncement] = useState('');
   const [openOnPhone, setOpenOnPhone] = useState(false);
+  const expanded = alwaysExpanded || expandedChoice;
+  const paperColor = look.paper === 'yellow' ? ('yellow' as const) : undefined;
   const contentId = useId();
   const helpId = useId();
   const groupHelpId = useId();
@@ -219,67 +274,60 @@ export function MemoStrip({
     stepGroup(group, index, step);
   };
 
-  /** The notes of a list, in a row that scrolls, or one under the other when expanded. */
-  const renderNotes = (list: string, notes: Memo[]) => {
-    const axis: Axis = expanded ? 'y' : 'x';
-    const ids = notes.map((memo) => memo.id);
-    const slot = noteDrag.slot(list);
-    const movable = !searching && notes.length > 1;
-    return (
-      <ul
-        {...noteDrag.container}
-        className={
-          expanded
-            ? 'flex min-w-0 flex-1 flex-col gap-1.5'
-            : 'flex min-w-0 flex-1 items-start gap-1.5 overflow-x-auto px-1 pt-1 pb-1.5'
-        }
-      >
-        {notes.map((memo, index) => (
-          <li
-            key={memo.id}
-            {...noteDrag.target(list, ids, index, axis)}
-            className={`relative ${expanded ? 'w-full' : 'shrink-0'}`}
-          >
-            {slot === index && <DropLine axis={axis} side="before" />}
-            {slot === index + 1 && index === notes.length - 1 && (
-              <DropLine axis={axis} side="after" />
-            )}
-            <MemoCard
-              memo={memo}
-              expanded={expanded}
-              today={today}
-              // Grouped, the group says who wrote its notes.
-              authorName={sharing && memo.author && !groups ? sharing.nameOf(memo.author) : null}
-              meId={sharing?.me.id ?? null}
-              movable={movable}
-              dragging={noteDrag.dragged === memo.id}
-              describedBy={helpId}
-              onOpen={() => onOpen(memo)}
-              onKeyDown={(event) => handleNoteKey(event, memo, list, index)}
-              {...noteDrag.source(memo.id, list)}
-            />
-          </li>
-        ))}
-      </ul>
-    );
-  };
+  /** The notes of a list: in a row that scrolls, or expanded on the board, as its layout says. */
+  const renderNotes = (list: string, notes: Memo[]) => (
+    <NoteList
+      key={list}
+      notes={notes}
+      expanded={expanded}
+      layout={look.layout}
+      drag={noteDrag}
+      renderNote={(memo, index, ids, axis) => (
+        <li
+          key={memo.id}
+          {...noteDrag.target(list, ids, index, axis)}
+          className={`relative ${expanded ? 'min-w-0' : 'shrink-0'}`}
+        >
+          {noteDrag.slot(list) === index && <DropLine axis={axis} side="before" />}
+          {noteDrag.slot(list) === index + 1 && index === notes.length - 1 && (
+            <DropLine axis={axis} side="after" />
+          )}
+          <MemoCard
+            memo={memo}
+            expanded={expanded}
+            shape={look.shape}
+            layout={look.layout}
+            paperColor={paperColor}
+            index={index}
+            today={today}
+            // Grouped, the group says who wrote its notes.
+            authorName={sharing && memo.author && !groups ? sharing.nameOf(memo.author) : null}
+            meId={sharing?.me.id ?? null}
+            movable={!searching && notes.length > 1}
+            dragging={noteDrag.dragged === memo.id}
+            describedBy={helpId}
+            onOpen={() => onOpen(memo)}
+            onKeyDown={(event) => handleNoteKey(event, memo, list, index)}
+            {...noteDrag.source(memo.id, list)}
+          />
+        </li>
+      )}
+    />
+  );
 
   /**
    * The notes by author: rows of notes one under the other, or, expanded, columns side by side.
    * Each group starts with its author, and its handle when there are groups to move among.
    */
   const renderGroups = (shown: MemoGroup[]) => {
-    const axis: Axis = expanded ? 'x' : 'y';
+    // Rows of notes, or on the board sections one under the other.
+    const axis: Axis = 'y';
     const slot = groupDrag.slot(GROUPS);
     const movable = shown.length > 1;
     return (
       <div
         {...groupDrag.container}
-        className={
-          expanded
-            ? 'flex min-w-0 flex-1 items-start gap-3 overflow-auto p-1 sm:max-h-[40vh]'
-            : 'flex min-w-0 flex-1 flex-col gap-1 p-1'
-        }
+        className={`flex min-w-0 flex-1 flex-col ${expanded ? 'gap-4' : 'gap-1 p-1'}`}
       >
         {shown.map((group, index) => {
           const name = groupName(group);
@@ -289,10 +337,8 @@ export function MemoStrip({
               role="group"
               aria-label={`Note di ${name}`}
               {...groupDrag.target(GROUPS, groupKeys, index, axis)}
-              className={`relative ${
-                expanded
-                  ? 'flex w-[min(16rem,75vw)] shrink-0 flex-col gap-1.5'
-                  : 'flex min-w-0 items-start gap-2'
+              className={`relative flex min-w-0 ${
+                expanded ? 'flex-col gap-2' : 'items-start gap-2'
               } ${groupDrag.dragged === group.key ? 'opacity-50' : ''}`}
             >
               {slot === index && <DropLine axis={axis} side="before" />}
@@ -303,7 +349,9 @@ export function MemoStrip({
                 draggable={movable}
                 {...(movable ? groupDrag.source(group.key, GROUPS) : {})}
                 className={`flex shrink-0 items-center gap-1 text-xs ${
-                  expanded ? 'border-b border-line pb-1' : 'w-28 pt-1.5 sm:w-36'
+                  expanded
+                    ? 'self-start rounded-md border border-line bg-surface px-1.5 py-0.5 text-fg shadow-2xs'
+                    : 'w-28 pt-1.5 sm:w-36'
                 } ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
               >
                 {movable && (
@@ -333,14 +381,7 @@ export function MemoStrip({
                 {movable && (
                   <span className="ml-auto flex shrink-0 items-center">
                     {([-1, 1] as const).map((step) => {
-                      const Icon =
-                        step === -1
-                          ? expanded
-                            ? ChevronLeft
-                            : ChevronUp
-                          : expanded
-                            ? ChevronRight
-                            : ChevronDown;
+                      const Icon = step === -1 ? ChevronUp : ChevronDown;
                       const controlId = `${groupHandleId(group.key)}-${step === -1 ? 'before' : 'after'}`;
                       const atEnd = step === -1 ? index === 0 : index === shown.length - 1;
                       return (
@@ -369,8 +410,9 @@ export function MemoStrip({
     );
   };
 
-  // On phones the notes start closed, so that the calendar is in view; a search opens them.
-  const shownOnPhone = openOnPhone || searching ? 'flex' : 'hidden';
+  // On phones the notes start closed, so that the calendar is in view; a search opens them, and
+  // in their own tab they are open.
+  const shownOnPhone = alwaysExpanded || openOnPhone || searching ? 'flex' : 'hidden';
 
   const controls = (
     <div className={`flex-wrap items-center gap-2 max-sm:w-full sm:flex ${shownOnPhone}`}>
@@ -411,7 +453,7 @@ export function MemoStrip({
           Per utente
         </ToggleChip>
       )}
-      {memos.length > 0 && (
+      {memos.length > 0 && !alwaysExpanded && (
         <Button
           variant="ghost"
           size="sm"
@@ -428,6 +470,15 @@ export function MemoStrip({
         </Button>
       )}
     </div>
+  );
+
+  const board = boardStyle(look.board);
+  const emptyMessage = (
+    <p className="self-center rounded-md bg-surface px-2 py-1 text-xs text-fg-muted">
+      {searching
+        ? 'Nessuna nota libera con questo testo.'
+        : 'Nessuna nota: scrivine una qui sopra e premi Invio.'}
+    </p>
   );
 
   if (unavailable) {
@@ -449,7 +500,7 @@ export function MemoStrip({
               {memos.length} di {total}
             </span>
           )}
-          {!searching && (
+          {!searching && !alwaysExpanded && (
             <Button
               variant="ghost"
               size="sm"
@@ -470,31 +521,48 @@ export function MemoStrip({
         </>
       }
     >
-      <div
-        id={contentId}
-        data-compact={compact || undefined}
-        style={scaledTextStyle(textScale, compact)}
-        className={`min-h-10 rounded-xl border border-line bg-surface p-1 shadow-2xs sm:flex ${shownOnPhone}`}
-      >
-        {memos.length > 0 &&
-          (groups ? (
-            renderGroups(groups)
-          ) : (
-            // Expanded, the notes stop at 40% of the screen, so that the calendars stay in view.
-            <div
-              className={`flex min-w-0 flex-1 ${expanded ? 'p-1 sm:max-h-[40vh] sm:overflow-y-auto' : ''}`}
-            >
-              {renderNotes(WHOLE_STRIP, memos)}
-            </div>
-          ))}
-        {memos.length === 0 && (
-          <p className="self-center px-2 py-1 text-xs text-fg-muted">
-            {searching
-              ? 'Nessuna nota libera con questo testo.'
-              : 'Nessuna nota: scrivine una qui sopra e premi Invio.'}
-          </p>
-        )}
-      </div>
+      {expanded ? (
+        // The board: the notes with a day on top, then the notes. In «All» it stops at 60% of the
+        // screen, so that the timeline stays in view; in its own tab it is as tall as its notes.
+        <div
+          id={contentId}
+          data-compact={compact || undefined}
+          style={{ ...scaledTextStyle(textScale, compact), ...board.style }}
+          className={`flex-col gap-3 rounded-xl border border-line p-3 shadow-2xs sm:flex in-data-compact:gap-2 in-data-compact:p-2 ${board.className} ${shownOnPhone}`}
+        >
+          {!searching && (
+            <DatedNotes
+              view={look.top}
+              sources={dated.sources}
+              look={dated.look}
+              paperColor={paperColor}
+              actions={dated.actions}
+              today={today}
+            />
+          )}
+          <div
+            className={`min-w-0 p-1 ${alwaysExpanded ? '' : 'sm:max-h-[60vh] sm:overflow-y-auto'}`}
+          >
+            {memos.length > 0 && (groups ? renderGroups(groups) : renderNotes(WHOLE_STRIP, memos))}
+            {memos.length === 0 && emptyMessage}
+          </div>
+        </div>
+      ) : (
+        <div
+          id={contentId}
+          data-compact={compact || undefined}
+          style={scaledTextStyle(textScale, compact)}
+          className={`min-h-10 rounded-xl border border-line bg-surface p-1 shadow-2xs sm:flex ${shownOnPhone}`}
+        >
+          {memos.length > 0 &&
+            (groups ? (
+              renderGroups(groups)
+            ) : (
+              <div className="flex min-w-0 flex-1">{renderNotes(WHOLE_STRIP, memos)}</div>
+            ))}
+          {memos.length === 0 && emptyMessage}
+        </div>
+      )}
 
       <p id={helpId} className="sr-only">
         Invio apre la nota. Alt e le frecce la spostano prima o dopo nella fila.

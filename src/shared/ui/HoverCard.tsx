@@ -117,6 +117,11 @@ interface HoverCardProps {
   onPointerLeave: () => void;
   /** The width of the card, as a class; a fixed width, so that it can be placed before it shows. */
   widthClass?: string;
+  /**
+   * A tooltip by default; a card with a command of its own is a group, named by `label`: a tooltip
+   * holds no controls. The command must also be reachable without the card, from its trigger.
+   */
+  label?: string;
 }
 
 /**
@@ -131,6 +136,7 @@ export function HoverCard({
   onPointerEnter,
   onPointerLeave,
   widthClass = 'w-72',
+  label,
 }: HoverCardProps) {
   // On every render: the content may change the card's size.
   useLayoutEffect(() => {
@@ -154,7 +160,8 @@ export function HoverCard({
   return createPortal(
     <div
       ref={cardRef}
-      role="tooltip"
+      role={label ? 'group' : 'tooltip'}
+      aria-label={label}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
       className={`fixed top-0 left-0 z-50 ${widthClass} max-w-[calc(100vw-16px)] rounded-xl border border-line bg-surface p-3 text-fg shadow-2xl transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] starting:scale-[0.97] starting:opacity-0 motion-reduce:starting:scale-100`}

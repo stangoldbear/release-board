@@ -20,7 +20,7 @@ export const DENSITIES: readonly { id: Density; label: string; description: stri
     id: 'compact',
     label: 'Compatta',
     description:
-      'Come Standard, e al livello Team le barre delle persone sottili e attaccate, con nomi e giorni in piccolo',
+      'Come Standard, e a «Info principali» le barre delle persone sottili e attaccate, con nomi e giorni in piccolo',
   },
 ];
 

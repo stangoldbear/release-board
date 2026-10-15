@@ -82,6 +82,13 @@ export interface PlanRepository {
   createTask(content: Omit<TaskItem, 'id'>): string;
   updateTask(taskId: string, changes: TaskChanges): void;
   deleteTask(taskId: string): void;
+  /** Adds a row of tasks at the end, with its name, and returns its id. */
+  createLane(name: string): string;
+  renameLane(laneId: string, name: string): void;
+  /** Puts a row of tasks right before another one, or last when `beforeId` is null. */
+  moveLane(laneId: string, beforeId: string | null): void;
+  /** Removes a row of tasks without tasks; a row with tasks stays, so that none is lost. */
+  deleteLane(laneId: string): void;
   /** Sets the note of a day; blank text removes it. */
   setNote(date: string, text: string): void;
   /**

@@ -326,7 +326,7 @@ describe('plan documents', () => {
   it('writes the metric definition along with the content', () => {
     expect(contentWrites(plan).some((write) => write.path === 'metrics/metric-1')).toBe(true);
     expect(importSummary(plan)).toBe(
-      '3 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere, 5 progetti, 4 note dei progetti, 10 assegnazioni, 2 note sulla timeline',
+      '4 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere, 5 progetti, 4 note dei progetti, 10 assegnazioni, 2 note sulla timeline',
     );
   });
 

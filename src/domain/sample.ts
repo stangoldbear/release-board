@@ -85,7 +85,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Collaudo',
-    laneId: 'lane-2',
+    laneId: 'lane-4',
     day: 12,
     days: 3,
     colorId: 'ice',

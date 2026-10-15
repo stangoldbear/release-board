@@ -15,6 +15,11 @@ interface DialogProps {
   /** Extra classes for the dialog box, typically its maximum width. */
   className?: string;
   /**
+   * The classes of the area under the title, which scrolls with some room around by default; a
+   * window with panes of its own lets each of them scroll.
+   */
+  bodyClassName?: string;
+  /**
    * Opened by the app on its own, as the reminders: it is not one of the windows the user opened,
    * which such a window waits for (`useOpenDialogCount`).
    */
@@ -39,6 +44,7 @@ export function Dialog({
   icon,
   footer,
   className = '',
+  bodyClassName = 'overflow-y-auto overscroll-contain p-5',
   unprompted = false,
   onClose,
   children,
@@ -92,7 +98,7 @@ export function Dialog({
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">{children}</div>
+      <div className={`min-h-0 flex-1 ${bodyClassName}`}>{children}</div>
 
       {footer && (
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-line bg-surface-muted px-5 py-3">

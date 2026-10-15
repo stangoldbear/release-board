@@ -48,7 +48,7 @@ interface MenuProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onSel
   items: MenuItem[];
   align?: PopupAlign;
   variant?: 'primary' | 'secondary' | 'ghost';
-  size?: 'sm' | 'md' | 'icon';
+  size?: 'sm' | 'md' | 'icon' | 'bare';
   /** The small arrow after the content of the button; off for an icon-only button. */
   chevron?: boolean;
   /** The content of the button. */

@@ -1,6 +1,10 @@
 import { PAGE_LAYOUT_IDS } from '../../app/layout';
 import type { PageLayout } from '../../app/layout';
 import { BACKUP_FORMAT } from '../../domain/backup';
+import { parseNotesLook } from '../../domain/notesLook';
+import type { NotesLook } from '../../domain/notesLook';
+import { parseTimelineNotesLook } from '../../domain/timelineNotes';
+import type { TimelineNotesLook } from '../../domain/timelineNotes';
 import { parseRoadmapConfig, sortByPosition } from '../../domain/roadmapConfig';
 import type { RoadmapConfig } from '../../domain/types';
 import { TEXT_SCALES } from '../../shared/ui/textScale';
@@ -29,6 +33,10 @@ export interface AppearanceSettings {
   dateFormat: DateFormat;
   layout: PageLayout;
   textScale: TextScale;
+  /** The row «Note sulla timeline» (0.18). */
+  timelineNotes: TimelineNotesLook;
+  /** The board of Notes (0.18). */
+  notesLook: NotesLook;
 }
 
 export interface SettingsFile {
@@ -139,6 +147,17 @@ function readAppearance(value: unknown): {
   pick('dateFormat', DATE_FORMAT_IDS, 'Formato delle date non riconosciuto');
   pick('layout', PAGE_LAYOUT_IDS, 'Layout non riconosciuto');
   pick('textScale', TEXT_SCALES, 'Dimensione del testo non riconosciuta');
+  // The looks of the notes are read as a browser reads them: what is not known takes the default.
+  const looks = [
+    ['timelineNotes', parseTimelineNotesLook, 'Note sulla timeline: formato non valido'],
+    ['notesLook', parseNotesLook, 'Aspetto di Notes: formato non valido'],
+  ] as const;
+  for (const [key, parse, unknown] of looks) {
+    if (value[key] === undefined) continue;
+    const look = parse(value[key]);
+    if (look) Object.assign(appearance, { [key]: look });
+    else skipped.push(unknown);
+  }
   return { appearance, skipped };
 }
 

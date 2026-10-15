@@ -113,7 +113,8 @@ export function CreatePlanWizard({ login, localPlan, onCreate, onSignOut }: Crea
       description={
         <>
           Sei il primo ad entrare in questa istanza{login && <strong>, {login}</strong>}: il piano
-          che crei sarà tuo, e potrai invitare i colleghi da Impostazioni → Membri.
+          che crei sarà tuo, e potrai invitare i colleghi da Impostazioni → Account e membri →
+          Membri.
         </>
       }
       wide
@@ -158,7 +159,7 @@ export function CreatePlanWizard({ login, localPlan, onCreate, onSignOut }: Crea
 
         <fieldset className="space-y-2">
           <legend className={LABEL_CLASS}>Contenuto iniziale</legend>
-          {option('empty', Sparkles, 'Piano vuoto', 'Tre corsie di esempio, nessuna attività.')}
+          {option('empty', Sparkles, 'Piano vuoto', 'Quattro corsie di esempio, nessuna attività.')}
           {option(
             'local',
             Laptop,
@@ -172,7 +173,7 @@ export function CreatePlanWizard({ login, localPlan, onCreate, onSignOut }: Crea
             'Un backup JSON',
             file
               ? `${file.name}: ${summary(file.plan)}`
-              : 'Un file esportato da Impostazioni → Backup.',
+              : 'Un file esportato da Impostazioni → Dati → Backup.',
           )}
           {source === 'file' && (
             <div className="ml-8 space-y-2">

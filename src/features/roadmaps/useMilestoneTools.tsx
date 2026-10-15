@@ -5,9 +5,9 @@ import type { MilestoneChanges } from '../../domain/milestones';
 import type { Milestone } from '../../domain/types';
 import { useFormatDate } from '../../shared/dateFormat';
 import { HoverCard, useHoverCard } from '../../shared/ui/HoverCard';
-import { taskColorStyle } from '../../themes';
 import { DragHint } from '../calendar/DragHint';
 import { usePointerDrag } from '../calendar/usePointerDrag';
+import { DiamondSymbol } from '../notes/noteSymbols';
 import { milestoneElementId } from './MilestoneDiamond';
 import type { MilestoneTools } from './MilestoneDiamond';
 
@@ -23,11 +23,7 @@ function MilestoneDetails({
   return (
     <div className="space-y-1 text-sm">
       <p className="flex items-center gap-2 font-bold">
-        <span
-          aria-hidden="true"
-          style={taskColorStyle(milestone.colorId)}
-          className="block h-3 w-3 shrink-0 rotate-45 rounded-[2px] border-2"
-        />
+        <DiamondSymbol colorId={milestone.colorId} size={12} />
         <span className="min-w-0 break-words">{milestone.title}</span>
       </p>
       <p className="text-xs text-fg-muted">

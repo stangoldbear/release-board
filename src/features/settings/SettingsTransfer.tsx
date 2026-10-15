@@ -1,7 +1,8 @@
-import { useId, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { Download, TriangleAlert, Upload } from 'lucide-react';
 import { PAGE_LAYOUTS } from '../../app/layout';
+import { NOTES_LAYOUTS, NOTE_SHAPES } from '../../domain/notesLook';
 import type { Assignment, RoadmapConfig } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { useToast } from '../../shared/ui/Toast';
@@ -57,6 +58,16 @@ function appearanceSummary(appearance: Partial<AppearanceSettings>): string {
     parts.push(PAGE_LAYOUTS.find((item) => item.id === appearance.layout)?.label ?? '');
   }
   if (appearance.textScale) parts.push(`Testo ${Math.round(appearance.textScale * 100)}%`);
+  if (appearance.timelineNotes) {
+    parts.push(
+      `Note sulla timeline ${appearance.timelineNotes.layout === 'lanes' ? 'su una linea per tipo' : 'su una linea'}`,
+    );
+  }
+  if (appearance.notesLook) {
+    const shape = NOTE_SHAPES.find((item) => item.id === appearance.notesLook?.shape);
+    const layout = NOTES_LAYOUTS.find((item) => item.id === appearance.notesLook?.layout);
+    parts.push(`Notes ${shape?.label ?? ''} in ${layout?.label.toLowerCase() ?? ''}`);
+  }
   return parts.filter(Boolean).join(' · ');
 }
 
@@ -88,7 +99,6 @@ export function SettingsTransfer({
 }: SettingsTransferProps) {
   const showToast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const headingId = useId();
   const [importState, setImportState] = useState<ImportState>({ step: 'idle' });
 
   const download = (suffix?: string) => {
@@ -139,14 +149,11 @@ export function SettingsTransfer({
     : 0;
 
   return (
-    <div role="group" aria-labelledby={headingId} className="space-y-3 border-t border-line pt-3">
-      <h4 id={headingId} className="text-sm font-semibold">
-        Impostazioni
-      </h4>
+    <div className="space-y-3">
       <p className="text-xs text-fg-muted">
         Le impostazioni senza i dati: campi, team e persone dei progetti, colori, formule e chiusure
         aziendali, che valgono per tutti, e l&apos;aspetto di questo browser (tema, formato delle
-        date, layout e dimensione del testo).
+        date, layout, dimensione del testo, note sulla timeline e Notes).
       </p>
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => download()}>

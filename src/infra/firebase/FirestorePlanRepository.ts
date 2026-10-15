@@ -23,6 +23,7 @@ import { INITIAL_SYNC } from '../../app/PlanRepository';
 import type { PlanPart, PlanRepository, SyncState, SyncStatus } from '../../app/PlanRepository';
 import type { AssignmentChanges, AssignmentContent } from '../../domain/assignments';
 import { HISTORY_SUMMARY_MAX, isHistoryAction, isHistoryEntity } from '../../domain/history';
+import { moveLaneBefore, tasksOfLane } from '../../domain/lanes';
 import type { HistoryAction, HistoryEntity, HistoryEntry } from '../../domain/history';
 import { applyChanges } from '../../domain/changes';
 import type { FieldChanges } from '../../domain/changes';
@@ -376,6 +377,54 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     batch.delete(this.ref(`tasks/${taskId}`));
     this.recordDeletions(batch, historyId);
     this.commit(batch);
+  }
+
+  createLane(name: string): string {
+    const id = this.createId();
+    const positions = (this.parts.lanes ?? []).map((item) => item.position);
+    // After the last one; positions are whole numbers, as the rules want them.
+    const position = positions.length > 0 ? Math.max(...positions) + 1 : 0;
+    this.createDocument('lanes', 'lane', id, { name: name.trim(), position });
+    return id;
+  }
+
+  renameLane(laneId: string, name: string): void {
+    const current = this.plan?.lanes.find((lane) => lane.id === laneId);
+    // A lane deleted meanwhile, by someone else, stays deleted.
+    if (!current || current.name === name.trim()) return;
+    this.updateEntity('lanes', 'lane', current, { name: name.trim() }, {});
+  }
+
+  /**
+   * Gives every lane its place in the new order, in one batch with one history entry: only the
+   * lanes whose place changes are written.
+   */
+  moveLane(laneId: string, beforeId: string | null): void {
+    const lanes = this.plan?.lanes ?? [];
+    const moved = lanes.find((lane) => lane.id === laneId);
+    if (!moved) return;
+    const stored = new Map((this.parts.lanes ?? []).map((item) => [item.lane.id, item.position]));
+    const order = moveLaneBefore(lanes, laneId, beforeId);
+    const changed = order.flatMap((lane, position) =>
+      stored.get(lane.id) === position ? [] : [{ lane, position }],
+    );
+    if (changed.length === 0) return;
+    const batch = writeBatch(this.db);
+    const historyId = this.record(batch, 'lane', laneId, 'update', {
+      before: { position: lanes.indexOf(moved) },
+      after: { name: moved.name, position: order.indexOf(moved) },
+    });
+    for (const { lane, position } of changed) {
+      batch.update(this.ref(`lanes/${lane.id}`), { position, ...this.audit(historyId) });
+    }
+    this.commit(batch);
+  }
+
+  deleteLane(laneId: string): void {
+    const before = this.plan?.lanes.find((lane) => lane.id === laneId);
+    // Already deleted, or with tasks that would be left without a lane: it stays.
+    if (!before || tasksOfLane(this.plan?.tasks ?? [], laneId).length > 0) return;
+    this.deleteDocument('lanes', 'lane', laneId, { name: before.name });
   }
 
   setNote(date: string, text: string): void {

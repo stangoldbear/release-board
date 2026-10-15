@@ -88,12 +88,9 @@ export function EmailDomainsSection({
   };
 
   return (
-    <div className="space-y-2 rounded-lg border border-line p-3">
-      <h4 className="flex items-center gap-1.5 text-xs font-bold">
-        <ShieldCheck className="h-4 w-4 text-fg-muted" aria-hidden="true" />
-        Domini email ammessi
-      </h4>
-      <p className="text-xs text-fg-muted">
+    <div className="space-y-2">
+      <p className="flex items-start gap-1.5 text-xs text-fg-muted">
+        <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
         {domains
           ? `Entrano solo gli account con un'email verificata di ${domains.join(', ')}.`
           : 'Nessun limite: entra ogni account invitato, qualunque sia la sua email.'}

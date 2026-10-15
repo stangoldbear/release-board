@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createBackupFile } from '../../domain/backup';
 import { createEmptyPlan } from '../../domain/plan';
+import { DEFAULT_NOTES_LOOK } from '../../domain/notesLook';
 import { defaultRoadmapConfig } from '../../domain/roadmapConfig';
+import { DEFAULT_TIMELINE_NOTES_LOOK } from '../../domain/timelineNotes';
 import {
   SETTINGS_FORMAT,
   createSettingsFile,
@@ -22,6 +24,8 @@ const appearance: AppearanceSettings = {
   dateFormat: 'dd/mm/yyyy',
   layout: 'classic',
   textScale: 1.15,
+  timelineNotes: { ...DEFAULT_TIMELINE_NOTES_LOOK, layout: 'lanes' },
+  notesLook: { ...DEFAULT_NOTES_LOOK, shape: 'card', board: 'dots' },
 };
 const file = createSettingsFile(roadmap, appearance, new Date('2026-10-13T10:00:00Z'));
 
@@ -62,7 +66,12 @@ describe('the settings file', () => {
     const result = parseSettingsText(JSON.stringify(changed));
     expect(result.ok && result.roadmap?.teams).toHaveLength(roadmap.teams.length);
     expect(result.ok && result.roadmap?.closures).toEqual(roadmap.closures);
-    expect(result.ok && result.appearance).toEqual({ dateFormat: 'dd/mm/yyyy', layout: 'classic' });
+    expect(result.ok && result.appearance).toEqual({
+      dateFormat: 'dd/mm/yyyy',
+      layout: 'classic',
+      timelineNotes: appearance.timelineNotes,
+      notesLook: appearance.notesLook,
+    });
     expect(result.ok && result.skipped).toEqual([
       'File di una versione più recente: lette solo le parti riconosciute',
       '1 team non letto',
@@ -104,6 +113,20 @@ describe('the settings file', () => {
     ).toEqual({
       ok: false,
       error: 'Il file non contiene impostazioni che questa versione riconosce.',
+    });
+  });
+
+  it('reads the looks of the notes as a browser does, and lists one it cannot read', () => {
+    const result = parseSettingsText(
+      JSON.stringify({
+        format: SETTINGS_FORMAT,
+        appearance: { timelineNotes: { layout: 'lanes', kinds: 'all' }, notesLook: 'post-it' },
+      }),
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      appearance: { timelineNotes: { ...DEFAULT_TIMELINE_NOTES_LOOK, layout: 'lanes' } },
+      skipped: ['Aspetto di Notes: formato non valido'],
     });
   });
 

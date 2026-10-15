@@ -6,6 +6,67 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-15
+
+Le regole di Firestore e i backup non cambiano: un'istanza si aggiorna al tag senza ripubblicare
+le regole. Le scelte nuove dell'aspetto valgono per il browser in cui si fanno, come il tema. Le
+corsie di Next Releases di un'istanza restano quelle di prima, con le loro attività: da questa
+versione si possono rinominare, riordinare e aggiungere.
+
+### Aggiunto
+
+- Impostazioni → Next Releases → «Corsie»: le righe delle attività si aggiungono in fondo, si
+  rinominano (due corsie non hanno lo stesso nome), si riordinano trascinandole o con le frecce e
+  si eliminano solo quando non hanno attività, così nessuna attività si perde. Le modifiche valgono
+  per tutti i membri e restano nella cronologia. La riga «Note» dei giorni resta sempre l'ultima.
+- Sulla timeline una corsia si riordina trascinando il suo nome, o con Alt e le frecce sulla sua
+  maniglia; un'attività passa a un'altra corsia trascinandola, come prima.
+- I piani nuovi partono con una quarta corsia, QA.
+
+- La riga «Note sulla timeline» raccoglie tutte le note che hanno un giorno, ognuna con la forma
+  della sua provenienza: una bandierina per la nota del giorno di Next Releases, un post-it per le
+  note di Notes nel giorno del loro promemoria (una pila con il numero quando sono più di una), i
+  rombi delle note sulla timeline come prima. Al passaggio del mouse, al focus e al tocco una scheda
+  mostra la nota; il clic apre la sua finestra, e su una pila prima l'elenco delle note. Un titolo
+  si ferma prima del simbolo che segue, con i puntini, e dove non c'è posto resta solo il simbolo.
+  Si spostano solo i rombi. La riga c'è con qualunque parte della timeline, anche con la sola Next Releases, e
+  si toglie da «Righe».
+- Impostazioni → Aspetto → «Note sulla timeline»: tutte le note su una linea (di serie) o una linea
+  per tipo, e per ogni tipo «Simbolo e titolo», «Solo simbolo» o «Nascoste» e il colore, anche
+  quello di ogni nota. Ogni scelta ha la sua anteprima.
+- L'area Notes espansa è una lavagna: in alto le note con un giorno, come agenda dei prossimi 60
+  giorni con i promemoria passati in testa o come mini timeline di sei settimane; sotto le note,
+  in muratura (ogni nota alta quanto il suo testo, in ordine da sinistra a destra), in griglia o in
+  lista. Le note si spostano trascinandole e con Alt e le frecce come prima; i gruppi per utente
+  sono sezioni una sotto l'altra.
+- Impostazioni → Aspetto → «Notes»: cosa c'è in alto, forma delle note (Post-it, Scheda,
+  Essenziale), layout, lavagna (Sughero, Neutra, Puntinata, Ardesia) e colore delle note senza
+  colore (Giallo post-it, di serie, o come il tema), ognuna con la sua miniatura. Il file delle
+  impostazioni porta anche queste scelte e quelle della riga «Note sulla timeline».
+- «Sincronizzato» dice sulla seconda riga chi ha fatto l'ultima modifica al piano. Il clic apre la
+  cronologia; la scheda al passaggio e al focus dice anche cosa è cambiato e quando, e ha il suo
+  «Apri la cronologia».
+
+### Cambiato
+
+- Le impostazioni sono divise per argomenti (Aspetto, Roadmap, Account e membri, Dati,
+  Informazioni) con le loro sezioni: a sinistra l'elenco, a destra la sezione scelta con il suo
+  percorso e dove vale la scelta («In questo browser» o «Per tutti i membri»). Sul telefono prima
+  l'elenco, poi la sezione, con «Tutte le impostazioni» per tornare indietro. Il browser ricorda
+  l'ultima sezione aperta. Dimensione del testo e densità sono anche in Aspetto → «Testo e
+  densità», a ogni larghezza. I percorsi nelle guide seguono: per esempio i membri si invitano da
+  Impostazioni → Account e membri → Membri, il backup è in Impostazioni → Dati → Backup.
+- Nella scheda Notes l'area è sempre espansa e alta quanto le sue note; in All parte compatta e
+  resta come la lascia l'utente. Le note senza colore sono gialle come i post-it, anche nella fila
+  compatta; si torna al colore del tema dalle impostazioni.
+- I rombi delle note sulla timeline hanno il contorno nel colore del testo, che si legge su ogni
+  barra, e stanno sul loro giorno con il titolo alla loro destra.
+
+### Corretto
+
+- La descrizione della densità «Compatta» parlava ancora del livello Team: le barre sottili sono
+  quelle di «Info principali».
+
 ## [0.17.0] - 2026-10-14
 
 Le regole di Firestore e i backup non cambiano: un'istanza si aggiorna al tag senza ripubblicare

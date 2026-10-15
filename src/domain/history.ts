@@ -77,6 +77,7 @@ const ENTITY_LABELS: Record<HistoryEntity, string> = {
 
 /** Entities named by what they are and their title: "il progetto «App mobile»". */
 const TITLED_ENTITIES: readonly HistoryEntity[] = [
+  'lane',
   'memo',
   'project',
   'projectNote',
@@ -123,6 +124,16 @@ function titleOf(entry: HistoryEntry): string | null {
   return `«${line.length > NOTE_TITLE_MAX ? `${line.slice(0, NOTE_TITLE_MAX - 1).trimEnd()}…` : line}»`;
 }
 
+/** A row of the tasks put in another place of the order, and nothing else changed. */
+function laneMoved(entry: HistoryEntry): boolean {
+  return (
+    entry.entity === 'lane' &&
+    entry.action === 'update' &&
+    typeof entry.before?.position === 'number' &&
+    entry.before.name === undefined
+  );
+}
+
 /** The days of a note that changed day: a move keeps the date before and after. */
 function noteMove(entry: HistoryEntry): { from: string; to: string } | null {
   const from = entry.before?.date;
@@ -165,7 +176,13 @@ export function describeChange(
     const title = titleOf(entry);
     const label = ENTITY_LABELS[entry.entity];
     const what = title ? `${label} ${title}` : label;
-    return `${entry.entity === 'memo' ? memoVerb(entry) : ACTION_LABELS[entry.action]} ${what}`;
+    const verb =
+      entry.entity === 'memo'
+        ? memoVerb(entry)
+        : laneMoved(entry)
+          ? 'ha spostato'
+          : ACTION_LABELS[entry.action];
+    return `${verb} ${what}`;
   }
   const move = noteMove(entry);
   if (move) {

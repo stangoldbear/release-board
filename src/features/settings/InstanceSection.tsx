@@ -7,10 +7,7 @@ import { SetupGuideDialog } from '../setup/SetupGuide';
 export function InstanceSection({ onSignIn }: { onSignIn?: () => void }) {
   const [guideOpen, setGuideOpen] = useState(false);
   return (
-    <section aria-labelledby="settings-instance" className="space-y-3">
-      <h3 id="settings-instance" className="text-sm font-bold">
-        Istanza condivisa
-      </h3>
+    <div className="space-y-3">
       <p className="text-xs text-fg-muted">
         I dati sono salvati solo in questo browser. Con un progetto Firebase il piano diventa
         condiviso con il team, in tempo reale e anche offline, con accesso tramite GitHub.
@@ -27,6 +24,6 @@ export function InstanceSection({ onSignIn }: { onSignIn?: () => void }) {
         </Button>
       </div>
       {guideOpen && <SetupGuideDialog onClose={() => setGuideOpen(false)} />}
-    </section>
+    </div>
   );
 }

@@ -1,0 +1,345 @@
+import { useId, useState } from 'react';
+import { ChevronDown, Monitor, Palette } from 'lucide-react';
+import { CUSTOM_THEME_IDS, SYSTEM_THEMES, getTheme, isDarkTheme, resolveTheme } from '../../themes';
+import type { CustomThemeId, Theme, ThemePreference } from '../../themes';
+import { COLOR_PRESETS, presetTasks } from '../../themes/presets';
+import type { ColorPreset } from '../../themes/presets';
+import { useSystemIsDark } from '../../themes/useAppliedTheme';
+import type { TaskColorId } from '../../domain/colors';
+import { TextSizeControls } from '../calendar/DisplayControls';
+import { DENSITIES } from '../../shared/ui/density';
+import type { Density } from '../../shared/ui/density';
+import type { TextScale } from '../../shared/ui/textScale';
+import { DATE_FORMATS, formatDate, todayIso } from '../../utils/dateUtils';
+import type { DateFormat } from '../../utils/dateUtils';
+import { PAGE_LAYOUTS } from '../../app/layout';
+import type { PageLayout } from '../../app/layout';
+
+/** A miniature of the page in the theme's own colors, whatever the current theme is. */
+function ThemeSwatch({ theme, small = false }: { theme: Theme; small?: boolean }) {
+  const { colors } = theme;
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex shrink-0 flex-col justify-center gap-1 rounded-md border p-1.5 ${
+        small ? 'h-8 w-11' : 'h-9 w-14'
+      }`}
+      style={{ backgroundColor: colors.canvas, borderColor: colors['line-strong'] }}
+    >
+      <span className="h-1.5 w-full rounded-sm" style={{ backgroundColor: colors.fg }} />
+      <span className="flex gap-1">
+        <span className="h-2.5 w-5 rounded-sm" style={{ backgroundColor: colors.accent }} />
+        <span className="h-2.5 w-3 rounded-sm" style={{ backgroundColor: colors.surface }} />
+      </span>
+    </span>
+  );
+}
+
+/** The colors a preset shows in its miniature: a few hues, from warm to cool. */
+const PRESET_SAMPLE: readonly TaskColorId[] = ['yellow', 'red', 'purple', 'blue', 'teal', 'green'];
+
+/**
+ * A miniature of a preset over the current theme: the bar of a project, with a line for its text,
+ * over the bars of its people in a few colors.
+ */
+function PresetSwatch({ theme, preset }: { theme: Theme; preset: ColorPreset }) {
+  const tasks = presetTasks(theme, preset);
+  const bar = tasks.blue;
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-9 w-24 shrink-0 flex-col justify-center gap-1 rounded-md border px-1.5"
+      style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors['line-strong'] }}
+    >
+      {/* The bar of a project: its text is a line of the color of the text. */}
+      <span
+        className="flex h-3 items-center rounded-[2px] border px-1"
+        style={{ backgroundColor: bar.bg, borderColor: bar.border }}
+      >
+        <span className="h-1 w-10 rounded-full" style={{ backgroundColor: bar.fg }} />
+      </span>
+      <span className="flex gap-0.5">
+        {PRESET_SAMPLE.map((id) => (
+          <span
+            key={id}
+            className="h-2 flex-1 rounded-[2px]"
+            style={{ backgroundColor: tasks[id].border }}
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
+
+/** A choice of the appearance: a line with its radio, its miniature and its name. */
+export const OPTION =
+  'flex cursor-pointer items-center gap-3 rounded-lg border border-line p-2 text-sm hover:bg-surface-strong has-checked:border-accent has-checked:bg-accent-soft';
+
+const SYSTEM_DESCRIPTION = `${getTheme(SYSTEM_THEMES.light).name} o ${getTheme(SYSTEM_THEMES.dark).name}, come il dispositivo`;
+
+const CUSTOM_GROUPS: { title: string; ids: CustomThemeId[] }[] = [
+  { title: 'Chiari', ids: CUSTOM_THEME_IDS.filter((id) => !isDarkTheme(id)) },
+  { title: 'Scuri', ids: CUSTOM_THEME_IDS.filter((id) => isDarkTheme(id)) },
+];
+
+function isCustom(theme: ThemePreference): theme is CustomThemeId {
+  return (CUSTOM_THEME_IDS as readonly string[]).includes(theme);
+}
+
+/**
+ * The theme: the system's, the app's light and dark ones, and as the last line a list of custom
+ * themes that opens only when asked, so that it does not crowd the settings.
+ */
+export function ThemeSettings({
+  theme,
+  onChangeTheme,
+}: {
+  theme: ThemePreference;
+  onChangeTheme: (theme: ThemePreference) => void;
+}) {
+  const systemDescriptionId = useId();
+  // Open from the start when a custom theme is in use, so that its choice is in view.
+  const [customOpen, setCustomOpen] = useState(() => isCustom(theme));
+
+  const radio = (option: ThemePreference, name: string, describedBy?: string) => (
+    <input
+      type="radio"
+      name="theme"
+      value={option}
+      checked={theme === option}
+      onChange={() => onChangeTheme(option)}
+      // The label may also hold a description, which belongs in the description only.
+      aria-label={name}
+      aria-describedby={describedBy}
+    />
+  );
+
+  return (
+    <fieldset>
+      <legend className="mb-2 text-xs text-fg-muted">Tema: la scelta si applica subito.</legend>
+      <div className="grid gap-2">
+        <label className={OPTION}>
+          {radio('system', 'Segui il sistema', systemDescriptionId)}
+          <span className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md border border-line-strong">
+            <Monitor className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span>
+            <span className="block font-semibold">Segui il sistema</span>
+            <span id={systemDescriptionId} className="block text-xs text-fg-muted">
+              {SYSTEM_DESCRIPTION}
+            </span>
+          </span>
+        </label>
+        {(['light-modern', 'dark-modern'] as const).map((option) => (
+          <label key={option} className={OPTION}>
+            {radio(option, getTheme(option).name)}
+            <ThemeSwatch theme={getTheme(option)} />
+            <span className="font-semibold">{getTheme(option).name}</span>
+          </label>
+        ))}
+
+        <details
+          open={customOpen}
+          onToggle={(event) => setCustomOpen(event.currentTarget.open)}
+          className="group rounded-lg border border-line"
+        >
+          <summary className="flex cursor-pointer list-none items-center gap-3 rounded-lg p-2 text-sm hover:bg-surface-strong [&::-webkit-details-marker]:hidden">
+            <span className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md border border-line-strong">
+              <Palette className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">Temi personalizzati</span>
+              <span className="block text-xs text-fg-muted">
+                {CUSTOM_THEME_IDS.length} temi ispirati ai temi più usati di Visual Studio Code
+                {isCustom(theme) && ` · in uso: ${getTheme(theme).name}`}
+              </span>
+            </span>
+            <ChevronDown
+              className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
+              aria-hidden="true"
+            />
+          </summary>
+          {/* Their colors are worked out only once the list is open. */}
+          {customOpen && (
+            <div className="space-y-3 border-t border-line p-2">
+              {CUSTOM_GROUPS.map(({ title, ids }) => (
+                <div key={title}>
+                  <p className="mb-1.5 text-xs font-semibold text-fg-muted">
+                    {title} · {ids.length}
+                  </p>
+                  <div className="grid gap-1.5 sm:grid-cols-2">
+                    {ids.map((id) => (
+                      <label key={id} className={OPTION}>
+                        {radio(id, getTheme(id).name)}
+                        <ThemeSwatch theme={getTheme(id)} small />
+                        <span className="min-w-0 leading-tight font-semibold">
+                          {getTheme(id).name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </details>
+      </div>
+    </fieldset>
+  );
+}
+
+/** The colors of tasks, projects and teams over the theme, each with a miniature in the theme in use. */
+export function ColorPresetSettings({
+  theme,
+  colorPreset,
+  onChangeColorPreset,
+}: {
+  theme: ThemePreference;
+  colorPreset: ColorPreset;
+  onChangeColorPreset: (preset: ColorPreset) => void;
+}) {
+  // The miniatures of the presets show the theme in use.
+  const shownTheme = resolveTheme(theme, useSystemIsDark());
+  return (
+    <fieldset>
+      <legend className="mb-2 text-xs text-fg-muted">
+        Colori di attività, progetti, team e note, sopra il tema.
+      </legend>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        {COLOR_PRESETS.map((option) => (
+          <label key={option.id} className={OPTION}>
+            <input
+              type="radio"
+              name="color-preset"
+              value={option.id}
+              checked={colorPreset === option.id}
+              onChange={() => onChangeColorPreset(option.id)}
+              aria-label={option.name}
+              aria-describedby={`color-preset-${option.id}`}
+            />
+            <PresetSwatch theme={shownTheme} preset={option.id} />
+            <span className="min-w-0">
+              <span className="block font-semibold">{option.name}</span>
+              <span id={`color-preset-${option.id}`} className="block text-xs text-fg-muted">
+                {option.description}
+              </span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+/** Where the areas of the page are, and how the dates are written in full. */
+export function LayoutSettings({
+  layout,
+  onChangeLayout,
+  dateFormat,
+  onChangeDateFormat,
+}: {
+  layout: PageLayout;
+  onChangeLayout: (layout: PageLayout) => void;
+  dateFormat: DateFormat;
+  onChangeDateFormat: (format: DateFormat) => void;
+}) {
+  const today = todayIso();
+  return (
+    <div className="space-y-5">
+      <fieldset>
+        <legend className="mb-2 text-xs text-fg-muted">
+          Layout della pagina: dove stanno le aree Notes, Next Releases e Roadmap.
+        </legend>
+        <div className="grid gap-1.5">
+          {PAGE_LAYOUTS.map((option) => (
+            <label key={option.id} className={OPTION}>
+              <input
+                type="radio"
+                name="layout"
+                value={option.id}
+                checked={layout === option.id}
+                onChange={() => onChangeLayout(option.id)}
+              />
+              <span className="min-w-0">
+                <span className="block font-semibold">{option.label}</span>
+                <span className="block text-xs text-fg-muted">{option.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend className="mb-2 text-xs text-fg-muted">
+          Formato delle date scritte per esteso. I mesi abbreviati e i campi data del browser non
+          cambiano.
+        </legend>
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {DATE_FORMATS.map((option) => (
+            <label key={option.id} className={OPTION}>
+              <input
+                type="radio"
+                name="date-format"
+                value={option.id}
+                checked={dateFormat === option.id}
+                onChange={() => onChangeDateFormat(option.id)}
+              />
+              <span className="min-w-0">
+                <span className="block font-semibold">{option.label}</span>
+                <span className="block text-xs text-fg-muted tabular-nums">
+                  oggi: {formatDate(today, option.id)}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    </div>
+  );
+}
+
+/**
+ * The size of the text of notes and calendars and how close together they are: the same controls
+ * as the header, which on phones has no room for the size.
+ */
+export function TextSettings({
+  textScale,
+  onTextScaleChange,
+  density,
+  onDensityChange,
+}: {
+  textScale: TextScale;
+  onTextScaleChange: (scale: TextScale) => void;
+  density: Density;
+  onDensityChange: (density: Density) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-fg-muted">
+          Dimensione del testo di note e calendari. Finestre e intestazione restano come sono.
+        </p>
+        <TextSizeControls textScale={textScale} onChange={onTextScaleChange} />
+      </div>
+      <fieldset>
+        <legend className="mb-2 text-xs text-fg-muted">Densità di note e calendari.</legend>
+        <div className="grid gap-1.5">
+          {DENSITIES.map((option) => (
+            <label key={option.id} className={OPTION}>
+              <input
+                type="radio"
+                name="density"
+                value={option.id}
+                checked={density === option.id}
+                onChange={() => onDensityChange(option.id)}
+              />
+              <span className="min-w-0">
+                <span className="block font-semibold">{option.label}</span>
+                <span className="block text-xs text-fg-muted">{option.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    </div>
+  );
+}
