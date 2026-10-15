@@ -40,10 +40,11 @@ interface HelpPanelProps {
   /** Which parts the timeline shows: the help speaks of what is there. */
   releases: boolean;
   projects: boolean;
+  people: boolean;
 }
 
 /** How the timeline is moved and read: gestures, keys, and what each shape and sign means. */
-export function HelpPanel({ releases, projects }: HelpPanelProps) {
+export function HelpPanel({ releases, projects, people }: HelpPanelProps) {
   return (
     <div className="space-y-3 text-xs leading-relaxed">
       <Section title="Mouse e dito">
@@ -79,9 +80,23 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
           )}
           {projects && (
             <li>
+              Il menu «Etichette» mostra solo i progetti con le etichette scelte; le etichette si
+              danno nella finestra del progetto e si leggono nelle sue informazioni («i»).
+            </li>
+          )}
+          {projects && (
+            <li>
               Sulla riga di un progetto, sotto il mouse: «i» apre le informazioni del progetto in
               una finestra che si sposta dalla sua barra e si chiude con la X, poi a «Info
               principali» e Team «Aggiungi una persona» e le righe da mostrare.
+            </li>
+          )}
+          {people && (
+            <li>
+              In «Persone» ogni persona ha una riga, con una barra per ogni progetto nel colore del
+              progetto: trascinala di lato per spostarla nel tempo, su un&apos;altra persona per
+              passarle il lavoro; il bordo destro cambia i giorni uomo. Le righe rosse in alto
+              segnano i giorni con più progetti insieme.
             </li>
           )}
           <li>
@@ -104,6 +119,12 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
             ) : null}
             .
           </li>
+          {people && (
+            <li>
+              In «Persone», <Key>Alt</Key> + <Key>↑</Key> <Key>↓</Key> passano il lavoro della barra
+              col focus alla persona sopra o sotto.
+            </li>
+          )}
           {(projects || releases) && (
             <li>
               <Key>Alt</Key> + <Key>↑</Key> <Key>↓</Key> spostano
@@ -161,6 +182,25 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
           <Sign label="Note di Notes con il promemoria in quel giorno: una pila se sono più di una">
             <PostitSymbol colorIds={['yellow', 'blue']} size={16} />
           </Sign>
+          {people && (
+            <Sign label="Giorni in cui una persona ha più progetti insieme">
+              <span
+                className="block h-1 w-7"
+                style={{
+                  backgroundImage:
+                    'repeating-linear-gradient(135deg, var(--color-danger) 0 4px, transparent 4px 7px)',
+                }}
+              />
+            </Sign>
+          )}
+          {(projects || people) && (
+            <Sign label="Assenza di una persona">
+              <span
+                className="block h-3 w-7 rounded-xs border border-line-strong"
+                style={ABSENCE_STRIPES}
+              />
+            </Sign>
+          )}
           {projects && (
             <>
               <Sign label="Deadline superata: il segno dice di quanto e chi la supera">
@@ -175,12 +215,6 @@ export function HelpPanel({ releases, projects }: HelpPanelProps) {
                 <span
                   className="block h-3 w-7 rounded-xs border border-line-strong bg-surface"
                   style={{ backgroundImage: FADED_STRIPES }}
-                />
-              </Sign>
-              <Sign label="Assenza di una persona">
-                <span
-                  className="block h-3 w-7 rounded-xs border border-line-strong"
-                  style={ABSENCE_STRIPES}
                 />
               </Sign>
             </>

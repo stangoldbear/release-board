@@ -10,6 +10,7 @@ import {
   isRoadmapConfigEmpty,
   projectColorField,
 } from '../../domain/roadmapConfig';
+import { customFields, labelsFieldOf } from '../../domain/labels';
 import type { RoadmapConfig } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
@@ -18,10 +19,18 @@ import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 import { ProjectFieldsDialog } from './ProjectFieldsDialog';
 import { TeamDialog } from './TeamDialog';
 
-/** The defaults of the repository with the company closures of the plan, which are no default. */
+/**
+ * The defaults of the repository with what belongs to the plan alone, which has no default: the
+ * company closures and the labels.
+ */
 function defaultsKeeping(config: RoadmapConfig): RoadmapConfig {
   const defaults = defaultRoadmapConfig();
-  return config.closures ? { ...defaults, closures: config.closures } : defaults;
+  const labels = labelsFieldOf(config);
+  return {
+    ...defaults,
+    ...(labels && { fields: [...defaults.fields, labels] }),
+    ...(config.closures && { closures: config.closures }),
+  };
 }
 
 interface RoadmapSettingsProps {
@@ -38,9 +47,11 @@ interface RoadmapSettingsProps {
 export function RoadmapConfigSettings({ config, unavailable, actions }: RoadmapSettingsProps) {
   const [open, setOpen] = useState<'fields' | 'team' | null>(null);
   const [confirmDefaults, setConfirmDefaults] = useState(false);
-  const empty = isRoadmapConfigEmpty(config);
-  const mainFields = config.fields.filter((field) => field.main).length;
-  const groupFields = config.fields.filter(isGroupable).length;
+  // The labels have a section of their own.
+  const fields = customFields(config.fields);
+  const empty = isRoadmapConfigEmpty({ ...config, fields });
+  const mainFields = fields.filter((field) => field.main).length;
+  const groupFields = fields.filter(isGroupable).length;
 
   if (unavailable) return <RulesNotice what="I campi, i team e le persone dei progetti" />;
   return (
@@ -55,7 +66,7 @@ export function RoadmapConfigSettings({ config, unavailable, actions }: RoadmapS
             Campi dei progetti
           </p>
           <p className="text-xs text-fg-muted">
-            {config.fields.length} {config.fields.length === 1 ? 'campo' : 'campi'}, {mainFields}{' '}
+            {fields.length} {fields.length === 1 ? 'campo' : 'campi'}, {mainFields}{' '}
             {mainFields === 1 ? 'principale' : 'principali'}
             {groupFields > 0 && `, ${groupFields} per raggruppare`}
           </p>
@@ -112,7 +123,7 @@ export function RoadmapConfigSettings({ config, unavailable, actions }: RoadmapS
       {confirmDefaults && (
         <ConfirmDialog
           title="Ripristinare i predefiniti?"
-          message="Campi, team e persone tornano a quelli del repository: le modifiche fatte qui si perdono, e il lavoro assegnato a persone che spariscono viene tolto dai progetti. I valori che i progetti hanno nei campi restano."
+          message="Campi, team e persone tornano a quelli del repository: le modifiche fatte qui si perdono, e il lavoro assegnato a persone che spariscono viene tolto dai progetti. I valori che i progetti hanno nei campi restano, come le etichette e le chiusure aziendali."
           confirmLabel="Ripristina"
           onConfirm={() => {
             setConfirmDefaults(false);

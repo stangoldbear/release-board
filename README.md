@@ -9,9 +9,9 @@ giornalieri.
 
 - Le note libere in cima e una sola timeline per i rilasci e i progetti, sugli stessi giorni: il
   fatturato e le note sulla timeline, poi le corsie delle attività con sotto le note dei giorni
-  (Next Releases) e i progetti (Roadmap), ognuno sotto un'intestazione con i conteggi per stato che si
-  ripiega. Con le schede in fondo alla pagina «All» mostra tutto, «Next Releases» e «Roadmap» la
-  timeline con una parte sola; oppure, a scelta nelle Impostazioni, i pulsanti nell'intestazione
+  (Next Releases), i progetti (Roadmap) e il lavoro di ogni persona (Persone), ognuno sotto
+  un'intestazione con i conteggi che si ripiega. Con le schede in fondo alla pagina «All» mostra
+  tutto, «Next Releases», «Roadmap» e «Persone» la timeline con una parte sola; oppure, a scelta nelle Impostazioni, i pulsanti nell'intestazione
   mostrano e nascondono le parti. Un solo pulsante «Nuovo» per attività, progetti e note.
 - La timeline scorre dentro la finestra, con mesi, fatturato e giorni sempre in alto e i nomi
   sempre a sinistra, in una colonna larga quanto si vuole; quattro livelli di zoom («Dettaglio»,
@@ -40,7 +40,9 @@ giornalieri.
   di cui passa la fine è completato, e un triangolo sulla colonna di oggi chiede di confermare. La
   barra di un progetto prende il colore della sua dimensione, o un colore libero a scelta nelle
   Impostazioni, e i progetti si raggruppano per un campo e si ordinano a mano o per inizio, fine,
-  deadline, stato o titolo. Ogni progetto ha il suo team: le persone con i giorni uomo in una tabella che le formule
+  deadline, stato o titolo. Etichette colorate, quante ne servono a ogni progetto, si danno nella
+  sua finestra e si leggono nelle sue informazioni; il menu «Etichette» mostra solo i progetti con
+  quelle scelte. Ogni progetto ha il suo team: le persone con i giorni uomo in una tabella che le formule
   dei team (analisi, test, contingency) riempiono da sole, disposte nel Gantt in parallelo o in
   sequenza: un progetto dura quanto il lavoro del suo team, con una deadline segnata dove il lavoro la supera e
   un avviso qualche giorno prima; la barra mostra il lavoro come lane per persona, come fasi o da
@@ -48,6 +50,10 @@ giornalieri.
   scadenza e avviso; una vista Team con una barra per persona, che salta weekend, festività,
   chiusure aziendali e assenze, allungabile dal bordo o scrivendo i giorni con un doppio clic. Progetti, barre e note si
   spostano trascinandoli, anche da tastiera.
+- Persone: una riga per persona, divise per team, con una barra per ogni progetto nel colore del
+  progetto. I giorni in cui una persona ha più progetti insieme sono segnati in rosso, con il
+  numero accanto al nome; una barra si sposta nel tempo o, trascinata su un'altra persona (anche
+  con Alt + frecce), le passa il lavoro, e progetti e giorni uomo seguono subito.
 - Ricerca in attività, note dei giorni, note libere, progetti (anche note e campi) e note sulla
   timeline, con tutte le parole o almeno una: le parole trovate sono evidenziate e i risultati si
   scorrono uno alla volta.

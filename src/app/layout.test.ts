@@ -16,12 +16,19 @@ describe('the layout of the page', () => {
   });
 
   it('lists «All» first, then the areas', () => {
-    expect(pageTabs(AREAS).map(({ id }) => id)).toEqual(['all', 'notes', 'releases', 'roadmaps']);
+    expect(pageTabs(AREAS).map(({ id }) => id)).toEqual([
+      'all',
+      'notes',
+      'releases',
+      'roadmaps',
+      'people',
+    ]);
     expect(pageTabs(AREAS).map(({ label }) => label)).toEqual([
       'All',
       'Notes',
       'Next Releases',
       'Roadmap',
+      'Persone',
     ]);
   });
 

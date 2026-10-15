@@ -1,4 +1,4 @@
-import { CalendarRange, LayoutGrid, Milestone, NotebookPen } from 'lucide-react';
+import { CalendarRange, LayoutGrid, Milestone, NotebookPen, UsersRound } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { PageTab } from './layout';
 
@@ -8,4 +8,5 @@ export const AREA_ICONS: Record<PageTab, LucideIcon> = {
   notes: NotebookPen,
   releases: CalendarRange,
   roadmaps: Milestone,
+  people: UsersRound,
 };

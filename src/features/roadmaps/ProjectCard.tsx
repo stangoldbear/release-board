@@ -1,4 +1,5 @@
 import { CalendarRange, Clock, Flag, UserRound } from 'lucide-react';
+import { projectLabels } from '../../domain/labels';
 import type { ProjectWithEnd } from '../../domain/projects';
 import type { ProjectSpan } from '../../domain/projectSpan';
 import type { StatusChange } from '../../domain/projectStatus';
@@ -10,7 +11,7 @@ import { taskColorStyle } from '../../themes';
 import { clampLines } from '../calendar/timelineLayout';
 import { formatManDays } from './barRendering';
 import type { WorkItem } from './barRendering';
-import { FieldValues } from './fieldUi';
+import { FieldTag, FieldValues } from './fieldUi';
 import { ProjectStatusMark } from './projectUi';
 
 interface ProjectCardProps {
@@ -55,6 +56,7 @@ export function ProjectCard({ project, span, work, config, tagField }: ProjectCa
   const sizeValue = tagField ? coloredValueOf(project, tagField) : null;
   // The main fields, but the one of the tab, which the header says.
   const mainFields = config.fields.filter((field) => field.main && field.id !== tagField?.id);
+  const labels = projectLabels(project, config);
   return (
     <div className="space-y-2.5 text-sm">
       <div className="flex items-start gap-2">
@@ -81,6 +83,16 @@ export function ProjectCard({ project, span, work, config, tagField }: ProjectCa
           </p>
         </div>
       </div>
+
+      {labels.length > 0 && (
+        <ul aria-label="Etichette" className="flex flex-wrap gap-1">
+          {labels.map((label) => (
+            <li key={label.id} className="flex min-w-0">
+              <FieldTag colorId={label.colorId}>{label.label}</FieldTag>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-2">
         <Fact icon={CalendarRange} label="Periodo">

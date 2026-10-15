@@ -17,7 +17,7 @@ describe('settingsCategories', () => {
     expect(ids(true, true)).toEqual([
       ['appearance', ['theme', 'colors', 'layout', 'text', 'timeline-notes', 'notes']],
       ['releases', ['lanes']],
-      ['roadmap', ['roadmap-config', 'project-colors', 'closures']],
+      ['roadmap', ['roadmap-config', 'labels', 'project-colors', 'closures']],
       ['people', ['account', 'members', 'email-domains']],
       ['data', ['backup', 'settings-file', 'history']],
       ['about', ['about']],

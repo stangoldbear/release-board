@@ -21,7 +21,7 @@ export function isSearching(filter: TaskFilter): boolean {
 }
 
 /** Lowercase and without accents, so that "attivita" finds "attività". */
-function normalize(text: string): string {
+export function normalizeText(text: string): string {
   return text
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
@@ -30,7 +30,7 @@ function normalize(text: string): string {
 
 /** The words of a search, lowercase and without accents; none when nothing is searched. */
 export function searchWords(search: string): string[] {
-  return normalize(search).split(/\s+/).filter(Boolean);
+  return normalizeText(search).split(/\s+/).filter(Boolean);
 }
 
 /**
@@ -45,7 +45,7 @@ function matches(
 ): boolean {
   const words = searchWords(search);
   if (words.length === 0) return true;
-  const found = texts.flatMap((text) => (text === undefined ? [] : [normalize(text)]));
+  const found = texts.flatMap((text) => (text === undefined ? [] : [normalizeText(text)]));
   const has = (word: string) => found.some((text) => text.includes(word));
   return mode === 'all' ? words.every(has) : words.some(has);
 }
@@ -128,7 +128,7 @@ export function highlightRanges(text: string, words: readonly string[]): [number
   const ends: number[] = [];
   let at = 0;
   for (const char of text) {
-    const pieces = normalize(char);
+    const pieces = normalizeText(char);
     // An accent written apart belongs to the letter before it, and is highlighted with it.
     if (pieces === '' && ends.length > 0) ends[ends.length - 1] = at + char.length;
     // One entry per UTF-16 unit, as indexOf counts them: an emoji takes two.

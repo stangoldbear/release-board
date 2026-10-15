@@ -22,6 +22,8 @@ export interface ProjectActions {
   /** Saves what the window edited: only the fields that changed. */
   onSave: (project: Project, content: ProjectContent) => void;
   onDelete: (project: Project) => void;
+  /** Adds a label to the plan, from the window of a project: its id, or null when it cannot be. */
+  onCreateLabel: (name: string) => string | null;
 }
 
 export interface NoteActions {

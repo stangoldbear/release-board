@@ -26,6 +26,7 @@ import {
   sortByPosition,
   uniqueId,
 } from '../../domain/roadmapConfig';
+import { customFields } from '../../domain/labels';
 import type { FieldOption, FieldType, ProjectField, RoadmapConfig } from '../../domain/types';
 import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
@@ -397,7 +398,8 @@ interface ProjectFieldsDialogProps {
  * to move, edit or remove, and a button for a new one.
  */
 export function ProjectFieldsDialog({ config, actions, onClose }: ProjectFieldsDialogProps) {
-  const fields = sortByPosition(config.fields);
+  // The labels have a section of their own in the settings.
+  const fields = sortByPosition(customFields(config.fields));
   const [editing, setEditing] = useState<ProjectField | null | 'new'>(null);
   const [toDelete, setToDelete] = useState<ProjectField | null>(null);
 

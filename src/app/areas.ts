@@ -1,7 +1,7 @@
 import type { PlanPart } from './PlanRepository';
 
 /** The areas of the page, one under the other; the header shows or hides each of them. */
-export type AreaId = 'notes' | 'releases' | 'roadmaps';
+export type AreaId = 'notes' | 'releases' | 'roadmaps' | 'people';
 
 export interface Area {
   id: AreaId;
@@ -14,6 +14,7 @@ export const AREAS: readonly Area[] = [
   { id: 'notes', label: 'Notes' },
   { id: 'releases', label: 'Next Releases' },
   { id: 'roadmaps', label: 'Roadmap' },
+  { id: 'people', label: 'Persone' },
 ];
 
 /** The browser preference that shows the parts of the app still in development. */
@@ -32,7 +33,12 @@ export function availableAreas(betaFeatures: boolean): readonly Area[] {
 
 export type AreaVisibility = Record<AreaId, boolean>;
 
-export const ALL_AREAS_VISIBLE: AreaVisibility = { notes: true, releases: true, roadmaps: true };
+export const ALL_AREAS_VISIBLE: AreaVisibility = {
+  notes: true,
+  releases: true,
+  roadmaps: true,
+  people: true,
+};
 
 /**
  * The areas shown, as a browser saved them; null when the saved value is not one. An area the

@@ -2,6 +2,7 @@ import { useId, useMemo } from 'react';
 import {
   ArrowUpDown,
   Banknote,
+  BriefcaseBusiness,
   CalendarOff,
   CalendarRange,
   CircleHelp,
@@ -15,9 +16,19 @@ import {
   RotateCcw,
   Rows3,
   StickyNote,
+  Tag,
+  TriangleAlert,
   Upload,
+  UsersRound,
 } from 'lucide-react';
 import { areaElementId } from '../../app/areas';
+import {
+  NO_LABELS_FILTER,
+  activeLabelsFilter,
+  describeLabelsFilter,
+  isFilteringLabels,
+  labelsOf,
+} from '../../domain/labels';
 import { freeMilestones } from '../../domain/milestones';
 import { DAILY_METRIC, TASK_STATUSES, TASK_STATUS_LABELS } from '../../domain/plan';
 import type { TaskChanges } from '../../domain/plan';
@@ -60,6 +71,8 @@ import { LanesSection } from '../calendar/LanesSection';
 import { NotesSection } from '../calendar/NotesSection';
 import { columnUnit, timelineMetrics } from '../calendar/timelineLayout';
 import { WeekBoard } from '../calendar/WeekBoard';
+import { PeopleSection } from '../people/PeopleSection';
+import { usePeopleWork } from '../people/usePeopleWork';
 import { ProjectsSection } from '../roadmaps/ProjectsSection';
 import { DETAIL_LEVELS, PROJECT_STATUS_ICONS, PROJECT_STATUS_PLURALS } from '../roadmaps/projectUi';
 import type { DetailLevel } from '../roadmaps/projectUi';
@@ -71,6 +84,7 @@ import type {
   StakeholderActions,
 } from '../roadmaps/roadmapActions';
 import { roadmapMetrics, roadmapRange } from '../roadmaps/roadmapLayout';
+import { ColorSwatch } from '../settings/ColorMenu';
 import { useMilestoneTools } from '../roadmaps/useMilestoneTools';
 import { useRoadmapDialogs } from '../roadmaps/useRoadmapDialogs';
 import type { OpenRequest } from '../roadmaps/useRoadmapDialogs';
@@ -79,7 +93,7 @@ import { HelpPanel } from './HelpPanel';
 import { SectionHeader } from './SectionHeader';
 import { TimelineFrame } from './TimelineFrame';
 import { TimelineNotesRow } from './TimelineNotesRow';
-import { LABEL_WIDTH, oneLineTitlesOf } from './useTimelineDisplay';
+import { LABEL_WIDTH, TIMELINE_PARTS, oneLineTitlesOf } from './useTimelineDisplay';
 import type { TimelineDisplay, TimelineDisplayControls, TimelinePart } from './useTimelineDisplay';
 
 /** No company closures: one list, so that the columns of the days are not built again. */
@@ -173,7 +187,14 @@ export interface TimelineNotesProps {
 const PART_TITLES: Record<TimelinePart, string> = {
   releases: 'Next Releases',
   roadmaps: 'Roadmap',
+  people: 'Persone',
 };
+
+const PART_ICONS = {
+  releases: CalendarRange,
+  roadmaps: MilestoneIcon,
+  people: UsersRound,
+} as const;
 
 /** How much every row shows: three icons, one pressed, each with its name on the tip. */
 function LevelToggle({
@@ -246,10 +267,14 @@ export function TimelineArea({
   roadmap,
   timelineNotes,
 }: TimelineAreaProps) {
-  const both = parts.releases && parts.roadmaps;
-  const title = both ? 'Timeline' : parts.releases ? PART_TITLES.releases : PART_TITLES.roadmaps;
+  const shownParts = TIMELINE_PARTS.filter((part) => parts[part]);
+  const several = shownParts.length > 1;
+  const title = several ? 'Timeline' : PART_TITLES[shownParts[0] ?? 'roadmaps'];
+  // The projects and the people share the days the work of the projects needs.
+  const projectDays = parts.roadmaps || parts.people;
   const releasesRowsId = useId();
   const roadmapRowsId = useId();
+  const peopleRowsId = useId();
   const oneLineTitles = oneLineTitlesOf(display, view.zoom);
   const dayWidth = dayWidthOf(view);
   const compact = isTight(density);
@@ -266,8 +291,8 @@ export function TimelineArea({
   // today or from the Monday of this week in weekly columns.
   const projects = roadmap.projects;
   const fullRange = useMemo(
-    () => (parts.roadmaps ? roadmapRange(view.range, projects) : view.range),
-    [parts.roadmaps, view.range, projects],
+    () => (projectDays ? roadmapRange(view.range, projects) : view.range),
+    [projectDays, view.range, projects],
   );
   const firstShownDay = columnUnit(dayWidth) === 'week' ? startOfWeek(today) : today;
   const start =
@@ -284,6 +309,11 @@ export function TimelineArea({
         ? today
         : view.anchor;
 
+  // The labels: the projects with one of those chosen, or with all of them, or without labels.
+  const labels = labelsOf(plan.roadmap);
+  const labelsFilter = activeLabelsFilter(display.labelsFilter, labels);
+  const filteringLabels = isFilteringLabels(labelsFilter);
+
   const dialogs = useRoadmapDialogs({
     plan,
     today,
@@ -296,7 +326,15 @@ export function TimelineArea({
     assignmentActions: roadmap.assignmentActions,
     stakeholderActions: roadmap.stakeholderActions,
     milestoneActions: roadmap.milestoneActions,
+    newProjectLabelIds: labelsFilter.ids,
   });
+  const peopleWork = usePeopleWork(
+    roadmap.projects,
+    roadmap.shown,
+    roadmap.spans,
+    plan.roadmap,
+    today,
+  );
   const milestone = useMilestoneTools({
     dayWidth,
     onOpen: dialogs.openMilestone,
@@ -344,7 +382,7 @@ export function TimelineArea({
       onSelect: () => releases.onAddTaskAt(defaultDay, plan.lanes[0]?.id ?? ''),
     });
   }
-  if (parts.roadmaps && !roadmap.unavailable) {
+  if (projectDays && !roadmap.unavailable) {
     newItems.push({
       label: 'Progetto',
       icon: MilestoneIcon,
@@ -401,13 +439,13 @@ export function TimelineArea({
       });
     }
   }
-  if (both) {
+  if (several) {
     rowItems.push({ kind: 'separator' }, { kind: 'heading', label: 'Parti' });
-    for (const part of ['releases', 'roadmaps'] as const) {
+    for (const part of shownParts) {
       rowItems.push({
         kind: 'check',
         label: PART_TITLES[part],
-        icon: part === 'releases' ? CalendarRange : MilestoneIcon,
+        icon: PART_ICONS[part],
         checked: !display.collapsed.includes(part),
         onToggle: () => controls.toggleCollapsed(part),
       });
@@ -450,6 +488,55 @@ export function TimelineArea({
       onSelect: () => controls.setGroupBy(field.id),
     })),
   ];
+  const toggleLabel = (labelId: string) =>
+    controls.setLabelsFilter({
+      ...labelsFilter,
+      ids: labelsFilter.ids.includes(labelId)
+        ? labelsFilter.ids.filter((id) => id !== labelId)
+        : [...labelsFilter.ids, labelId],
+    });
+  const labelItems: MenuItem[] = [
+    { kind: 'heading', label: 'Mostra i progetti con' },
+    ...labels.map((label): MenuItem => ({
+      kind: 'check',
+      label: label.label,
+      leading: <ColorSwatch colorId={label.colorId} />,
+      checked: labelsFilter.ids.includes(label.id),
+      onToggle: () => toggleLabel(label.id),
+    })),
+    {
+      kind: 'check',
+      label: 'Senza etichette',
+      checked: labelsFilter.unlabeled,
+      onToggle: () =>
+        controls.setLabelsFilter({ ...labelsFilter, unlabeled: !labelsFilter.unlabeled }),
+    },
+    { kind: 'separator' },
+    {
+      kind: 'radio',
+      label: 'Almeno una di quelle scelte',
+      checked: labelsFilter.match === 'any',
+      onSelect: () => controls.setLabelsFilter({ ...labelsFilter, match: 'any' }),
+    },
+    {
+      kind: 'radio',
+      label: 'Tutte quelle scelte',
+      checked: labelsFilter.match === 'all',
+      onSelect: () => controls.setLabelsFilter({ ...labelsFilter, match: 'all' }),
+    },
+    ...(filteringLabels
+      ? ([
+          { kind: 'separator' },
+          {
+            label: 'Togli il filtro',
+            icon: RotateCcw,
+            onSelect: () => controls.setLabelsFilter(NO_LABELS_FILTER),
+          },
+        ] satisfies MenuItem[])
+      : []),
+  ];
+  const labelsWords = describeLabelsFilter(labelsFilter, labels);
+
   const statusItems: MenuItem[] = [
     {
       kind: 'radio',
@@ -498,7 +585,13 @@ export function TimelineArea({
             <Popover
               label="Aiuto e legenda"
               size="icon"
-              panel={<HelpPanel releases={parts.releases} projects={parts.roadmaps} />}
+              panel={
+                <HelpPanel
+                  releases={parts.releases}
+                  projects={parts.roadmaps}
+                  people={parts.people}
+                />
+              }
             >
               <CircleHelp className="h-4 w-4" aria-hidden="true" />
             </Popover>
@@ -525,11 +618,13 @@ export function TimelineArea({
             <Rows3 className="h-3.5 w-3.5" aria-hidden="true" />
             Righe
           </Menu>
-          <LevelToggle
-            level={display.level}
-            teamAvailable={!roadmap.detailsUnavailable}
-            onChange={controls.setLevel}
-          />
+          {(parts.releases || parts.roadmaps) && (
+            <LevelToggle
+              level={display.level}
+              teamAvailable={!roadmap.detailsUnavailable}
+              onChange={controls.setLevel}
+            />
+          )}
           {parts.roadmaps && exceptions > 0 && (
             <span className="text-xs text-fg-muted">
               {exceptions === 1
@@ -561,6 +656,27 @@ export function TimelineArea({
                 <span className="max-sm:sr-only">Raggruppa:</span> {groupBy?.label ?? 'No'}
               </Menu>
             </>
+          )}
+          {projectDays && (
+            <Menu
+              label="Filtra per etichette"
+              items={labelItems}
+              disabled={labels.length === 0}
+              title={
+                labels.length === 0
+                  ? 'Le etichette si creano in Impostazioni → Roadmap → Etichette o nella finestra di un progetto'
+                  : filteringLabels
+                    ? `Solo i progetti con: ${labelsWords}`
+                    : 'Solo i progetti con alcune etichette'
+              }
+              className={filteringLabels ? 'border-accent! bg-accent-soft!' : ''}
+            >
+              <Tag className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="max-sm:sr-only">Etichette{filteringLabels ? ':' : ''}</span>
+              {filteringLabels && (
+                <span className="max-w-48 truncate font-normal">{labelsWords}</span>
+              )}
+            </Menu>
           )}
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
             <Tooltip text="Festivi e weekend in rosso">
@@ -761,7 +877,7 @@ export function TimelineArea({
                           label: PROJECT_STATUS_PLURALS[status],
                           count: projects.filter((project) => project.status === status).length,
                         }))}
-                        found={searching ? roadmap.shown.length : null}
+                        found={searching || filteringLabels ? roadmap.shown.length : null}
                         collapsed={display.collapsed.includes('roadmaps')}
                         onToggleCollapsed={() => controls.toggleCollapsed('roadmaps')}
                         rowsId={roadmapRowsId}
@@ -800,6 +916,57 @@ export function TimelineArea({
                               milestones={roadmap.milestones}
                               milestoneTools={milestone.tools}
                               onAddMilestone={searching ? undefined : dialogs.addMilestone}
+                            />
+                          ))}
+                      </div>
+                    </>
+                  )}
+
+                  {parts.people && (
+                    <>
+                      <SectionHeader
+                        id={areaElementId('people')}
+                        title={PART_TITLES.people}
+                        icon={UsersRound}
+                        total={{ label: 'Persone', count: peopleWork.people }}
+                        counts={[
+                          {
+                            icon: BriefcaseBusiness,
+                            label: 'Al lavoro oggi',
+                            count: peopleWork.atWorkToday,
+                          },
+                          {
+                            icon: TriangleAlert,
+                            label: 'Con più progetti insieme',
+                            count: peopleWork.overbooked,
+                          },
+                        ]}
+                        found={null}
+                        collapsed={display.collapsed.includes('people')}
+                        onToggleCollapsed={() => controls.toggleCollapsed('people')}
+                        rowsId={peopleRowsId}
+                        width={geometry.totalWidth}
+                      />
+                      <div id={peopleRowsId}>
+                        {!display.collapsed.includes('people') &&
+                          (roadmap.unavailable || roadmap.detailsUnavailable ? (
+                            <div className="sticky left-0 w-fit max-w-full p-3">
+                              <RulesNotice what="Le persone e il loro lavoro" />
+                            </div>
+                          ) : peopleWork.people === 0 ? (
+                            <p className="sticky left-0 w-fit px-4 py-3 text-xs text-fg-muted">
+                              Nessuna persona: si aggiungono in Impostazioni → Roadmap → Campi, team
+                              e persone.
+                            </p>
+                          ) : (
+                            <PeopleSection
+                              geometry={geometry}
+                              work={peopleWork}
+                              assignments={plan.assignments}
+                              metrics={metrics}
+                              onOpenAssignment={dialogs.openAssignment}
+                              onChangeAssignment={roadmap.assignmentActions.onUpdate}
+                              onOpenStakeholder={dialogs.openStakeholder}
                             />
                           ))}
                       </div>

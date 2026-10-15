@@ -1,3 +1,5 @@
+import { NO_LABELS_FILTER, parseLabelsFilter } from '../../domain/labels';
+import type { LabelsFilter } from '../../domain/labels';
 import { ROADMAP_SORTS } from '../../domain/projectOrder';
 import type { ZoomLevel } from '../../domain/schedule';
 import type { RoadmapSort } from '../../domain/projectOrder';
@@ -8,10 +10,13 @@ import { ALL_ROWS_VISIBLE, parseRowVisibility, toggleLane } from '../calendar/ro
 import { DETAIL_LEVELS } from '../roadmaps/projectUi';
 import type { DetailLevel } from '../roadmaps/projectUi';
 
-/** The two parts of the timeline: the lanes of the releases and the projects of the roadmap. */
-export type TimelinePart = 'releases' | 'roadmaps';
+/**
+ * The parts of the timeline: the lanes of the releases, the projects of the roadmap and, since the
+ * 0.19, the work of each person on the projects.
+ */
+export type TimelinePart = 'releases' | 'roadmaps' | 'people';
 
-export const TIMELINE_PARTS: readonly TimelinePart[] = ['releases', 'roadmaps'];
+export const TIMELINE_PARTS: readonly TimelinePart[] = ['releases', 'roadmaps', 'people'];
 
 /** What the timeline shows, as this browser remembers it. */
 export interface TimelineDisplay {
@@ -35,6 +40,8 @@ export interface TimelineDisplay {
   groupBy: string | null;
   /** The order of the rows of the projects: the members' own, or a criterion over it. */
   sort: RoadmapSort;
+  /** The projects shown by their labels: all of them while no label is chosen. */
+  labelsFilter: LabelsFilter;
   /** The parts folded under their header. */
   collapsed: readonly TimelinePart[];
   /** Width of the column of the names, in pixels at the normal size of the text. */
@@ -57,6 +64,7 @@ export interface TimelineDisplayControls {
   setProjectLevel: (projectId: string, level: DetailLevel | null) => void;
   setGroupBy: (fieldId: string | null) => void;
   setSort: (sort: RoadmapSort) => void;
+  setLabelsFilter: (filter: LabelsFilter) => void;
   toggleCollapsed: (part: TimelinePart) => void;
   /** The width of the column of the names, kept within its limits. */
   setLabelWidth: (width: number) => void;
@@ -140,6 +148,11 @@ export function useTimelineDisplay(): [TimelineDisplay, TimelineDisplayControls]
     (value) => (isRoadmapId(value) ? value : null),
     null,
   );
+  const [labelsFilter, setLabelsFilter] = usePreference(
+    'roadmap-labels-filter',
+    parseLabelsFilter,
+    NO_LABELS_FILTER,
+  );
   const [collapsed, setCollapsed] = usePreference<readonly TimelinePart[]>(
     'timeline-collapsed',
     parseCollapsed,
@@ -163,6 +176,7 @@ export function useTimelineDisplay(): [TimelineDisplay, TimelineDisplayControls]
       projectLevels,
       groupBy,
       sort,
+      labelsFilter,
       collapsed,
       labelWidth,
     },
@@ -191,6 +205,7 @@ export function useTimelineDisplay(): [TimelineDisplay, TimelineDisplayControls]
         }),
       setGroupBy,
       setSort,
+      setLabelsFilter,
       toggleCollapsed: (part) =>
         setCollapsed((current) =>
           current.includes(part) ? current.filter((item) => item !== part) : [...current, part],

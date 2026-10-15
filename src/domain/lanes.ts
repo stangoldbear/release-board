@@ -1,3 +1,4 @@
+import { followerAt, moveBefore } from './listOrder';
 import type { Lane, PlanSnapshot, TaskItem } from './types';
 
 // The rows of the tasks of Next Releases ("corsie"): part of the plan, shared by every member,
@@ -40,12 +41,7 @@ export function moveLaneBefore(
   laneId: string,
   beforeId: string | null,
 ): Lane[] {
-  const moved = lanes.find((lane) => lane.id === laneId);
-  if (!moved || beforeId === laneId) return [...lanes];
-  const others = lanes.filter((lane) => lane.id !== laneId);
-  const at = beforeId === null ? -1 : others.findIndex((lane) => lane.id === beforeId);
-  if (at < 0) return [...others, moved];
-  return [...others.slice(0, at), moved, ...others.slice(at)];
+  return moveBefore(lanes, laneId, beforeId);
 }
 
 /** The lane that follows `laneId` once it is at `index` of the lanes: null when it goes last. */
@@ -54,8 +50,7 @@ export function laneFollowerAt(
   laneId: string,
   index: number,
 ): string | null {
-  const others = lanes.filter((lane) => lane.id !== laneId);
-  return others[index]?.id ?? null;
+  return followerAt(lanes, laneId, index);
 }
 
 /** The plan with a lane more, at the end. */

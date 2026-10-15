@@ -48,6 +48,8 @@ interface RoadmapDialogsOptions {
   assignmentActions: AssignmentActions;
   stakeholderActions: StakeholderActions;
   milestoneActions: MilestoneActions;
+  /** The labels a new project starts with: those the timeline filters by. */
+  newProjectLabelIds: readonly string[];
 }
 
 export interface RoadmapDialogs {
@@ -88,6 +90,7 @@ export function useRoadmapDialogs({
   assignmentActions,
   stakeholderActions,
   milestoneActions,
+  newProjectLabelIds,
 }: RoadmapDialogsOptions): RoadmapDialogs {
   const [open, setOpen] = useState<OpenProject | null>(null);
   const [assignmentDialog, setAssignmentDialog] = useState<{
@@ -151,6 +154,8 @@ export function useRoadmapDialogs({
           onOpenAssignment={(assignment) => {
             if (current) setAssignmentDialog({ assignment, project: current });
           }}
+          onCreateLabel={detailsUnavailable ? undefined : projectActions.onCreateLabel}
+          defaultLabelIds={newProjectLabelIds}
         />
       )}
 

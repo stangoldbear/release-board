@@ -14,6 +14,7 @@ const SECTION_IDS = [
   'notes',
   'lanes',
   'roadmap-config',
+  'labels',
   'project-colors',
   'closures',
   'account',
@@ -84,6 +85,7 @@ export function settingsCategories({ cloud, owner, beta }: SettingsContext): Set
       label: 'Roadmap',
       sections: [
         { id: 'roadmap-config', label: 'Campi, team e persone', scope: 'plan' },
+        { id: 'labels', label: 'Etichette', scope: 'plan' },
         { id: 'project-colors', label: 'Colori dei progetti', scope: 'plan' },
         { id: 'closures', label: 'Chiusure aziendali', scope: 'plan' },
       ],

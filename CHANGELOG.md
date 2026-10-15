@@ -6,6 +6,40 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-15
+
+Le regole di Firestore e i backup non cambiano: un'istanza si aggiorna al tag senza ripubblicare le
+regole. Le etichette sono un campo dei progetti, quindi vanno nei backup, nella cronologia e nel
+file delle impostazioni come gli altri; la parte «Persone» mostra i dati che il piano ha già.
+
+### Aggiunto
+
+- Etichette sui progetti: quante ne servono a ogni progetto, ognuna con un nome e un colore. Si
+  danno nella finestra del progetto, dove una parola nuova crea l'etichetta per tutti, si leggono
+  nelle informazioni del progetto («i») e si gestiscono da Impostazioni → Roadmap → Etichette
+  (nome, colore, ordine, eliminazione). Sono un campo dei progetti, quindi le regole di Firestore
+  non cambiano.
+- Filtro «Etichette» nella barra della timeline: solo i progetti con almeno una delle etichette
+  scelte, o con tutte, e volendo anche quelli senza etichette. Resta nel browser; l'intestazione
+  della Roadmap dice quanti progetti restano, e un progetto nuovo parte con le etichette del
+  filtro, così non sparisce appena salvato.
+- Vista «Persone»: una parte nuova della timeline, sotto la Roadmap, con la sua scheda in basso (o il
+  suo pulsante nell'intestazione). Ogni persona ha una riga, nell'ordine dei team, con una barra per
+  ogni progetto a cui lavora, nel colore del progetto, con il titolo e i giorni. Le barre che
+  cadono negli stessi giorni stanno su più linee, e una banda rossa a strisce con il triangolo e il
+  numero di giorni accanto al nome segna quando una persona ha più progetti insieme; le assenze
+  sono a strisce su tutta la riga. Una barra si sposta di lato come nella Roadmap, si allunga dal
+  bordo destro e, trascinata su un'altra persona o con Alt + frecce su e giù, passa il lavoro a
+  quella persona: la Roadmap, la tabella dei giorni del progetto e i giorni uomo del piè di pagina
+  seguono subito. I team si ripiegano uno per uno; l'intestazione dice quante persone lavorano oggi
+  e quante hanno più progetti insieme.
+
+### Corretto
+
+- Passare da una sezione all'altra delle impostazioni non lascia più la pagina bianca: nei browser
+  in cui gli scorrimenti restituiscono una promessa, come Chrome ed Edge dalla versione 150, il
+  secondo clic chiudeva tutto con l'errore «… is not a function».
+
 ## [0.18.0] - 2026-10-15
 
 Le regole di Firestore e i backup non cambiano: un'istanza si aggiorna al tag senza ripubblicare
@@ -1065,7 +1099,10 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/stangoldbear/release-board/compare/v0.18.0...v0.19.0
+[0.18.0]: https://github.com/stangoldbear/release-board/compare/v0.17.0...v0.18.0
+[0.17.0]: https://github.com/stangoldbear/release-board/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/stangoldbear/release-board/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/stangoldbear/release-board/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/stangoldbear/release-board/compare/v0.13.0...v0.14.0

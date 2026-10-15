@@ -41,9 +41,18 @@ import { projectSpan, withEffectiveEnd } from '../domain/projectSpan';
 import { withEffectiveStatus } from '../domain/projectStatus';
 import type { ProjectSpan } from '../domain/projectSpan';
 import { teamEffortOn } from '../domain/dayEffort';
+import {
+  filterByLabels,
+  labelsFieldOf,
+  withLabelAdded,
+  withLabelChanged,
+  withLabelMoved,
+  withLabelRemoved,
+} from '../domain/labels';
 import { projectColorField } from '../domain/roadmapConfig';
 import type { TeamPlan } from '../domain/teamPlan';
 import type { RoadmapSettingsChanges } from '../domain/roadmapConfig';
+import type { TaskColorId } from '../domain/colors';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
 import { buildSamplePlan } from '../domain/sample';
 import type {
@@ -91,6 +100,7 @@ import { useToast } from '../shared/ui/Toast';
 import { DEFAULT_DENSITY, DENSITY_IDS, isTight } from '../shared/ui/density';
 import { VersionStamp } from '../shared/ui/VersionStamp';
 import { addDaysIso, parseISODate, todayIso } from '../utils/dateUtils';
+import { createId } from '../utils/id';
 import {
   ALL_AREAS_VISIBLE,
   BETA_FEATURES_PREFERENCE,
@@ -631,6 +641,31 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       showToast(`«${oneLine(stakeholder.name)}» salvata`);
     },
   };
+  // The labels of the projects: one list for every member, a field of the roadmap of its own.
+  const labelsField = labelsFieldOf(plan.roadmap);
+  const labelActions = {
+    onCreate: (name: string): string | null => {
+      const added = withLabelAdded(plan.roadmap, name, createId());
+      if (!added) return null;
+      repository.saveProjectField(added.field);
+      showToast(`Etichetta «${added.label.label}» aggiunta`);
+      return added.label.id;
+    },
+    onChange: (labelId: string, changes: { label?: string; colorId?: TaskColorId }) => {
+      if (labelsField) repository.saveProjectField(withLabelChanged(labelsField, labelId, changes));
+    },
+    onMove: (labelId: string, beforeId: string | null) => {
+      if (labelsField) repository.saveProjectField(withLabelMoved(labelsField, labelId, beforeId));
+    },
+    onDelete: (labelId: string) => {
+      if (!labelsField) return;
+      // A list needs a value: the field goes with the last label.
+      const rest = withLabelRemoved(labelsField, labelId);
+      if (rest) repository.saveProjectField(rest);
+      else repository.deleteProjectField(labelsField.id);
+      showToast('Etichetta eliminata');
+    },
+  };
   const configActions = {
     onSaveField: (field: ProjectField) => repository.saveProjectField(field),
     onDeleteField: (fieldId: string) => {
@@ -670,9 +705,11 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     endOf: (project) => spans.get(project.id)?.end ?? project.startDate,
     field: projectColorField(plan.roadmap),
   });
+  // The labels chosen in the bar of the timeline, then the search.
+  const labeledProjects = filterByLabels(orderedProjects, plan.roadmap, display.labelsFilter);
   const shownProjects = searching
-    ? filterProjects(orderedProjects, filters.search, searchMode, projectTexts)
-    : orderedProjects;
+    ? filterProjects(labeledProjects, filters.search, searchMode, projectTexts)
+    : labeledProjects;
   const shownMilestones = searching
     ? filterMilestones(plan.milestones, filters.search, searchMode, (milestone) => [
         plan.projects.find((project) => project.id === milestone.projectId)?.title,
@@ -952,9 +989,13 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             />
           )}
 
-          {(isShown('releases') || isShown('roadmaps')) && (
+          {(isShown('releases') || isShown('roadmaps') || isShown('people')) && (
             <TimelineArea
-              parts={{ releases: isShown('releases'), roadmaps: isShown('roadmaps') }}
+              parts={{
+                releases: isShown('releases'),
+                roadmaps: isShown('roadmaps'),
+                people: isShown('people'),
+              }}
               plan={plan}
               view={view}
               onViewAction={dispatchView}
@@ -1001,6 +1042,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
                   onReorder: handleReorderProject,
                   onSave: handleSaveProject,
                   onDelete: handleDeleteProject,
+                  onCreateLabel: labelActions.onCreate,
                 },
                 noteActions,
                 assignmentActions,
@@ -1183,6 +1225,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             roadmapUnavailable={sync.missing.includes('roadmap')}
             roadmapActions={configActions}
             laneActions={laneActions}
+            labelActions={labelActions}
             theme={theme}
             onChangeTheme={setTheme}
             colorPreset={colorPreset}

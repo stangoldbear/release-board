@@ -1,5 +1,6 @@
 import { PAGE_LAYOUT_IDS } from '../../app/layout';
 import type { PageLayout } from '../../app/layout';
+import { customFields, labelsOf } from '../../domain/labels';
 import { BACKUP_FORMAT } from '../../domain/backup';
 import { parseNotesLook } from '../../domain/notesLook';
 import type { NotesLook } from '../../domain/notesLook';
@@ -214,10 +215,15 @@ export function parseSettingsText(text: string): SettingsParseResult {
   };
 }
 
-/** "9 campi · 6 team · 16 persone · 2 chiusure · formula della contingency": what a configuration holds. */
+/**
+ * "9 campi · 4 etichette · 6 team · 16 persone · 2 chiusure · formula della contingency": what a
+ * configuration holds.
+ */
 export function roadmapSummary(config: RoadmapConfig): string {
+  const labels = labelsOf(config).length;
   const parts = [
-    count(config.fields.length, 'campo', 'campi'),
+    count(customFields(config.fields).length, 'campo', 'campi'),
+    ...(labels > 0 ? [count(labels, 'etichetta', 'etichette')] : []),
     count(config.teams.length, 'team', 'team'),
     count(config.stakeholders.length, 'persona', 'persone'),
     count(config.closures?.length ?? 0, 'chiusura', 'chiusure'),

@@ -2,6 +2,7 @@ import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react';
 import { describeEffort, moveAssignment } from '../../domain/assignments';
 import type { WorkSchedule } from '../../domain/assignments';
 import type { DateRange } from '../../domain/schedule';
+import type { TaskColorId } from '../../domain/colors';
 import type { Assignment } from '../../domain/types';
 import { useDateFormat, useFormatDate } from '../../shared/dateFormat';
 import { diffDays, formatDate } from '../../utils/dateUtils';
@@ -76,6 +77,16 @@ interface WorkBarProps {
   /** A double click: the days typed in place. */
   onEditDays: () => void;
   onChange: (changes: WorkChanges) => void;
+  /** The element id, when the bar is drawn a second time, as in the part «Persone». */
+  elementId?: string;
+  /** What the bar says, in place of the name of its person: the title of its project. */
+  name?: string;
+  /** The beginning of its name for a screen reader, when the words on the bar are not enough. */
+  ariaName?: string;
+  /** Its color, in place of its team's: the color of its project. */
+  colorId?: TaskColorId | null;
+  /** Alt and the arrows up and down give the work to the person above or below. */
+  onReassign?: (step: -1 | 1) => void;
 }
 
 /**
@@ -101,6 +112,11 @@ export function WorkBar({
   onOpen,
   onEditDays,
   onChange,
+  elementId,
+  name = item.name,
+  ariaName = name,
+  colorId = item.colorId,
+  onReassign,
 }: WorkBarProps) {
   const dateFormat = useDateFormat();
   const formatDate = useFormatDate();
@@ -118,6 +134,11 @@ export function WorkBar({
   }`;
 
   const handleKeyDown = (event: KeyboardEvent) => {
+    if (onReassign && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      event.preventDefault();
+      onReassign(event.key === 'ArrowUp' ? -1 : 1);
+      return;
+    }
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
     const step = event.shiftKey ? 7 : 1;
@@ -132,19 +153,19 @@ export function WorkBar({
   // The color of the team fills the bar, with no edge around it (the owner's choice): the name of
   // the person is beside it in the column and over it in the tip, and the grip marks its end. With
   // its words on it, the bar takes the colors of the team as a task does, border and text.
-  const fill = item.colorId
+  const fill = colorId
     ? labeled
-      ? taskColorStyle(item.colorId)
-      : { backgroundColor: `var(--rb-task-${item.colorId}-border)` }
+      ? taskColorStyle(colorId)
+      : { backgroundColor: `var(--rb-task-${colorId}-border)` }
     : undefined;
   const neutral = labeled ? 'border-line-strong bg-surface-strong text-fg' : 'bg-line-strong';
 
   return (
-    <Tooltip text={`${item.name}: ${words}`}>
+    <Tooltip text={`${name}: ${words}`}>
       <button
         type="button"
-        id={workBarId(item)}
-        aria-label={`${item.name}: ${words}`}
+        id={elementId ?? workBarId(item)}
+        aria-label={`${ariaName}: ${words}`}
         aria-describedby={describedBy}
         onPointerDown={(event) => {
           clicks.onPointerDown(event);
@@ -168,7 +189,7 @@ export function WorkBar({
           style={{ ...fill, height: barHeight }}
           className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center overflow-clip ${
             labeled ? 'border text-xs leading-none font-semibold whitespace-nowrap' : ''
-          } ${item.colorId ? '' : neutral} ${continuesBefore ? 'rounded-l-none' : 'rounded-l-xs'} ${
+          } ${colorId ? '' : neutral} ${continuesBefore ? 'rounded-l-none' : 'rounded-l-xs'} ${
             continuesAfter ? 'rounded-r-none' : 'rounded-r-xs'
           } ${
             dragging
@@ -196,7 +217,7 @@ export function WorkBar({
             // In view while the start of a long bar scrolls past the column of the names, on the
             // color of the bar over the days away; clear of the grip on the right.
             <span className="sticky left-[calc(var(--gantt-label-width)+4px)] z-[1] min-w-0 truncate bg-inherit pr-3 pl-1">
-              {item.name}
+              {name}
               <span className="font-normal tabular-nums"> · {formatManDays(item.manDays)}</span>
             </span>
           )}

@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { Milestone, Trash, UserRound, TriangleAlert } from 'lucide-react';
+import { LABELS_FIELD_ID, customFields, labelsFieldOf } from '../../domain/labels';
 import { TASK_COLORS } from '../../domain/colors';
 import type { TaskColorId } from '../../domain/colors';
 import { formatLocaleNumber } from '../../domain/numberFormat';
@@ -47,6 +48,7 @@ import { isIsoDate } from '../../utils/dateUtils';
 import { draftsFrom, valuesFrom } from './fieldDrafts';
 import type { FieldDraft, FieldDrafts } from './fieldDrafts';
 import { FieldEditor, ProjectFieldsEditor } from './ProjectFieldsEditor';
+import { LabelsPicker } from './LabelsPicker';
 import { ProjectNotesPanel } from './ProjectNotesPanel';
 import { ProjectStatusMark } from './projectUi';
 import type { NoteActions } from './roadmapActions';
@@ -97,6 +99,10 @@ interface ProjectDialogProps {
   onReorder: (projectId: string, beforeId: string | null) => void;
   /** Opens the window of an assignment: its start and its note. */
   onOpenAssignment: (assignment: Assignment) => void;
+  /** Adds a label to the plan and returns its id; absent when labels cannot be created. */
+  onCreateLabel?: (name: string) => string | null;
+  /** The labels a new project starts with: those the timeline filters by, so that it stays in view. */
+  defaultLabelIds?: readonly string[];
 }
 
 const TABS: readonly { id: ProjectTab; label: string }[] = [
@@ -132,12 +138,18 @@ export function ProjectDialog({
   order,
   onReorder,
   onOpenAssignment,
+  onCreateLabel,
+  defaultLabelIds = [],
 }: ProjectDialogProps) {
   const formatDate = useFormatDate();
   // The field of the tag of the project, as «Dimensione», comes right after the title in both
   // views; the other fields follow the view.
   const sizeField = projectColorField(config);
-  const fields = sortByPosition(config.fields).filter((field) => field.id !== sizeField?.id);
+  // The labels have a field of their own, right after the tag, in both views too.
+  const labelsField = labelsFieldOf(config);
+  const fields = sortByPosition(customFields(config.fields)).filter(
+    (field) => field.id !== sizeField?.id,
+  );
   const quickFields = fields.filter((field) => field.quick);
   const [view, setView] = usePreference<DialogView>(
     'project-dialog-view',
@@ -160,7 +172,11 @@ export function ProjectDialog({
   const [owner, setOwner] = useState(project?.owner ?? '');
   const [description, setDescription] = useState(project?.description ?? '');
   const [drafts, setDrafts] = useState<FieldDrafts>(() =>
-    draftsFrom(config.fields, project?.fields ?? {}),
+    draftsFrom(
+      config.fields,
+      project?.fields ??
+        (defaultLabelIds.length > 0 ? { [LABELS_FIELD_ID]: [...defaultLabelIds] } : {}),
+    ),
   );
   // The field that colors the projects, when the colors come from a field: the window shows the
   // color it gives rather than asking for one.
@@ -237,6 +253,9 @@ export function ProjectDialog({
     status,
     deadline,
   ]);
+
+  const labelsDraft = drafts[LABELS_FIELD_ID];
+  const labelIds = labelsDraft?.kind === 'choice' ? labelsDraft.ids : [];
 
   const changeDraft = (fieldId: string, draft: FieldDraft) => {
     setDrafts((current) => ({ ...current, [fieldId]: draft }));
@@ -500,6 +519,15 @@ export function ProjectDialog({
                 drafts={drafts}
                 problems={problems}
                 onChange={changeDraft}
+              />
+            )}
+
+            {(labelsField || onCreateLabel) && (
+              <LabelsPicker
+                labels={labelsField?.options ?? []}
+                selected={labelIds}
+                onChange={(ids) => changeDraft(LABELS_FIELD_ID, { kind: 'choice', ids })}
+                onCreate={onCreateLabel}
               />
             )}
 

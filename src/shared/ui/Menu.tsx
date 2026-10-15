@@ -23,6 +23,8 @@ export type MenuItem =
       kind: 'check';
       label: string;
       icon?: LucideIcon;
+      /** Drawn before the label in place of an icon, such as the swatch of a color. Decorative. */
+      leading?: ReactNode;
       checked: boolean;
       onToggle: () => void;
       disabled?: boolean;
@@ -210,7 +212,7 @@ export function Menu({
                       {checked && <Check className="h-4 w-4" />}
                     </span>
                   )}
-                  {item.kind === 'radio' && item.leading}
+                  {(item.kind === 'radio' || item.kind === 'check') && item.leading}
                   {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}
                   <span className="min-w-0 flex-1">{item.label}</span>
                 </button>

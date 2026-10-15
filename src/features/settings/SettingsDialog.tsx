@@ -15,6 +15,7 @@ import type { LucideIcon } from 'lucide-react';
 import { HAS_BETA_FEATURES } from '../../app/areas';
 import { canReplacePlan } from '../../app/Instance';
 import type { Instance } from '../../app/Instance';
+import { labelsFieldOf, projectsWithLabel } from '../../domain/labels';
 import type { NotesLook } from '../../domain/notesLook';
 import type { TimelineNotesLook } from '../../domain/timelineNotes';
 import type { PlanSnapshot } from '../../domain/types';
@@ -40,6 +41,8 @@ import { BetaSection } from './BetaSection';
 import { ClosuresSection } from './ClosuresSection';
 import { EmailDomainsSection } from './EmailDomainsSection';
 import { InstanceSection } from './InstanceSection';
+import { LabelsSettings } from './LabelsSettings';
+import type { LabelActions } from './LabelsSettings';
 import { LanesSettings } from './LanesSettings';
 import type { LaneActions } from './LanesSettings';
 import { MembersSection } from './MembersSection';
@@ -103,6 +106,8 @@ interface SettingsDialogProps {
   roadmapActions: RoadmapConfigActions;
   /** The rows of the tasks of Next Releases: added, renamed, put in order, removed. */
   laneActions: LaneActions;
+  /** The labels of the projects: added, renamed, colored, put in order, removed. */
+  labelActions: LabelActions;
   /** Opens the page with every change to the plan. */
   onOpenHistory: () => void;
   onClose: () => void;
@@ -139,6 +144,7 @@ export function SettingsDialog({
   roadmapUnavailable,
   roadmapActions,
   laneActions,
+  labelActions,
   onOpenHistory,
   onClose,
 }: SettingsDialogProps) {
@@ -162,8 +168,11 @@ export function SettingsDialog({
   const headingId = useId();
   const detailRef = useRef<HTMLElement>(null);
 
-  // Every section starts from its top.
-  useEffect(() => detailRef.current?.scrollTo({ top: 0 }), [selected]);
+  // Every section starts from its top. A block, not an arrow that returns the call: newer browsers
+  // return a promise from scrollTo, which React would take for the cleanup and call.
+  useEffect(() => {
+    detailRef.current?.scrollTo({ top: 0 });
+  }, [selected]);
 
   const select = (id: SettingsSectionId) => {
     setSelected(id);
@@ -225,6 +234,17 @@ export function SettingsDialog({
             actions={roadmapActions}
           />
         );
+      case 'labels': {
+        const field = labelsFieldOf(plan.roadmap);
+        return (
+          <LabelsSettings
+            labels={field?.options ?? []}
+            usage={(labelId) => (field ? projectsWithLabel(plan.projects, field, labelId) : 0)}
+            unavailable={roadmapUnavailable}
+            actions={labelActions}
+          />
+        );
+      }
       case 'project-colors':
         return (
           <ProjectColorsSettings

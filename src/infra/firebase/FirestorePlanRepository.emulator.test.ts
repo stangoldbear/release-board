@@ -5,6 +5,14 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { unavailableMessage } from '../../app/PlanRepository';
 import type { PlanPart, SyncState, SyncStatus } from '../../app/PlanRepository';
 import { describeHistoryEntry } from '../../domain/history';
+import {
+  LABELS_FIELD_ID,
+  filterByLabels,
+  labelsFieldOf,
+  labelsOf,
+  projectLabels,
+  withLabelAdded,
+} from '../../domain/labels';
 import type { HistoryEntry } from '../../domain/history';
 import { createEmptyPlan } from '../../domain/plan';
 import { buildSamplePlan } from '../../domain/sample';
@@ -1021,6 +1029,45 @@ describe('the notes, the assignments and the configuration of the roadmap', () =
         !plan.projectNotes.some((note) => note.projectId === appMobile) &&
         !plan.assignments.some((item) => item.projectId === appMobile),
     );
+  });
+
+  it('keeps the labels of the projects as a field of their own, and passes work to another person', async () => {
+    const start = await planWhere(repository, () => true);
+    const added = withLabelAdded(start.roadmap, 'Mobile', createId());
+    if (!added) throw new Error('The label was refused');
+    repository.saveProjectField(added.field);
+    const labeled = await planWhere(repository, (plan) => labelsOf(plan.roadmap).length === 1);
+    expect(labelsFieldOf(labeled.roadmap)).toMatchObject({
+      id: LABELS_FIELD_ID,
+      type: 'choice',
+      multiple: true,
+      options: [{ id: added.label.id, label: 'Mobile' }],
+    });
+    const project = labeled.projects.find((item) => item.id === appMobile);
+    repository.updateProject(appMobile, {
+      fields: { ...project?.fields, [LABELS_FIELD_ID]: [added.label.id] },
+    });
+    const tagged = await planWhere(repository, (plan) => {
+      const found = plan.projects.find((item) => item.id === appMobile);
+      return found !== undefined && projectLabels(found, plan.roadmap).length === 1;
+    });
+    expect(
+      filterByLabels(tagged.projects, tagged.roadmap, {
+        ids: [added.label.id],
+        match: 'any',
+        unlabeled: false,
+      }).map((item) => item.id),
+    ).toEqual([appMobile]);
+
+    const work = tagged.assignments.find((item) => item.projectId === appMobile);
+    if (!work) throw new Error('The sample has no work on the project');
+    const other = tagged.roadmap.stakeholders.find((item) => item.id !== work.stakeholderId);
+    repository.updateAssignment(work.id, { stakeholderId: other!.id });
+    await planWhere(
+      repository,
+      (plan) => plan.assignments.find((item) => item.id === work.id)?.stakeholderId === other!.id,
+    );
+    await whenSynced(repository);
   });
 
   it('adds, changes and deletes the notes on the timeline, and removes those of a deleted project', async () => {
