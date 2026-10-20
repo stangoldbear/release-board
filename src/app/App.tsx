@@ -29,7 +29,7 @@ import type { AssignmentChanges, AssignmentContent } from '../domain/assignments
 import { copyOfTask, diffTask, isPlanEmpty } from '../domain/plan';
 import { notesOfProject, rememberNoteReminders } from '../domain/projectNotes';
 import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
-import { arrangementOf, diffProject } from '../domain/projects';
+import { arrangementOf, diffProject, duplicateProjectContent } from '../domain/projects';
 import type { ProjectChanges, ProjectContent } from '../domain/projects';
 import {
   nextProjectPosition,
@@ -514,6 +514,26 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     });
     showToast(`Progetto «${oneLine(content.title)}» aggiunto`);
     return id;
+  };
+
+  const handleDuplicateProject = (project: Project) => {
+    const source = plan.projects.find((item) => item.id === project.id);
+    if (!source) return;
+    const content = duplicateProjectContent(source);
+    const projectId = repository.createProject({
+      ...content,
+      position: nextProjectPosition(plan.projects),
+    });
+    for (const assignment of assignmentsOfProject(plan.assignments, source.id)) {
+      repository.createAssignment({
+        projectId,
+        stakeholderId: assignment.stakeholderId,
+        startDate: assignment.startDate,
+        manDays: assignment.manDays,
+        ...(assignment.note ? { note: assignment.note } : {}),
+      });
+    }
+    showToast(`Progetto «${oneLine(content.title)}» duplicato`);
   };
 
   // A project put before another: one position changes, or every project is numbered again when
@@ -1036,6 +1056,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
                 nameOf,
                 projectActions: {
                   onCreate: handleCreateProject,
+                  onDuplicate: handleDuplicateProject,
                   onUpdate: (projectId, changes) => repository.updateProject(projectId, changes),
                   onMove: handleMoveProject,
                   onSaveTeam: handleSaveTeam,

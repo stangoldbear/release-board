@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffProject, parseProjectData, sortProjects } from './projects';
+import { diffProject, duplicateProjectContent, parseProjectData, sortProjects } from './projects';
 import type { Project } from './types';
 
 const project: Project = {
@@ -12,6 +12,46 @@ const project: Project = {
 };
 
 describe('projects', () => {
+  it('duplicate saved content without identity, position or calculated view fields', () => {
+    const source = {
+      ...project,
+      position: 4,
+      endDate: '2026-12-01',
+      deadline: '2026-11-30',
+      remindDaysBefore: 7,
+      contingency: { startDate: '2026-11-20', manDays: 3 },
+      arrangement: 'manual' as const,
+      description: 'Release details',
+      fields: { labels: ['mobile'] },
+    };
+    const copy = duplicateProjectContent(source);
+    expect(copy).toEqual({
+      title: 'App mobile 3.0 (copia)',
+      startDate: project.startDate,
+      colorId: project.colorId,
+      status: project.status,
+      owner: project.owner,
+      deadline: source.deadline,
+      remindDaysBefore: 7,
+      contingency: source.contingency,
+      arrangement: 'manual',
+      description: source.description,
+      fields: source.fields,
+    });
+    expect(copy.contingency).not.toBe(source.contingency);
+    expect(copy.fields).not.toBe(source.fields);
+    expect(copy.fields?.labels).not.toBe(source.fields.labels);
+    expect(source.title).toBe(project.title);
+    expect(source.position).toBe(4);
+  });
+
+  it('keep duplicated titles within the security rules limit', () => {
+    const copy = duplicateProjectContent({ ...project, title: 'x'.repeat(200) });
+    expect(copy.title).toHaveLength(200);
+    expect(copy.title.endsWith(' (copia)')).toBe(true);
+    expect(parseProjectData(copy)).toEqual({ content: copy });
+  });
+
   it('follow their start, then their title', () => {
     const later = { ...project, id: 'p2', startDate: '2026-10-01' };
     const app = { ...project, id: 'p3', title: 'App' };

@@ -903,6 +903,7 @@ export function TimelineArea({
                               groupBy={groupBy}
                               metrics={metrics}
                               onOpen={(project) => dialogs.openProject(project)}
+                              onDuplicate={roadmap.projectActions.onDuplicate}
                               onAdd={() => dialogs.openNewProject(defaultDay)}
                               onAddAt={dialogs.openNewProject}
                               onChange={roadmap.projectActions.onUpdate}

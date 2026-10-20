@@ -277,6 +277,7 @@ export interface ProjectRowProps {
   onStartWorkDrag: (event: PointerEvent, item: WorkItem, kind: WorkDragKind) => void;
   onEdit: (editing: Editing | null) => void;
   onOpen: () => void;
+  onContextMenu: (anchor: HTMLElement, x: number, y: number) => void;
   onChange: (changes: ProjectChanges) => void;
   onMove: (days: number) => void;
   onChangeWork: (item: WorkItem, changes: WorkChanges) => void;
@@ -340,6 +341,7 @@ export function ProjectRow({
   onStartWorkDrag,
   onEdit,
   onOpen,
+  onContextMenu,
   onChange,
   onMove,
   onChangeWork,
@@ -423,6 +425,22 @@ export function ProjectRow({
       className={`group/row relative grid border-b border-line ${rowDragging ? 'opacity-50' : ''}`}
       style={ROW_STYLE}
       {...dragTarget}
+      onContextMenu={(event) => {
+        const anchor = (event.target as HTMLElement).closest<HTMLElement>('[data-project-menu]');
+        if (!anchor) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onContextMenu(anchor, event.clientX, event.clientY);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+        const anchor = (event.target as HTMLElement).closest<HTMLElement>('[data-project-menu]');
+        if (!anchor) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const bounds = anchor.getBoundingClientRect();
+        onContextMenu(anchor, bounds.left, bounds.bottom);
+      }}
     >
       {dropLine && (
         <div
@@ -463,6 +481,7 @@ export function ProjectRow({
 
       {/* The cell of the names: the details of the project open from the first of its buttons. */}
       <div
+        data-project-menu
         // The grip and the rail take the left of the cell at every density.
         className={`${LABEL_CELL} flex flex-col justify-center overflow-hidden pr-2 pl-7 transition-colors group-hover/row:bg-surface-strong in-data-compact:pl-7 ${
           peopleRow ? 'bg-(--block-tint) py-1!' : 'bg-surface-muted'

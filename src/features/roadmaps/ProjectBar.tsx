@@ -110,6 +110,7 @@ export function ProjectBar({
     <button
       type="button"
       id={projectBarId(project.id)}
+      data-project-menu
       aria-label={[
         project.title,
         `dal ${formatDate(project.startDate)} al ${formatDate(project.endDate)}`,

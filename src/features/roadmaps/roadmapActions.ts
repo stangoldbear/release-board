@@ -12,6 +12,7 @@ import type { MilestoneChanges, MilestoneContent } from '../../domain/milestones
 export interface ProjectActions {
   /** Adds a project and returns its id, so that the work of its team can follow. */
   onCreate: (content: ProjectContent) => string;
+  onDuplicate: (project: Project) => void;
   onUpdate: (projectId: string, changes: ProjectChanges) => void;
   /** Moves a project by some days with the work of its team; its deadline stays. */
   onMove: (projectId: string, days: number) => void;

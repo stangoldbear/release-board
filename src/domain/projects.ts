@@ -84,6 +84,16 @@ export function arrangementOf(project: Pick<Project, 'arrangement'>): ProjectArr
 /** What a new project holds. */
 export type ProjectContent = Omit<Project, 'id'>;
 
+export function duplicateProjectContent(project: Project): ProjectContent {
+  const parsed = parseProjectData(project);
+  if ('problems' in parsed) throw new Error(parsed.problems.join(', '));
+  const content = parsed.content;
+  delete content.position;
+  const suffix = ' (copia)';
+  content.title = `${content.title.slice(0, PROJECT_TITLE_MAX - suffix.length).trimEnd()}${suffix}`;
+  return content;
+}
+
 /** A project whose end is known: the effective one, as the roadmap draws it. */
 export type ProjectWithEnd = Project & { endDate: string };
 

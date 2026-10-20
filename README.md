@@ -35,7 +35,11 @@ giornalieri.
   forma, i team al lavoro e l'etichetta della dimensione; tutto il resto, periodo, giorni uomo,
   responsabile, deadline, descrizione, campi personalizzati (link a Jira, Figma e Confluence,
   stime…) e persone con i giorni, in una finestra spostabile che si apre dal pulsante «i» della
-  riga. Un clic su un giorno dice in fondo alla pagina i giorni uomo di ogni team in quel giorno.
+  riga. Il tasto destro sul nome o sulla barra apre un menu con «Mostra informazioni» e «Duplica»;
+  dalla barra si apre anche con Maiusc + F10 o con il tasto menu. La copia mantiene i campi e il
+  lavoro del team, con nuovi identificativi e il titolo seguito da «(copia)», senza copiare le
+  note autoriali o le note sulla timeline. Un clic su un giorno dice in fondo alla pagina i giorni
+  uomo di ogni team in quel giorno.
   Lo stato segue la data di oggi: un progetto pianificato di cui arriva il giorno è in corso, uno
   di cui passa la fine è completato, e un triangolo sulla colonna di oggi chiede di confermare. La
   barra di un progetto prende il colore della sua dimensione, o un colore libero a scelta nelle

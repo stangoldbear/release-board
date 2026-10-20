@@ -32,6 +32,7 @@ import { FieldTag } from './fieldUi';
 import type { MilestoneTools } from './MilestoneDiamond';
 import { projectBarId } from './ProjectBar';
 import { ProjectCard } from './ProjectCard';
+import { ProjectContextMenu } from './ProjectContextMenu';
 import { ProjectRow } from './ProjectRow';
 import type { Editing } from './ProjectRow';
 import type { DetailLevel } from './projectUi';
@@ -62,6 +63,7 @@ export interface ProjectsSectionProps {
   groupBy: ProjectField | null;
   metrics: RoadmapMetrics;
   onOpen: (project: Project) => void;
+  onDuplicate: (project: Project) => void;
   /** Adds a project from the days in view, as the button above the timeline does. */
   onAdd: () => void;
   /** Adds a project from a day. */
@@ -159,6 +161,7 @@ export function ProjectsSection({
   groupBy,
   metrics,
   onOpen,
+  onDuplicate,
   onAdd,
   onAddAt,
   onChange,
@@ -197,6 +200,22 @@ export function ProjectsSection({
   };
   const workDrag = useWorkDrag(dayWidth, changeWork);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [menu, setMenu] = useState<{
+    projectId: string;
+    anchor: HTMLElement;
+    x: number;
+    y: number;
+  } | null>(null);
+  const menuProject = menu ? projects.find((project) => project.id === menu.projectId) : undefined;
+  const closeMenu = () => {
+    const anchor = menu?.anchor;
+    setMenu(null);
+    if (anchor?.isConnected) {
+      (anchor.matches('button') ? anchor : anchor.querySelector('button'))?.focus({
+        preventScroll: true,
+      });
+    }
+  };
   const spanOf = (project: ProjectWithEnd): ProjectSpan =>
     spans.get(project.id) ?? projectSpan(project, assignments, config);
   const workOf = useMemo(
@@ -349,6 +368,10 @@ export function ProjectsSection({
                   onStartWorkDrag={workDrag.startDrag}
                   onEdit={setEditing}
                   onOpen={() => onOpen(project)}
+                  onContextMenu={(anchor, x, y) => {
+                    setInfo(null);
+                    setMenu({ projectId: project.id, anchor, x, y });
+                  }}
                   onChange={(changes) => changeByKey(project, changes)}
                   onMove={(days) => moveByKey(project, days)}
                   onChangeWork={changeWorkByKey}
@@ -397,6 +420,27 @@ export function ProjectsSection({
         )}
       </div>
 
+      {menu && menuProject && (
+        <ProjectContextMenu
+          key={menu.projectId}
+          title={menuProject.title}
+          x={menu.x}
+          y={menu.y}
+          canDuplicate={teamLevelAvailable}
+          onShowInfo={() => {
+            closeMenu();
+            const anchor = menu.anchor.matches('button')
+              ? menu.anchor
+              : (menu.anchor.querySelector('button') ?? menu.anchor);
+            setInfo({ projectId: menu.projectId, anchor, beside: menu.anchor });
+          }}
+          onDuplicate={() => {
+            closeMenu();
+            onDuplicate(menuProject);
+          }}
+          onClose={closeMenu}
+        />
+      )}
       {info && infoProject && (
         <FloatingPanel
           title="Informazioni sul progetto"
