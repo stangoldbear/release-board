@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { diffProject, parseProjectData, sortProjects } from './projects';
+import { CONTINGENCY_SEGMENTS_MAX, diffProject, parseProjectData, sortProjects } from './projects';
+import {
+  changeContingency,
+  contingencySegments,
+  duplicateContingency,
+  moveContingency,
+  removeContingency,
+} from './contingency';
 import type { Project } from './types';
 
 const project: Project = {
@@ -12,6 +19,58 @@ const project: Project = {
 };
 
 describe('projects', () => {
+  it('duplicates reserve work after its end and moves every segment with the project', () => {
+    const item = { ...project, contingency: { startDate: '2026-11-06', manDays: 1, note: 'Keep' } };
+    const reserve = duplicateContingency(item, item.id, 'reserve-2', [
+      { start: '2026-11-09', end: '2026-11-09' },
+    ]);
+    expect(reserve?.segments).toEqual([
+      { id: 'reserve-2', startDate: '2026-11-10', manDays: 1, note: 'Keep' },
+    ]);
+    expect(moveContingency(reserve!, 7, []).segments?.[0]).toMatchObject({
+      startDate: '2026-11-17',
+      note: 'Keep',
+    });
+    expect(item.contingency).not.toHaveProperty('segments');
+    expect(removeContingency({ ...item, contingency: reserve! }, item.id)).toEqual({
+      startDate: '2026-11-10',
+      manDays: 1,
+      note: 'Keep',
+    });
+    expect(changeContingency(item, item.id, { note: '' })).not.toHaveProperty('note');
+  });
+
+  it('preserves independent reserve segments and detects changes to their notes', () => {
+    const contingency = {
+      startDate: '2026-11-02',
+      manDays: 2,
+      note: 'First',
+      segments: [{ id: 'reserve-2', startDate: '2026-11-09', manDays: 3, note: 'Second' }],
+    };
+    const item = { ...project, contingency };
+    expect(parseProjectData(item)).toMatchObject({ content: { contingency } });
+    expect(contingencySegments(item).map((segment) => segment.id)).toEqual(['p1', 'reserve-2']);
+    const changed = changeContingency(item, 'reserve-2', { note: 'Updated' });
+    expect(changed?.startDate).toBe(contingency.startDate);
+    expect(changed?.segments?.[0]?.note).toBe('Updated');
+    expect(contingency.segments[0]?.note).toBe('Second');
+    expect(diffProject(item, { ...item, contingency: changed })).toEqual({ contingency: changed });
+    for (const segments of [
+      [contingency.segments[0], contingency.segments[0]],
+      [{ ...contingency.segments[0], startDate: 'invalid' }],
+      [{ ...contingency.segments[0], note: 'x'.repeat(501) }],
+      [{ ...contingency.segments[0], id: project.id }],
+      Array.from({ length: CONTINGENCY_SEGMENTS_MAX + 1 }, (_, index) => ({
+        ...contingency.segments[0],
+        id: `reserve-${index}`,
+      })),
+    ]) {
+      expect(parseProjectData({ ...item, contingency: { ...contingency, segments } })).toEqual({
+        problems: ['contingency non valida'],
+      });
+    }
+  });
+
   it('follow their start, then their title', () => {
     const later = { ...project, id: 'p2', startDate: '2026-10-01' };
     const app = { ...project, id: 'p3', title: 'App' };

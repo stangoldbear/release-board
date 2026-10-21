@@ -5,8 +5,16 @@ import type { ProjectSpan } from '../../domain/projectSpan';
 import type { StatusChange } from '../../domain/projectStatus';
 import { PROJECT_STATUS_LABELS } from '../../domain/projects';
 import { coloredValueOf, projectColorOf } from '../../domain/roadmapConfig';
-import type { ProjectField, RoadmapConfig } from '../../domain/types';
+import type {
+  MemoAuthor,
+  Milestone,
+  ProjectField,
+  ProjectNote,
+  RoadmapConfig,
+} from '../../domain/types';
+import { formatDateTimeIT } from '../../utils/dateUtils';
 import { useFormatDate } from '../../shared/dateFormat';
+import { Highlight } from '../../shared/ui/Highlight';
 import { taskColorStyle } from '../../themes';
 import { clampLines } from '../calendar/timelineLayout';
 import { formatManDays } from './barRendering';
@@ -22,6 +30,9 @@ interface ProjectCardProps {
   config: RoadmapConfig;
   /** The field whose value tags the project beside its title. */
   tagField: ProjectField | null;
+  notes: readonly ProjectNote[];
+  milestones: readonly Milestone[];
+  nameOf: (author: MemoAuthor) => string;
 }
 
 /** A line of the card: an icon, a name, a value. */
@@ -50,110 +61,183 @@ function Fact({
  * the title with the state, the period with its days, the owner, the deadline, the
  * description, the main fields with their links, and the people at work with their days.
  */
-export function ProjectCard({ project, span, work, config, tagField }: ProjectCardProps) {
+export function ProjectCard({
+  project,
+  span,
+  work,
+  config,
+  tagField,
+  notes,
+  milestones,
+  nameOf,
+}: ProjectCardProps) {
   const formatDate = useFormatDate();
   const colorId = projectColorOf(project, config);
   const sizeValue = tagField ? coloredValueOf(project, tagField) : null;
   // The main fields, but the one of the tab, which the header says.
   const mainFields = config.fields.filter((field) => field.main && field.id !== tagField?.id);
   const labels = projectLabels(project, config);
+  const workNotes = work.filter((item) => item.note?.trim());
+  const datedNotes = milestones.filter((item) => item.projectId === project.id);
+  const noteCount = notes.length + workNotes.length + datedNotes.length;
   return (
-    <div className="space-y-2.5 text-sm">
-      <div className="flex items-start gap-2">
-        <span
-          aria-hidden="true"
-          style={taskColorStyle(colorId)}
-          className="mt-0.5 block h-4 w-2 shrink-0 rounded-xs border"
-        />
-        <div className="min-w-0 flex-1">
-          <p className="font-bold break-words">{project.title}</p>
-          <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
-            <ProjectStatusMark status={project.status} />
-            {project.statusChange && (
-              <span>
-                (era {PROJECT_STATUS_LABELS[project.statusChange.from].toLowerCase()}, da
-                confermare)
-              </span>
-            )}
-            {sizeValue && tagField && (
-              <span>
-                {tagField.label}: {sizeValue.label}
-              </span>
-            )}
+    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+      <div className="space-y-2.5 text-sm">
+        <div className="flex items-start gap-2">
+          <span
+            aria-hidden="true"
+            style={taskColorStyle(colorId)}
+            className="mt-0.5 block h-4 w-2 shrink-0 rounded-xs border"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="font-bold break-words">{project.title}</p>
+            <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
+              <ProjectStatusMark status={project.status} />
+              {project.statusChange && (
+                <span>
+                  (era {PROJECT_STATUS_LABELS[project.statusChange.from].toLowerCase()}, da
+                  confermare)
+                </span>
+              )}
+              {sizeValue && tagField && (
+                <span>
+                  {tagField.label}: {sizeValue.label}
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {labels.length > 0 && (
+          <ul aria-label="Etichette" className="flex flex-wrap gap-1">
+            {labels.map((label) => (
+              <li key={label.id} className="flex min-w-0">
+                <FieldTag colorId={label.colorId}>{label.label}</FieldTag>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+          <Fact icon={CalendarRange} label="Periodo">
+            {formatDate(project.startDate)} → {formatDate(project.endDate)}
+          </Fact>
+          <Fact icon={Clock} label="Giorni uomo">
+            {span.totalManDays > 0 ? formatManDays(span.totalManDays) : '—'}
+          </Fact>
+          {project.owner && (
+            <Fact icon={UserRound} label="Responsabile">
+              {project.owner}
+            </Fact>
+          )}
+          {project.deadline && (
+            <Fact icon={Flag} label="Deadline">
+              {formatDate(project.deadline)}
+              {span.late && <span className="text-danger"> · superata</span>}
+            </Fact>
+          )}
+        </div>
+
+        {project.description && (
+          <p
+            style={clampLines(6)}
+            className="text-xs break-words whitespace-pre-line text-fg-muted"
+            title={project.description}
+          >
+            {project.description}
           </p>
-        </div>
-      </div>
+        )}
 
-      {labels.length > 0 && (
-        <ul aria-label="Etichette" className="flex flex-wrap gap-1">
-          {labels.map((label) => (
-            <li key={label.id} className="flex min-w-0">
-              <FieldTag colorId={label.colorId}>{label.label}</FieldTag>
+        {mainFields.length > 0 && (
+          <div className="flex flex-col gap-1 border-t border-line pt-2">
+            {mainFields.map((field) => (
+              <FieldValues key={field.id} project={project} field={field} />
+            ))}
+          </div>
+        )}
+
+        {work.length > 0 && (
+          <ul aria-label="Team" className="flex flex-col gap-0.5 border-t border-line pt-2 text-xs">
+            {work.map((item) => (
+              <li key={`${item.kind}-${item.id}`} className="flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className="h-2 w-2 shrink-0 rounded-full border border-line-strong"
+                  style={{
+                    backgroundColor: item.colorId
+                      ? `var(--rb-task-${item.colorId}-border)`
+                      : 'var(--color-surface-strong)',
+                  }}
+                />
+                <span className="min-w-0 flex-1 truncate">
+                  {item.name}
+                  {item.tag && <span className="text-fg-muted"> {item.tag}</span>}
+                </span>
+                <span className="shrink-0 tabular-nums">{formatManDays(item.manDays)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <section
+        aria-label="Tutte le note del progetto"
+        className="min-w-0 space-y-3 border-t border-line pt-3 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4"
+      >
+        <h3 className="text-sm font-semibold">
+          Note e commenti <span className="font-normal text-fg-muted">({noteCount})</span>
+        </h3>
+        {noteCount === 0 && <p className="text-xs text-fg-muted">Nessuna nota</p>}
+        <ol className="space-y-3 text-xs">
+          {notes.map((note) => (
+            <li key={note.id} className="space-y-1 border-b border-line pb-2">
+              <p className="font-semibold text-fg-muted">
+                Progetto · {note.author ? `${nameOf(note.author)} · ` : ''}
+                {formatDateTimeIT(note.createdAt)}
+              </p>
+              <p
+                className={`whitespace-pre-wrap break-words ${note.status === 'done' ? 'text-fg-muted line-through' : ''}`}
+              >
+                <Highlight text={note.text} />
+              </p>
+              {note.status && (
+                <p className="text-fg-muted">{note.status === 'done' ? 'Fatta' : 'Da fare'}</p>
+              )}
+              {note.dueOn && <p className="text-fg-muted">Scadenza: {formatDate(note.dueOn)}</p>}
+              {note.owners?.length ? (
+                <p className="break-words text-fg-muted">Owner: {note.owners.join(', ')}</p>
+              ) : null}
+              {note.tags?.length ? (
+                <p className="break-words text-fg-muted">Tag: {note.tags.join(', ')}</p>
+              ) : null}
             </li>
           ))}
-        </ul>
-      )}
-
-      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-        <Fact icon={CalendarRange} label="Periodo">
-          {formatDate(project.startDate)} → {formatDate(project.endDate)}
-        </Fact>
-        <Fact icon={Clock} label="Giorni uomo">
-          {span.totalManDays > 0 ? formatManDays(span.totalManDays) : '—'}
-        </Fact>
-        {project.owner && (
-          <Fact icon={UserRound} label="Responsabile">
-            {project.owner}
-          </Fact>
-        )}
-        {project.deadline && (
-          <Fact icon={Flag} label="Deadline">
-            {formatDate(project.deadline)}
-            {span.late && <span className="text-danger"> · superata</span>}
-          </Fact>
-        )}
-      </div>
-
-      {project.description && (
-        <p
-          style={clampLines(6)}
-          className="text-xs break-words whitespace-pre-line text-fg-muted"
-          title={project.description}
-        >
-          {project.description}
-        </p>
-      )}
-
-      {mainFields.length > 0 && (
-        <div className="flex flex-col gap-1 border-t border-line pt-2">
-          {mainFields.map((field) => (
-            <FieldValues key={field.id} project={project} field={field} />
-          ))}
-        </div>
-      )}
-
-      {work.length > 0 && (
-        <ul aria-label="Team" className="flex flex-col gap-0.5 border-t border-line pt-2 text-xs">
-          {work.map((item) => (
-            <li key={`${item.kind}-${item.id}`} className="flex items-center gap-1.5">
-              <span
-                aria-hidden="true"
-                className="h-2 w-2 shrink-0 rounded-full border border-line-strong"
-                style={{
-                  backgroundColor: item.colorId
-                    ? `var(--rb-task-${item.colorId}-border)`
-                    : 'var(--color-surface-strong)',
-                }}
-              />
-              <span className="min-w-0 flex-1 truncate">
-                {item.name}
-                {item.tag && <span className="text-fg-muted"> {item.tag}</span>}
-              </span>
-              <span className="shrink-0 tabular-nums">{formatManDays(item.manDays)}</span>
+          {workNotes.map((item) => (
+            <li key={`${item.kind}-${item.id}`} className="space-y-1 border-b border-line pb-2">
+              <p className="font-semibold text-fg-muted">
+                {item.name} · {formatDate(item.schedule.start)} → {formatDate(item.schedule.end)}
+              </p>
+              <p className="whitespace-pre-wrap break-words">
+                <Highlight text={item.note!} />
+              </p>
             </li>
           ))}
-        </ul>
-      )}
+          {datedNotes.map((item) => (
+            <li key={`milestone-${item.id}`} className="space-y-1 border-b border-line pb-2">
+              <p className="font-semibold text-fg-muted">
+                Nota sulla timeline · {formatDate(item.date)}
+              </p>
+              <p className="font-semibold break-words">
+                <Highlight text={item.title} />
+              </p>
+              {item.body && (
+                <p className="whitespace-pre-wrap break-words">
+                  <Highlight text={item.body} />
+                </p>
+              )}
+            </li>
+          ))}
+        </ol>
+      </section>
     </div>
   );
 }

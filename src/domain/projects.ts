@@ -1,5 +1,5 @@
 import { isIsoDate } from '../utils/dateUtils';
-import { isValidManDays } from './assignments';
+import { ASSIGNMENT_NOTE_MAX, isValidManDays } from './assignments';
 import { TASK_COLOR_IDS, isKnownColorId } from './colors';
 import { isRemindDays } from './projectReminders';
 import type { TaskColorId } from './colors';
@@ -16,6 +16,7 @@ import type {
 export const PROJECT_TITLE_MAX = 200;
 export const PROJECT_OWNER_MAX = 100;
 export const PROJECT_DESCRIPTION_MAX = 5000;
+export const CONTINGENCY_SEGMENTS_MAX = 5;
 
 /** A new project is blue, apart from the yellow of the new tasks. */
 export const DEFAULT_PROJECT_COLOR_ID: TaskColorId = 'blue';
@@ -128,18 +129,56 @@ export function sortProjects<T extends Project>(projects: readonly T[]): T[] {
 }
 
 export function isValidContingency(value: unknown): value is ProjectContingency {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.keys(value).every((key) => key === 'startDate' || key === 'manDays') &&
-    isIsoDate((value as { startDate?: unknown }).startDate) &&
-    isValidManDays((value as { manDays?: unknown }).manDays)
-  );
+  if (!isData(value)) return false;
+  const validBar = (bar: Data) =>
+    isIsoDate(bar.startDate) &&
+    isValidManDays(bar.manDays) &&
+    (bar.note === undefined ||
+      (typeof bar.note === 'string' && bar.note.length <= ASSIGNMENT_NOTE_MAX));
+  if (
+    !Object.keys(value).every((key) =>
+      ['startDate', 'manDays', 'note', 'segments'].includes(key),
+    ) ||
+    !validBar(value)
+  )
+    return false;
+  if (value.segments === undefined) return true;
+  if (!Array.isArray(value.segments) || value.segments.length > CONTINGENCY_SEGMENTS_MAX)
+    return false;
+  const ids = new Set<string>();
+  return value.segments.every((segment: unknown) => {
+    if (
+      !isData(segment) ||
+      !Object.keys(segment).every((key) => ['id', 'startDate', 'manDays', 'note'].includes(key)) ||
+      !validBar(segment)
+    )
+      return false;
+    if (
+      typeof segment.id !== 'string' ||
+      !segment.id ||
+      segment.id.length > 100 ||
+      ids.has(segment.id)
+    )
+      return false;
+    ids.add(segment.id);
+    return true;
+  });
 }
 
 function sameContingency(a: ProjectContingency | undefined, b: ProjectContingency | undefined) {
-  return a?.startDate === b?.startDate && a?.manDays === b?.manDays;
+  const segments = (reserve: ProjectContingency | undefined) =>
+    (reserve?.segments ?? []).map((segment) => [
+      segment.id,
+      segment.startDate,
+      segment.manDays,
+      segment.note ?? '',
+    ]);
+  return (
+    a?.startDate === b?.startDate &&
+    a?.manDays === b?.manDays &&
+    a?.note === b?.note &&
+    JSON.stringify(segments(a)) === JSON.stringify(segments(b))
+  );
 }
 
 /**
@@ -204,6 +243,12 @@ export function parseProjectData(value: unknown, repairColor = false): ParsedPro
   if (value.contingency !== undefined && !isValidContingency(value.contingency)) {
     problems.push('contingency non valida');
   }
+  if (
+    isValidContingency(value.contingency) &&
+    value.contingency.segments?.some((segment) => segment.id === value.id)
+  ) {
+    problems.push('contingency non valida');
+  }
   if (value.position !== undefined && !isPosition(value.position)) {
     problems.push('posizione non valida');
   }
@@ -239,6 +284,10 @@ export function parseProjectData(value: unknown, repairColor = false): ParsedPro
     content.contingency = {
       startDate: value.contingency.startDate,
       manDays: value.contingency.manDays,
+      ...(value.contingency.note ? { note: value.contingency.note } : {}),
+      ...(value.contingency.segments?.length
+        ? { segments: value.contingency.segments.map((segment) => ({ ...segment })) }
+        : {}),
     };
   }
   if (isProjectArrangement(value.arrangement) && value.arrangement !== DEFAULT_ARRANGEMENT) {

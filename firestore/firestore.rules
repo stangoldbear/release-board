@@ -335,6 +335,32 @@ service cloud.firestore {
       // before 0.16 are gone: a change of a project removes them.
       match /projects/{projectId} {
         allow read: if isMember(planId);
+        function validReserveSegment(segment) {
+          return segment is map
+            && segment.keys().hasOnly(['id', 'startDate', 'manDays', 'note'])
+            && isText(segment.id, 100) && isIsoDate(segment.startDate)
+            && segment.manDays is number && segment.manDays > 0 && segment.manDays <= 500
+            && (!('note' in segment) || isText(segment.note, 500));
+        }
+        function validReserveSegmentAt(segments, index) {
+          return index >= segments.size() || validReserveSegment(segments[index]);
+        }
+        function uniqueReserveIds(segments) {
+          let ids = [projectId,
+            segments.size() > 0 ? segments[0].id : projectId,
+            segments.size() > 1 ? segments[1].id : projectId,
+            segments.size() > 2 ? segments[2].id : projectId,
+            segments.size() > 3 ? segments[3].id : projectId,
+            segments.size() > 4 ? segments[4].id : projectId];
+          return ids.toSet().size() == segments.size() + 1;
+        }
+        function validReserveSegments(segments) {
+          return segments is list && segments.size() <= 5
+            && validReserveSegmentAt(segments, 0) && validReserveSegmentAt(segments, 1)
+            && validReserveSegmentAt(segments, 2) && validReserveSegmentAt(segments, 3)
+            && validReserveSegmentAt(segments, 4)
+            && uniqueReserveIds(segments);
+        }
         function validProject() {
           let data = request.resource.data;
           return data.keys().hasOnly(['title', 'startDate', 'deadline', 'remindDaysBefore',
@@ -346,11 +372,13 @@ service cloud.firestore {
             && (!('remindDaysBefore' in data) || (data.remindDaysBefore is int
               && data.remindDaysBefore >= 0 && data.remindDaysBefore <= 365))
             && (!('contingency' in data) || (data.contingency is map
-              && data.contingency.keys().hasOnly(['startDate', 'manDays'])
+              && data.contingency.keys().hasOnly(['startDate', 'manDays', 'note', 'segments'])
               && isIsoDate(data.contingency.startDate)
               && data.contingency.manDays is number
               && data.contingency.manDays > 0
-              && data.contingency.manDays <= 500))
+              && data.contingency.manDays <= 500
+              && (!('note' in data.contingency) || isText(data.contingency.note, 500))
+              && (!('segments' in data.contingency) || validReserveSegments(data.contingency.segments))))
             && (!('arrangement' in data)
               || data.arrangement in ['standard', 'parallel', 'sequence', 'manual'])
             && (!('position' in data) || data.position is number)
@@ -363,8 +391,7 @@ service cloud.firestore {
             && (!('fields' in data) || (data.fields is map && data.fields.size() <= 50));
         }
 
-        allow create: if isMemberAfter(planId) && audited(planId) && validProject();
-        allow update: if isMemberAfter(planId) && audited(planId) && validProject();
+        allow create, update: if isMemberAfter(planId) && audited(planId) && validProject();
         allow delete: if isMember(planId) && recorded(planId);
       }
 

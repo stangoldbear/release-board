@@ -50,6 +50,7 @@ import type { FieldDraft, FieldDrafts } from './fieldDrafts';
 import { FieldEditor, ProjectFieldsEditor } from './ProjectFieldsEditor';
 import { LabelsPicker } from './LabelsPicker';
 import { ProjectNotesPanel } from './ProjectNotesPanel';
+import { emptyNoteDraft, noteDraftContent } from './NoteEditor';
 import { ProjectStatusMark } from './projectUi';
 import type { NoteActions } from './roadmapActions';
 import { projectPeriod } from './roadmapLayout';
@@ -157,6 +158,7 @@ export function ProjectDialog({
     'standard',
   );
   const [tab, setTab] = useState<ProjectTab>(project ? initialTab : 'project');
+  const [noteDraft, setNoteDraft] = useState(emptyNoteDraft);
   const [title, setTitle] = useState(project?.title ?? '');
   const [startDate, setStartDate] = useState(project?.startDate ?? defaultStart);
   const [deadline, setDeadline] = useState(project?.deadline ?? '');
@@ -266,7 +268,13 @@ export function ProjectDialog({
     });
   };
 
-  const canSave = title.trim() !== '' && startValid && deadlineValid && !gone;
+  const pendingNote = project ? noteDraftContent(project.id, noteDraft) : null;
+  const canSave =
+    title.trim() !== '' &&
+    startValid &&
+    deadlineValid &&
+    !gone &&
+    (!noteDraft.text.trim() || pendingNote !== null);
 
   const save = (event: FormEvent) => {
     event.preventDefault();
@@ -291,6 +299,7 @@ export function ProjectDialog({
     if (Object.keys(values).length > 0) content.fields = values;
     const id = onSubmit(content);
     onSaveTeam(id, preview.plan);
+    if (pendingNote) noteActions.onCreate(pendingNote);
     if (project && after !== initialAfter) {
       const at = after === 'start' ? 0 : others.findIndex((item) => item.id === after) + 1;
       onReorder(id, others[at]?.id ?? null);
@@ -776,6 +785,8 @@ export function ProjectDialog({
                 nameOf={nameOf}
                 today={today}
                 actions={noteActions}
+                draft={noteDraft}
+                onDraftChange={setNoteDraft}
               />
             )}
           </div>

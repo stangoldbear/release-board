@@ -7,6 +7,48 @@ const config = defaultRoadmapConfig();
 const project = { id: 'p1', startDate: '2026-11-02' };
 
 describe('the plan of the team of a project', () => {
+  it('keeps split assignments and all reserve segments when saving the project', () => {
+    const reserve = {
+      startDate: '2026-11-12',
+      manDays: 2,
+      note: 'First',
+      segments: [{ id: 'reserve-2', startDate: '2026-11-23', manDays: 3, note: 'After the pause' }],
+    };
+    const existing: Assignment[] = [
+      {
+        id: 'a1',
+        projectId: 'p1',
+        stakeholderId: 'server-1',
+        startDate: '2026-11-02',
+        manDays: 2,
+        note: 'First',
+      },
+      {
+        id: 'a2',
+        projectId: 'p1',
+        stakeholderId: 'server-1',
+        startDate: '2026-11-09',
+        manDays: 2,
+        note: 'After the pause',
+      },
+    ];
+    const plan = planTeam(
+      { ...project, arrangement: 'manual', contingency: reserve },
+      existing,
+      existing.map((item) => ({
+        assignmentId: item.id,
+        stakeholderId: item.stakeholderId,
+        manDays: item.manDays,
+      })),
+      2,
+      config,
+    );
+    expect(plan.contingency).toEqual(reserve);
+    expect(plan.update).toEqual([]);
+    expect(plan.remove).toEqual([]);
+    expect(plan.create).toEqual([]);
+  });
+
   it('adds the rows as assignments placed by the arrangement, with the contingency after them', () => {
     const plan = planTeam(
       project,

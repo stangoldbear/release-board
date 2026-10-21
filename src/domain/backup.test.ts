@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlanSnapshot } from './types';
 import {
   BACKUP_FORMAT,
+  BACKUP_SCHEMA_VERSION,
   backupFileName,
   createBackupFile,
   parseBackup,
@@ -148,6 +149,36 @@ function errorsOf(value: unknown): string[] {
 }
 
 describe('backup round trip', () => {
+  it('preserves split reserve segments in schema 8 and still reads schema 7', () => {
+    const reserve = {
+      startDate: '2026-11-02',
+      manDays: 2,
+      note: 'First',
+      segments: [{ id: 'reserve-2', startDate: '2026-11-09', manDays: 3, note: 'After the pause' }],
+    };
+    const split = {
+      ...plan,
+      projects: plan.projects.map((project, index) =>
+        index === 0 ? { ...project, contingency: reserve } : project,
+      ),
+    };
+    const file = createBackupFile(split, new Date('2026-10-21T10:00:00Z'));
+    expect(file.schemaVersion).toBe(8);
+    expect(BACKUP_SCHEMA_VERSION).toBe(8);
+    const parsed = parseBackupText(serializeBackup(file));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.plan.projects.find((project) => project.id === 'project-1')?.contingency).toEqual(
+      reserve,
+    );
+    expect(
+      parseBackup({
+        ...createBackupFile(plan, new Date('2026-10-21T10:00:00Z')),
+        schemaVersion: 7,
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
   it('restores exactly the exported plan', () => {
     const text = serializeBackup(createBackupFile(plan, new Date('2026-09-28T10:00:00Z')));
     const result = parseBackupText(text);
@@ -259,7 +290,7 @@ describe('invalid backups', () => {
   it('reject unknown files and newer versions', () => {
     expect(errorsOf([])).toEqual(['Il file non contiene un backup.']);
     expect(errorsOf({ hello: 'world' })).toEqual(['Il file non è un backup di Release Board.']);
-    expect(errorsOf({ ...valid, schemaVersion: 8 })).toEqual([
+    expect(errorsOf({ ...valid, schemaVersion: BACKUP_SCHEMA_VERSION + 1 })).toEqual([
       'Il backup è stato creato con una versione più recente di Release Board.',
     ]);
     expect(errorsOf({ ...valid, schemaVersion: 2 })).toEqual([

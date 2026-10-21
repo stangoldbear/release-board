@@ -6,6 +6,43 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-21
+
+**Le regole Firestore cambiano**: aggiornare il sito e ripubblicare le regole prima di usare i
+segmenti e le note della contingency. Fare ricaricare la pagina a tutti i membri: una versione
+precedente non conosce i nuovi segmenti. I backup passano allo schema 8; restano leggibili quelli
+degli schemi da 3 a 7, mentre una versione precedente rifiuta i nuovi backup anziché perdere dati.
+
+### Aggiunto
+
+- Menu contestuale sulle barre dei progetti, delle persone e della contingency: «Mostra
+  informazioni» e «Duplica», anche con il tasto menu o Maiusc + F10. Le icone «i» aprono le
+  informazioni con gli stessi comandi anche al tocco.
+- Le informazioni flottanti del progetto hanno una colonna con tutte le note del progetto,
+  delle assegnazioni, dei segmenti della contingency e delle note sulla timeline, con la loro
+  provenienza. Sul telefono le colonne si dispongono una sotto l'altra.
+- Ogni rettangolo del lavoro ha le proprie informazioni con date, giorni e nota, e i comandi
+  per modificarlo o duplicarlo, anche nella parte «Persone».
+- La deadline ha una bandierina a scacchi sulla riga del progetto, accanto alla linea
+  tratteggiata; il segno della deadline superata resta distinto.
+- «Duplica» crea un altro segmento di lavoro dal primo giorno disponibile dopo la fine del
+  precedente, saltando chiusure e assenze. I segmenti si spostano e si allungano da soli, hanno
+  note indipendenti e stanno sulla stessa riga della persona o della contingency; eventuali
+  sovrapposizioni vanno su linee separate. La contingency ammette il primo segmento più cinque
+  successivi, per rispettare i limiti delle regole, con modifica ed eliminazione indipendenti.
+- Un progetto si duplica con gli stessi titolo, campi, etichette, assegnazioni, contingency,
+  note e milestone, con nuovi identificativi. Le copie delle note sono nuove note, con autore
+  e ora di chi duplica; la cronologia originale non si copia.
+
+### Corretto
+
+- «Salva» nella finestra del progetto salva anche una nuova nota non ancora confermata con
+  «Aggiungi». La bozza resta cambiando scheda; una nota già aggiunta non viene salvata due volte.
+  Una scadenza della nota non valida impedisce di chiudere con «Salva» perdendo il testo.
+- Le duplicazioni mantengono il titolo originale senza aggiungere la parola «copia».
+- Aggiornato lo strumento di sviluppo Vite alla patch 8.3.4 per correggere gli advisory di
+  sicurezza della versione precedente, senza nuove dipendenze.
+
 ## [0.19.0] - 2026-10-15
 
 Le regole di Firestore e i backup non cambiano: un'istanza si aggiorna al tag senza ripubblicare le

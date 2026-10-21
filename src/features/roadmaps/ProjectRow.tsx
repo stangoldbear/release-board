@@ -1,5 +1,6 @@
 import type { CSSProperties, DragEvent, PointerEvent } from 'react';
-import { GripVertical, Info, UserPlus } from 'lucide-react';
+import { Flag, GripVertical, Info, UserPlus } from 'lucide-react';
+import { Tooltip } from '../../shared/ui/Tooltip';
 import type { TaskColorId } from '../../domain/colors';
 import type { ProjectChanges, ProjectWithEnd } from '../../domain/projects';
 import type { ProjectSpan } from '../../domain/projectSpan';
@@ -21,7 +22,7 @@ import { useStableCallback } from '../../shared/useStableCallback';
 import { diffDays } from '../../utils/dateUtils';
 import { LABEL_CELL } from '../calendar/timelineLayout';
 import type { Column } from '../calendar/timelineLayout';
-import { formatManDays, peopleRows, projectRowGeometry } from './barRendering';
+import { formatManDays, groupWorkItems, peopleRows, projectRowGeometry } from './barRendering';
 import type { WorkItem } from './barRendering';
 import { DaysEditor } from './DaysEditor';
 import { DeadlineSign } from './DeadlineSign';
@@ -277,6 +278,10 @@ export interface ProjectRowProps {
   onStartWorkDrag: (event: PointerEvent, item: WorkItem, kind: WorkDragKind) => void;
   onEdit: (editing: Editing | null) => void;
   onOpen: () => void;
+  onDuplicate: (() => void) | undefined;
+  onDuplicateWork: (item: WorkItem) => void;
+  contingencyDuplicable: boolean;
+  onOpenContingency: (item: WorkItem) => void;
   onChange: (changes: ProjectChanges) => void;
   onMove: (days: number) => void;
   onChangeWork: (item: WorkItem, changes: WorkChanges) => void;
@@ -340,6 +345,10 @@ export function ProjectRow({
   onStartWorkDrag,
   onEdit,
   onOpen,
+  onDuplicate,
+  onDuplicateWork,
+  contingencyDuplicable,
+  onOpenContingency,
   onChange,
   onMove,
   onChangeWork,
@@ -370,7 +379,7 @@ export function ProjectRow({
   const editorHeight = Math.max(personRowHeight, metrics.lineHeight + 4);
   const shown = projectDrag?.project.id === project.id ? draggedProject(projectDrag) : project;
   const placed = placeTasks([shown], range).placed[0];
-  const people = peopleRow ? work : [];
+  const people = peopleRow ? groupWorkItems(work) : [];
   const rows = 1 + people.length;
   // The bar with its lanes, and the lines of the column: the row takes the taller.
   const geometry = projectRowGeometry(level, work.length, metrics);
@@ -413,6 +422,8 @@ export function ProjectRow({
       ignoreClick={ignoreProjectClick}
       onPointerDown={(event) => onStartProjectDrag(event, project)}
       onOpen={onOpen}
+      onShowInfo={(anchor) => onShowInfo(anchor, anchor)}
+      onDuplicate={onDuplicate}
       onMove={onMove}
       onMoveRow={onMoveRow}
     />
@@ -551,12 +562,35 @@ export function ProjectRow({
           top="50%"
           tools={milestoneTools}
         />
+        {deadlineLeft !== null && project.deadline && (
+          <div className="pointer-events-auto absolute top-0.5 z-30" style={{ left: deadlineLeft }}>
+            <Tooltip text={`Deadline di «${project.title}»: ${formatDate(project.deadline)}`}>
+              <button
+                type="button"
+                aria-label={`Traguardo di «${project.title}»: ${formatDate(project.deadline)}`}
+                onClick={onOpen}
+                className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-xs bg-surface text-fg ring-1 ring-line-strong"
+              >
+                <Flag className="h-4 w-4" aria-hidden="true" />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-[5px] left-[7px] h-[6px] w-[7px]"
+                  style={{
+                    backgroundImage:
+                      'conic-gradient(var(--color-fg) 25%, var(--color-surface) 0 50%, var(--color-fg) 0 75%, var(--color-surface) 0)',
+                    backgroundSize: '4px 4px',
+                  }}
+                />
+              </button>
+            </Tooltip>
+          </div>
+        )}
         {/* Over the bar, on the day of the deadline: where the work goes past it. */}
         {overrun && deadlineLeft !== null && (
           <DeadlineSign
             title={project.title}
             overrun={overrun}
-            left={deadlineLeft}
+            left={deadlineLeft - 12}
             onOpen={onOpen}
           />
         )}
@@ -572,12 +606,18 @@ export function ProjectRow({
         )}
       </div>
 
-      {people.map((item, index) => {
-        const moving = isDragged(item) && workDrag ? draggedWork(workDrag) : item;
+      {people.map((group, index) => {
+        const item = group.items[0]!;
+        const totalDays = group.items.reduce(
+          (sum, entry) =>
+            sum + (isDragged(entry) && workDrag ? draggedWork(workDrag).manDays : entry.manDays),
+          0,
+        );
         const gridRow = index + 2;
         const last = index === people.length - 1;
+        const groupHeight = rowHeightOf(last) + (group.lines - 1) * personRowHeight;
         return (
-          <div key={`${item.kind}-${item.id}`} className="contents">
+          <div key={group.key} className="contents">
             {/*
               One line, under the title and in its rail: the person, the team and the days. At
               «Info principali» in «Compatta» the row is as thin as the bar, and the words shrink
@@ -592,14 +632,14 @@ export function ProjectRow({
                 gridRow,
                 ...(peopleRow?.thin
                   ? {
-                      height: rowHeightOf(last),
+                      height: groupHeight,
                       fontSize: personRowHeight,
                       lineHeight: `${personRowHeight}px`,
                     }
-                  : { minHeight: rowHeightOf(last) }),
+                  : { minHeight: groupHeight }),
                 ...blockCellStyle(colorId, false, last),
               }}
-              title={peopleRow?.thin ? personLine(item, moving.manDays) : undefined}
+              title={peopleRow?.thin ? personLine(item, totalDays) : undefined}
             >
               <RailPiece colorId={colorId} part={last ? 'last' : 'middle'} />
               <TreeBranch last={last} />
@@ -640,56 +680,73 @@ export function ProjectRow({
                 <span className="min-w-0 shrink-[4] truncate text-fg-muted">{item.tag}</span>
               )}
               <span className="ml-auto shrink-0 pl-1 text-fg-muted tabular-nums">
-                {formatManDays(moving.manDays)}
+                {formatManDays(totalDays)}
               </span>
             </div>
             <div
               className="pointer-events-none relative"
-              style={{ gridColumn: 2, gridRow, minHeight: rowHeightOf(last) }}
+              style={{ gridColumn: 2, gridRow, minHeight: groupHeight }}
             >
-              <WorkBar
-                item={moving}
-                range={range}
-                dayWidth={dayWidth}
-                height={personRowHeight}
-                barHeight={peopleRow?.barHeight ?? 0}
-                labeled={peopleRow?.labeled ?? false}
-                dragging={isDragged(item)}
-                describedBy={workHelpId}
-                ignoreClick={ignoreWorkClick}
-                onPointerDown={(event, kind) => onStartWorkDrag(event, item, kind)}
-                onOpen={() => {
-                  if (item.kind === 'contingency') {
-                    onOpen();
-                    return;
-                  }
-                  const assignment = assignments.find((entry) => entry.id === item.id);
-                  if (assignment) onOpenAssignment(assignment);
-                }}
-                onEditDays={() => onEdit({ kind: item.kind, id: item.id })}
-                onChange={(changes) => onChangeWork(item, changes)}
-              />
-              {isEdited(item) && (
-                <DaysEditor
-                  value={item.manDays}
-                  label={`Giorni uomo di ${item.name}`}
-                  style={{
-                    left: Math.max(0, diffDays(range.start, item.schedule.start)) * dayWidth + 1,
-                    top: `calc(50% - ${editorHeight / 2}px)`,
-                    height: editorHeight,
-                    minWidth: EDITOR_MIN_WIDTH,
-                  }}
-                  onSave={(manDays) => {
-                    onChangeWork(item, { manDays });
-                    onEdit(null);
-                    focusBack(workBarId(item));
-                  }}
-                  onCancel={() => {
-                    onEdit(null);
-                    focusBack(workBarId(item));
-                  }}
-                />
-              )}
+              {group.placed.map(({ bar: item, line }) => {
+                const moving = isDragged(item) && workDrag ? draggedWork(workDrag) : item;
+                return (
+                  <div
+                    key={`${item.kind}-${item.id}`}
+                    className="pointer-events-none absolute inset-x-0"
+                    style={{ top: line * personRowHeight, height: personRowHeight }}
+                  >
+                    <WorkBar
+                      item={moving}
+                      range={range}
+                      dayWidth={dayWidth}
+                      height={personRowHeight}
+                      barHeight={peopleRow?.barHeight ?? 0}
+                      labeled={peopleRow?.labeled ?? false}
+                      dragging={isDragged(item)}
+                      describedBy={workHelpId}
+                      ignoreClick={ignoreWorkClick}
+                      onPointerDown={(event, kind) => onStartWorkDrag(event, item, kind)}
+                      onOpen={() => {
+                        if (item.kind === 'contingency') {
+                          onOpenContingency(item);
+                          return;
+                        }
+                        const assignment = assignments.find((entry) => entry.id === item.id);
+                        if (assignment) onOpenAssignment(assignment);
+                      }}
+                      onEditDays={() => onEdit({ kind: item.kind, id: item.id })}
+                      onChange={(changes) => onChangeWork(item, changes)}
+                      onDuplicate={
+                        item.kind === 'contingency' && !contingencyDuplicable
+                          ? undefined
+                          : () => onDuplicateWork(item)
+                      }
+                    />
+                    {isEdited(item) && (
+                      <DaysEditor
+                        value={item.manDays}
+                        label={`Giorni uomo di ${item.name}`}
+                        style={{
+                          left:
+                            Math.max(0, diffDays(range.start, item.schedule.start)) * dayWidth + 1,
+                          top: `calc(50% - ${editorHeight / 2}px)`,
+                          height: editorHeight,
+                          minWidth: EDITOR_MIN_WIDTH,
+                        }}
+                        onSave={(manDays) => {
+                          onChangeWork(item, { manDays });
+                          onEdit(null);
+                          focusBack(workBarId(item));
+                        }}
+                        onCancel={() => {
+                          onEdit(null);
+                          focusBack(workBarId(item));
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );

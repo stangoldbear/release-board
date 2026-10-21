@@ -52,6 +52,7 @@ interface PeopleSectionProps {
   assignments: readonly Assignment[];
   metrics: RoadmapMetrics;
   onOpenAssignment: (assignment: Assignment) => void;
+  onDuplicateAssignment: (assignmentId: string) => void;
   onChangeAssignment: (assignmentId: string, changes: AssignmentChanges) => void;
   onOpenStakeholder: (stakeholder: Stakeholder) => void;
 }
@@ -69,6 +70,7 @@ export function PeopleSection({
   assignments,
   metrics,
   onOpenAssignment,
+  onDuplicateAssignment,
   onChangeAssignment,
   onOpenStakeholder,
 }: PeopleSectionProps) {
@@ -248,6 +250,7 @@ export function PeopleSection({
                   ignoreClick={drag.isClickAfterDrag}
                   onPointerDown={(event, kind) => drag.startDrag(event, bar.item, kind)}
                   onOpen={() => open(bar)}
+                  onDuplicate={() => onDuplicateAssignment(bar.item.id)}
                   onEditDays={() => setEditing(bar.item.id)}
                   onChange={(changes: WorkChanges) => change(bar, changes)}
                   elementId={personWorkBarId(bar.item.id)}

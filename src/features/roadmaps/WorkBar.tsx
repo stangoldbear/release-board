@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react';
+import { Copy, Info, Pencil } from 'lucide-react';
 import { describeEffort, moveAssignment } from '../../domain/assignments';
 import type { WorkSchedule } from '../../domain/assignments';
 import type { DateRange } from '../../domain/schedule';
@@ -8,6 +10,9 @@ import { useDateFormat, useFormatDate } from '../../shared/dateFormat';
 import { diffDays, formatDate } from '../../utils/dateUtils';
 import type { DateFormat } from '../../utils/dateUtils';
 import { Tooltip } from '../../shared/ui/Tooltip';
+import { FloatingPanel } from '../../shared/ui/FloatingPanel';
+import { Button } from '../../shared/ui/Button';
+import { useBarMenu } from './useBarMenu';
 import { taskColorStyle } from '../../themes';
 import { formatManDays } from './barRendering';
 import type { WorkItem } from './barRendering';
@@ -87,6 +92,7 @@ interface WorkBarProps {
   colorId?: TaskColorId | null;
   /** Alt and the arrows up and down give the work to the person above or below. */
   onReassign?: (step: -1 | 1) => void;
+  onDuplicate?: () => void;
 }
 
 /**
@@ -117,10 +123,13 @@ export function WorkBar({
   ariaName = name,
   colorId = item.colorId,
   onReassign,
+  onDuplicate,
 }: WorkBarProps) {
   const dateFormat = useDateFormat();
   const formatDate = useFormatDate();
   const clicks = useClickOrDoubleClick(onOpen, onEditDays, ignoreClick);
+  const [infoAnchor, setInfoAnchor] = useState<HTMLElement | null>(null);
+  const commands = useBarMenu(ariaName, setInfoAnchor, onDuplicate);
   const { schedule } = item;
   if (schedule.start > range.end || schedule.end < range.start) return null;
   const first = Math.max(0, diffDays(range.start, schedule.start));
@@ -133,7 +142,8 @@ export function WorkBar({
     item.late ? ', oltre la deadline' : ''
   }`;
 
-  const handleKeyDown = (event: KeyboardEvent) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (commands.onMenuKeyDown(event)) return;
     if (onReassign && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
       event.preventDefault();
       onReassign(event.key === 'ArrowUp' ? -1 : 1);
@@ -161,85 +171,158 @@ export function WorkBar({
   const neutral = labeled ? 'border-line-strong bg-surface-strong text-fg' : 'bg-line-strong';
 
   return (
-    <Tooltip text={`${name}: ${words}`}>
-      <button
-        type="button"
-        id={elementId ?? workBarId(item)}
-        aria-label={`${ariaName}: ${words}`}
-        aria-describedby={describedBy}
-        onPointerDown={(event) => {
-          clicks.onPointerDown(event);
-          onPointerDown(event, 'move');
-        }}
-        onClick={clicks.onClick}
-        onDoubleClick={clicks.onDoubleClick}
-        onKeyDown={handleKeyDown}
-        style={{
-          left: first * dayWidth + 1,
-          width: Math.max(width, 6),
-          top: `calc(50% - ${height / 2}px)`,
-          height,
-        }}
-        className={`group/work pointer-events-auto absolute cursor-grab text-fg active:cursor-grabbing ${
-          dragging ? 'z-[1000]' : 'z-10'
-        }`}
-      >
-        <span
-          aria-hidden="true"
-          style={{ ...fill, height: barHeight }}
-          className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center overflow-clip ${
-            labeled ? 'border text-xs leading-none font-semibold whitespace-nowrap' : ''
-          } ${colorId ? '' : neutral} ${continuesBefore ? 'rounded-l-none' : 'rounded-l-xs'} ${
-            continuesAfter ? 'rounded-r-none' : 'rounded-r-xs'
-          } ${
-            dragging
-              ? 'opacity-90 shadow-xl ring-2 ring-fg'
-              : 'group-hover/work:ring-2 group-hover/work:ring-link/40'
+    <>
+      <Tooltip text={`${name}: ${words}`}>
+        <button
+          type="button"
+          id={elementId ?? workBarId(item)}
+          aria-label={`${ariaName}: ${words}`}
+          aria-describedby={describedBy}
+          onPointerDown={(event) => {
+            clicks.onPointerDown(event);
+            onPointerDown(event, 'move');
+          }}
+          onClick={clicks.onClick}
+          onDoubleClick={clicks.onDoubleClick}
+          onKeyDown={handleKeyDown}
+          onContextMenu={commands.onContextMenu}
+          style={{
+            left: first * dayWidth + 1,
+            width: Math.max(width, 6),
+            top: `calc(50% - ${height / 2}px)`,
+            height,
+          }}
+          className={`group/work pointer-events-auto absolute cursor-grab text-fg active:cursor-grabbing ${
+            dragging ? 'z-[1000]' : 'z-10'
           }`}
         >
-          {schedule.absences.map((absence) => {
-            const from = Math.max(first, diffDays(range.start, absence.start));
-            const to = Math.min(last, diffDays(range.start, absence.end));
-            return (
-              <span
-                key={absence.start}
-                title={`Assente dal ${formatDate(absence.start)} al ${formatDate(absence.end)}`}
-                style={{
-                  ...ABSENCE_STRIPES,
-                  left: (from - first) * dayWidth,
-                  width: (to - from + 1) * dayWidth,
-                }}
-                className="absolute inset-y-0"
-              />
-            );
-          })}
-          {labeled && (
-            // In view while the start of a long bar scrolls past the column of the names, on the
-            // color of the bar over the days away; clear of the grip on the right.
-            <span className="sticky left-[calc(var(--gantt-label-width)+4px)] z-[1] min-w-0 truncate bg-inherit pr-3 pl-1">
-              {name}
-              <span className="font-normal tabular-nums"> · {formatManDays(item.manDays)}</span>
-            </span>
-          )}
-        </span>
-        {resizable && !continuesAfter && (
           <span
             aria-hidden="true"
-            onPointerDown={(event) => onPointerDown(event, 'end')}
-            className="absolute inset-y-0 right-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center rounded-xs hover:bg-current/15"
+            style={{ ...fill, height: barHeight }}
+            className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center overflow-clip ${
+              labeled ? 'border text-xs leading-none font-semibold whitespace-nowrap' : ''
+            } ${colorId ? '' : neutral} ${continuesBefore ? 'rounded-l-none' : 'rounded-l-xs'} ${
+              continuesAfter ? 'rounded-r-none' : 'rounded-r-xs'
+            } ${
+              dragging
+                ? 'opacity-90 shadow-xl ring-2 ring-fg'
+                : 'group-hover/work:ring-2 group-hover/work:ring-link/40'
+            }`}
           >
-            {/*
+            {schedule.absences.map((absence) => {
+              const from = Math.max(first, diffDays(range.start, absence.start));
+              const to = Math.min(last, diffDays(range.start, absence.end));
+              return (
+                <span
+                  key={absence.start}
+                  title={`Assente dal ${formatDate(absence.start)} al ${formatDate(absence.end)}`}
+                  style={{
+                    ...ABSENCE_STRIPES,
+                    left: (from - first) * dayWidth,
+                    width: (to - from + 1) * dayWidth,
+                  }}
+                  className="absolute inset-y-0"
+                />
+              );
+            })}
+            {labeled && (
+              // In view while the start of a long bar scrolls past the column of the names, on the
+              // color of the bar over the days away; clear of the grip on the right.
+              <span className="sticky left-[calc(var(--gantt-label-width)+4px)] z-[1] min-w-0 truncate bg-inherit pr-3 pl-5">
+                {name}
+                <span className="font-normal tabular-nums"> · {formatManDays(item.manDays)}</span>
+              </span>
+            )}
+          </span>
+          {resizable && !continuesAfter && (
+            <span
+              aria-hidden="true"
+              onPointerDown={(event) => onPointerDown(event, 'end')}
+              className="absolute inset-y-0 right-0 z-10 flex w-2.5 cursor-ew-resize items-center justify-center rounded-xs hover:bg-current/15"
+            >
+              {/*
               The grip that says the edge can be dragged, stronger under the mouse: a line in the
               color of the text with a halo in the color of the page, so that one of the two
               stands out on any bar, light or deep, in every theme.
             */}
-            <span
-              style={{ height: Math.min(10, barHeight - 2) }}
-              className="w-0.5 rounded-full bg-current opacity-80 shadow-[0_0_0_1px_var(--color-surface)] group-hover/work:opacity-100"
-            />
-          </span>
-        )}
-      </button>
-    </Tooltip>
+              <span
+                style={{ height: Math.min(10, barHeight - 2) }}
+                className="w-0.5 rounded-full bg-current opacity-80 shadow-[0_0_0_1px_var(--color-surface)] group-hover/work:opacity-100"
+              />
+            </span>
+          )}
+        </button>
+      </Tooltip>
+      {width >= 32 && (
+        <div
+          className="pointer-events-none absolute z-30"
+          style={{ left: first * dayWidth + 1, width, top: `calc(50% - ${height / 2}px)`, height }}
+        >
+          <Tooltip text={`Informazioni: ${ariaName}`}>
+            <button
+              type="button"
+              id={`work-info-${elementId ?? workBarId(item)}`}
+              aria-label={`Informazioni sul lavoro di «${ariaName}»`}
+              onClick={(event) => setInfoAnchor(event.currentTarget)}
+              onContextMenu={commands.onContextMenu}
+              style={{ height }}
+              className="pointer-events-auto sticky left-[calc(var(--gantt-label-width)+2px)] flex w-4 cursor-pointer items-center justify-center rounded-xs text-fg"
+            >
+              <Info
+                className="rounded-full bg-surface text-fg"
+                style={{ width: Math.min(12, barHeight), height: Math.min(12, barHeight) }}
+                aria-hidden="true"
+              />
+            </button>
+          </Tooltip>
+        </div>
+      )}
+      {commands.menu}
+      {infoAnchor && (
+        <FloatingPanel
+          title="Informazioni sul lavoro"
+          anchor={infoAnchor}
+          onClose={() => setInfoAnchor(null)}
+        >
+          <div className="space-y-3 text-sm">
+            <p className="font-semibold break-words">{name}</p>
+            {item.stakeholder && (
+              <p className="text-xs text-fg-muted">
+                {item.stakeholder.name}
+                {item.team ? ` · ${item.team.name}` : ''}
+              </p>
+            )}
+            <p className="text-xs">{words}</p>
+            <section aria-label="Nota del segmento" className="border-t border-line pt-2">
+              <h3 className="text-xs font-semibold text-fg-muted">Nota del segmento</h3>
+              <p className="mt-1 whitespace-pre-wrap break-words">{item.note || 'Nessuna nota'}</p>
+            </section>
+            <div className="flex flex-wrap gap-2 border-t border-line pt-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setInfoAnchor(null);
+                  onOpen();
+                }}
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+                Modifica
+              </Button>
+              <Button
+                size="sm"
+                disabled={!onDuplicate}
+                onClick={() => {
+                  setInfoAnchor(null);
+                  onDuplicate?.();
+                }}
+              >
+                <Copy className="h-4 w-4" aria-hidden="true" />
+                Duplica
+              </Button>
+            </div>
+          </div>
+        </FloatingPanel>
+      )}
+    </>
   );
 }

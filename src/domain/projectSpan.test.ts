@@ -27,6 +27,24 @@ const assignment = (id: string, stakeholderId: string, startDate: string, manDay
   ({ id, projectId: 'p1', stakeholderId, startDate, manDays }) as Assignment;
 
 describe('the span of a project', () => {
+  it('counts split reserve segments and exposes their gap and notes', () => {
+    const split = {
+      ...project,
+      contingency: {
+        startDate: '2026-11-02',
+        manDays: 2,
+        segments: [
+          { id: 'reserve-2', startDate: '2026-11-09', manDays: 3, note: 'After the pause' },
+        ],
+      },
+    };
+    const span = projectSpan(split, [], calendar);
+    expect(span.end).toBe('2026-11-11');
+    expect(span.totalManDays).toBe(5);
+    expect(span.bars[1]).toMatchObject({ id: 'reserve-2', note: 'After the pause' });
+    expect(span.gaps).toEqual([{ start: '2026-11-04', end: '2026-11-08' }]);
+  });
+
   it('ends on its start without the work of a team', () => {
     expect(projectSpan(project, [], calendar)).toMatchObject({
       start: '2026-11-02',

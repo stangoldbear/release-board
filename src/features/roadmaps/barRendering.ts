@@ -1,4 +1,5 @@
 import type { WorkSchedule } from '../../domain/assignments';
+import { stackBars } from '../../domain/peopleWork';
 import type { TaskColorId } from '../../domain/colors';
 import { formatLocaleNumber } from '../../domain/numberFormat';
 import type { ProjectSpan } from '../../domain/projectSpan';
@@ -30,6 +31,7 @@ export interface WorkItem {
   projectId: string;
   startDate: string;
   manDays: number;
+  note?: string;
   stakeholder: Stakeholder | null;
   team: Team | null;
   name: string;
@@ -42,6 +44,17 @@ export interface WorkItem {
   schedule: WorkSchedule;
   /** Its last day is past the deadline of the project. */
   late: boolean;
+}
+
+export function groupWorkItems(work: readonly WorkItem[]) {
+  const groups = new Map<string, WorkItem[]>();
+  for (const item of work) {
+    const key = item.kind === 'contingency' ? 'contingency' : (item.stakeholder?.id ?? item.id);
+    const items = groups.get(key) ?? [];
+    items.push(item);
+    groups.set(key, items);
+  }
+  return [...groups].map(([key, items]) => ({ key, items, ...stackBars(items) }));
 }
 
 /**
@@ -66,6 +79,7 @@ export function workItemsOf(
       projectId: project.id,
       startDate: bar.startDate,
       manDays: bar.manDays,
+      note: bar.note,
       stakeholder,
       team,
       name: contingency ? CONTINGENCY_NAME : (stakeholder?.name ?? 'Persona non in configurazione'),

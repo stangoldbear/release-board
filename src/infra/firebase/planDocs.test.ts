@@ -31,6 +31,19 @@ import {
 
 const plan = buildSamplePlan(2026, 8);
 
+it('round-trips reserve segments and their independent notes through project documents', () => {
+  const item = {
+    ...plan.projects[0]!,
+    contingency: {
+      startDate: '2026-11-02',
+      manDays: 2,
+      note: 'First',
+      segments: [{ id: 'reserve-2', startDate: '2026-11-09', manDays: 3, note: 'Second' }],
+    },
+  };
+  expect(readProject(item.id, projectContent(item))).toEqual(item);
+});
+
 describe('task documents', () => {
   it('leaves empty optional fields out and reads them back as absent', () => {
     const data = taskContent({

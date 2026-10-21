@@ -1,5 +1,6 @@
 import { addDaysIso } from '../utils/dateUtils';
 import { isWorkingDay, scheduleAssignment } from './assignments';
+import { contingencySegments } from './contingency';
 import type { WorkSchedule } from './assignments';
 import type { DateRange } from './schedule';
 import type { Assignment, Project, RoadmapConfig } from './types';
@@ -16,6 +17,7 @@ export interface WorkBar {
   /** The day the work was set to start from; the schedule starts on the first working day. */
   startDate: string;
   manDays: number;
+  note?: string;
   schedule: WorkSchedule;
 }
 
@@ -52,19 +54,21 @@ export function workBarsOf(
       stakeholderId: assignment.stakeholderId,
       startDate: assignment.startDate,
       manDays: assignment.manDays,
+      note: assignment.note,
       schedule: scheduleAssignment(
         assignment,
         stakeholders.find((item) => item.id === assignment.stakeholderId)?.absences ?? [],
         closures,
       ),
     }));
-  if (project.contingency) {
+  for (const segment of contingencySegments(project)) {
     bars.push({
       kind: 'contingency',
-      id: project.id,
-      startDate: project.contingency.startDate,
-      manDays: project.contingency.manDays,
-      schedule: scheduleAssignment(project.contingency, [], closures),
+      id: segment.id,
+      startDate: segment.startDate,
+      manDays: segment.manDays,
+      note: segment.note,
+      schedule: scheduleAssignment(segment, [], closures),
     });
   }
   return bars;

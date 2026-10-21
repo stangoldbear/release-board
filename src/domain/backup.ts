@@ -38,14 +38,14 @@ import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES } from './plan';
 import { parseMilestone, sortMilestones } from './milestones';
 
 export const BACKUP_FORMAT = 'release-board/backup';
-export const BACKUP_SCHEMA_VERSION = 7;
+export const BACKUP_SCHEMA_VERSION = 8;
 /**
  * Older schemas this version still reads: 3 had no free notes, 4 no projects, 5 no notes of the
  * projects, assignments or roadmap configuration, 6 no phases, formulas and default members of
- * the teams, nor the settings of the roadmap. The company closures of the 0.14 are an optional
- * part of the roadmap of the 7: a version before them reads the backup without them.
+ * the teams, nor the settings of the roadmap. Schema 7 had no split reserve segments: schema 8
+ * prevents older versions from importing a backup whose project data they cannot read.
  */
-const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, 4, 5, 6, BACKUP_SCHEMA_VERSION];
+const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, 4, 5, 6, 7, BACKUP_SCHEMA_VERSION];
 /** Larger files are rejected before parsing: a real plan weighs a few hundred kilobytes. */
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 const MAX_REPORTED_ERRORS = 20;

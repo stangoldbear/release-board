@@ -134,6 +134,15 @@ export interface ProjectContingency {
   startDate: string;
   /** Working days of reserve. */
   manDays: number;
+  note?: string;
+  segments?: ContingencySegment[];
+}
+
+export interface ContingencySegment {
+  id: string;
+  startDate: string;
+  manDays: number;
+  note?: string;
 }
 
 /**

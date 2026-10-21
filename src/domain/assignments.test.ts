@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   absencesWithin,
   assignmentsOfProject,
+  copyAfterAssignment,
   describeEffort,
   diffAssignment,
   isValidManDays,
@@ -22,6 +23,27 @@ const assignment: Assignment = {
 };
 
 describe('scheduling an assignment', () => {
+  it('copies work after its end, skipping closures and absences and retaining its note', () => {
+    const original = { ...assignment, startDate: '2026-11-06', manDays: 1, note: 'Retained' };
+    const content = copyAfterAssignment(
+      original,
+      [{ start: '2026-11-10', end: '2026-11-10' }],
+      [{ start: '2026-11-09', end: '2026-11-09' }],
+    );
+    expect(content).toEqual({
+      projectId: 'p1',
+      stakeholderId: 'server-1',
+      startDate: '2026-11-11',
+      manDays: 1,
+      note: 'Retained',
+    });
+    expect(original.startDate).toBe('2026-11-06');
+    expect(
+      copyAfterAssignment(original, [{ start: '2026-01-01', end: '2099-12-31' }], []),
+    ).toBeNull();
+    expect(copyAfterAssignment({ ...original, startDate: '9999-12-31' }, [], [])).toBeNull();
+  });
+
   it('skips weekends, holidays and the days away, as in the example of the request', () => {
     // Three weeks from Tuesday the 15th of December 2026, away from the 20th of December to the
     // 20th of January: four days before the leave, then eleven from Thursday the 21st of January.

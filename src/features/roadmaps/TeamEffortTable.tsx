@@ -63,6 +63,16 @@ export function TeamEffortTable({
         </thead>
         <tbody className="divide-y divide-line">
           {rows.map((row) => {
+            const segments =
+              row.kind === 'person'
+                ? rows.filter(
+                    (item) => item.kind === 'person' && item.stakeholderId === row.stakeholderId,
+                  )
+                : [];
+            const rowName =
+              segments.length > 1
+                ? `${row.name} · segmento ${segments.findIndex((item) => item.key === row.key) + 1}`
+                : row.name;
             const days = rowDays(row, rows, config);
             const typedProblem =
               !row.auto && row.text.trim() !== '' && parseDays(row.text) === null;
@@ -80,7 +90,7 @@ export function TeamEffortTable({
                         color ? { backgroundColor: `var(--rb-task-${color}-border)` } : undefined
                       }
                     />
-                    <span className="truncate font-semibold">{row.name}</span>
+                    <span className="truncate font-semibold">{rowName}</span>
                     {row.team && (
                       <span className="shrink-0 text-xs text-fg-muted">{row.team.tag}</span>
                     )}
@@ -100,7 +110,7 @@ export function TeamEffortTable({
                       onChange={(event) =>
                         onRowsChange(typeDays(rows, row.key, event.target.value))
                       }
-                      aria-label={`Giorni uomo di ${row.name}`}
+                      aria-label={`Giorni uomo di ${rowName}`}
                       aria-describedby={hintId}
                       aria-invalid={typedProblem || undefined}
                       className={`${FIELD_CLASS} w-20 text-right tabular-nums ${
@@ -124,7 +134,7 @@ export function TeamEffortTable({
                         size="icon"
                         className="p-1"
                         onClick={() => onRowsChange(resetRow(rows, row.key))}
-                        aria-label={`Riapplica la formula a ${row.name}`}
+                        aria-label={`Riapplica la formula a ${rowName}`}
                         title={`Riapplica la formula: ${row.formula}`}
                       >
                         <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -136,7 +146,7 @@ export function TeamEffortTable({
                         size="icon"
                         className="p-1"
                         onClick={() => onOpenAssignment(row.assignmentId!)}
-                        aria-label={`Modifica il lavoro di ${row.name}: inizio e nota`}
+                        aria-label={`Modifica il lavoro di ${rowName}: inizio e nota`}
                         title="Inizio e nota del lavoro"
                       >
                         <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
@@ -148,7 +158,7 @@ export function TeamEffortTable({
                         size="icon"
                         className="p-1"
                         onClick={() => onRowsChange(removeRow(rows, row.key))}
-                        aria-label={`Togli ${row.name} dal progetto`}
+                        aria-label={`Togli ${rowName} dal progetto`}
                         title="Togli dal progetto"
                       >
                         <X className="h-3.5 w-3.5" aria-hidden="true" />

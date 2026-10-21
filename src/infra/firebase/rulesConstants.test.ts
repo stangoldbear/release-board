@@ -15,6 +15,7 @@ import {
 import { BORDER_STYLES, TASK_STATUSES } from '../../domain/plan';
 import {
   PROJECT_ARRANGEMENTS,
+  CONTINGENCY_SEGMENTS_MAX,
   PROJECT_DESCRIPTION_MAX,
   PROJECT_OWNER_MAX,
   PROJECT_STATUSES,
@@ -109,6 +110,9 @@ describe('the security rules', () => {
     expect(projects).toContain(`isText(data.description, ${PROJECT_DESCRIPTION_MAX})`);
     expect(projects).toContain(`data.fields.size() <= ${PROJECT_FIELDS_MAX}`);
     expect(projects).toContain(`data.contingency.manDays <= ${MAN_DAYS_MAX}`);
+    expect(projects).toContain(`segments.size() <= ${CONTINGENCY_SEGMENTS_MAX}`);
+    expect(projects).toContain(`isText(segment.note, ${ASSIGNMENT_NOTE_MAX})`);
+    expect(projects).toContain(`isText(data.contingency.note, ${ASSIGNMENT_NOTE_MAX})`);
   });
 
   it('limit the notes of the projects, the assignments and the configuration as the app does', () => {

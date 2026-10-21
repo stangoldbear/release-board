@@ -42,6 +42,23 @@ export function assignmentsOfProject(
   return sortAssignments(assignments.filter((item) => item.projectId === projectId));
 }
 
+export function copyAfterAssignment(
+  assignment: Assignment,
+  absences: readonly Absence[],
+  closures: readonly DateRange[],
+): AssignmentContent | null {
+  const schedule = scheduleAssignment(assignment, absences, closures);
+  if (schedule.truncated) return null;
+  const next = scheduleAssignment(
+    { startDate: addDaysIso(schedule.end, 1), manDays: 0.5 },
+    absences,
+    closures,
+  );
+  if (next.truncated || !isIsoDate(next.start)) return null;
+  const { id: _id, ...content } = assignment;
+  return { ...content, startDate: next.start };
+}
+
 /** The fields that differ between an assignment and what the editor saves; a blank note removes it. */
 export function diffAssignment(before: Assignment, after: AssignmentContent): AssignmentChanges {
   const changes: AssignmentChanges = {};

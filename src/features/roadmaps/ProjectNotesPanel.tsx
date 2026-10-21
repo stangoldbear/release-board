@@ -8,6 +8,7 @@ import { Highlight } from '../../shared/ui/Highlight';
 import { RulesNotice } from '../../shared/ui/RulesNotice';
 import { formatDateTimeIT } from '../../utils/dateUtils';
 import { NoteEditor } from './NoteEditor';
+import type { NoteDraft } from './NoteEditor';
 import { DueBadge } from './noteUi';
 import type { NoteActions } from './roadmapActions';
 
@@ -21,6 +22,8 @@ interface ProjectNotesPanelProps {
   nameOf: (author: MemoAuthor) => string;
   today: string;
   actions: NoteActions;
+  draft: NoteDraft;
+  onDraftChange: (draft: NoteDraft) => void;
 }
 
 /**
@@ -36,6 +39,8 @@ export function ProjectNotesPanel({
   nameOf,
   today,
   actions,
+  draft,
+  onDraftChange,
 }: ProjectNotesPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -59,6 +64,8 @@ export function ProjectNotesPanel({
         resetOnSubmit
         autoFocus
         onSubmit={actions.onCreate}
+        draft={draft}
+        onDraftChange={onDraftChange}
       />
       <p className="text-xs text-fg-muted">
         Le note si salvano subito. Invio aggiunge, Maiusc + Invio va a capo.

@@ -1,7 +1,17 @@
 import { Fragment, useId, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Copy, Pencil, Plus } from 'lucide-react';
+import { notesOfProject } from '../../domain/projectNotes';
+import { Button } from '../../shared/ui/Button';
 import { assignmentsOfProject } from '../../domain/assignments';
 import type { AssignmentChanges } from '../../domain/assignments';
+import {
+  changeContingency,
+  duplicateContingency,
+  removeContingency,
+} from '../../domain/contingency';
+import { CONTINGENCY_SEGMENTS_MAX } from '../../domain/projects';
+import { createId } from '../../utils/id';
+import { ContingencyDialog } from './ContingencyDialog';
 import { applyChanges } from '../../domain/changes';
 import { milestonesOfProject } from '../../domain/milestones';
 import { followerOf } from '../../domain/projectOrder';
@@ -12,9 +22,11 @@ import type { ProjectOfDay } from '../../domain/projectStatus';
 import { groupProjects, projectColorField } from '../../domain/roadmapConfig';
 import type {
   Assignment,
+  MemoAuthor,
   FieldOption,
   Milestone,
   Project,
+  ProjectNote,
   ProjectField,
   RoadmapConfig,
   Stakeholder,
@@ -56,12 +68,16 @@ export interface ProjectsSectionProps {
   /** The custom fields, the teams and the people, to show the main fields and the assignments. */
   config: RoadmapConfig;
   assignments: Assignment[];
+  notes: readonly ProjectNote[];
+  nameOf: (author: MemoAuthor) => string;
   /** While searching, the rows are those found, and no row adds a project. */
   searching: boolean;
   /** A field that groups: the projects with the same value go together, under its tag. */
   groupBy: ProjectField | null;
   metrics: RoadmapMetrics;
   onOpen: (project: Project) => void;
+  onDuplicateProject: (project: Project) => void;
+  onDuplicateAssignment: (assignmentId: string) => void;
   /** Adds a project from the days in view, as the button above the timeline does. */
   onAdd: () => void;
   /** Adds a project from a day. */
@@ -79,6 +95,7 @@ export interface ProjectsSectionProps {
   onReorder: (projectId: string, beforeId: string | null) => void;
   /** The notes on the timeline to show, those of the projects among them. */
   milestones: Milestone[];
+  allMilestones: readonly Milestone[];
   /** What every diamond shares: the drag, the card and the commands. */
   milestoneTools: MilestoneTools;
   /** Adds a note of a project on a day, with a click on it; absent while searching. */
@@ -155,10 +172,14 @@ export function ProjectsSection({
   teamLevelAvailable,
   config,
   assignments,
+  notes,
+  nameOf,
   searching,
   groupBy,
   metrics,
   onOpen,
+  onDuplicateProject,
+  onDuplicateAssignment,
   onAdd,
   onAddAt,
   onChange,
@@ -170,6 +191,7 @@ export function ProjectsSection({
   onSetProjectLevel,
   onReorder,
   milestones,
+  allMilestones,
   milestoneTools,
   onAddMilestone,
 }: ProjectsSectionProps) {
@@ -186,10 +208,9 @@ export function ProjectsSection({
       onChangeAssignment(item.id, changes);
       return;
     }
-    const contingency = {
-      startDate: changes.startDate ?? item.startDate,
-      manDays: changes.manDays ?? item.manDays,
-    };
+    const project = projects.find((project) => project.id === item.projectId);
+    if (!project) return;
+    const contingency = changeContingency(project, item.id, changes);
     onChange(
       item.projectId,
       changes.startDate ? { contingency, arrangement: 'manual' } : { contingency },
@@ -197,6 +218,9 @@ export function ProjectsSection({
   };
   const workDrag = useWorkDrag(dayWidth, changeWork);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [reserveEditor, setReserveEditor] = useState<{ projectId: string; id: string } | null>(
+    null,
+  );
   const spanOf = (project: ProjectWithEnd): ProjectSpan =>
     spans.get(project.id) ?? projectSpan(project, assignments, config);
   const workOf = useMemo(
@@ -215,6 +239,24 @@ export function ProjectsSection({
   );
 
   const addAt = useStableCallback(onAddAt);
+  const duplicateWork = (item: WorkItem) => {
+    if (item.kind === 'assignment') {
+      onDuplicateAssignment(item.id);
+      return;
+    }
+    const project = projects.find((entry) => entry.id === item.projectId);
+    if (!project) return;
+    const contingency = duplicateContingency(project, item.id, createId(), config.closures ?? []);
+    if (contingency) onChange(project.id, { contingency, arrangement: 'manual' });
+  };
+  const reserveProject = reserveEditor
+    ? projects.find((project) => project.id === reserveEditor.projectId)
+    : undefined;
+  const reserveItem = reserveEditor
+    ? workOf
+        .get(reserveEditor.projectId)
+        ?.find((item) => item.kind === 'contingency' && item.id === reserveEditor.id)
+    : undefined;
   // The small window with everything about a project, from the button of its row: one for every
   // row, which stays where it was moved while it shows another project.
   const [info, setInfo] = useState<{
@@ -349,6 +391,14 @@ export function ProjectsSection({
                   onStartWorkDrag={workDrag.startDrag}
                   onEdit={setEditing}
                   onOpen={() => onOpen(project)}
+                  onDuplicate={teamLevelAvailable ? () => onDuplicateProject(project) : undefined}
+                  onDuplicateWork={duplicateWork}
+                  contingencyDuplicable={
+                    (project.contingency?.segments?.length ?? 0) < CONTINGENCY_SEGMENTS_MAX
+                  }
+                  onOpenContingency={(item) =>
+                    setReserveEditor({ projectId: item.projectId, id: item.id })
+                  }
                   onChange={(changes) => changeByKey(project, changes)}
                   onMove={(days) => moveByKey(project, days)}
                   onChangeWork={changeWorkByKey}
@@ -403,6 +453,7 @@ export function ProjectsSection({
           anchor={info.anchor}
           beside={info.beside}
           onClose={() => setInfo(null)}
+          widthClass="w-[48rem]"
         >
           <ProjectCard
             project={infoProject}
@@ -410,8 +461,53 @@ export function ProjectsSection({
             work={workOf.get(infoProject.id) ?? []}
             config={config}
             tagField={tagField}
+            notes={notesOfProject(notes, infoProject.id)}
+            milestones={allMilestones}
+            nameOf={nameOf}
           />
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
+            <Button
+              size="sm"
+              onClick={() => {
+                setInfo(null);
+                onOpen(infoProject);
+              }}
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              Modifica
+            </Button>
+            <Button
+              size="sm"
+              disabled={!teamLevelAvailable}
+              onClick={() => {
+                setInfo(null);
+                onDuplicateProject(infoProject);
+              }}
+            >
+              <Copy className="h-4 w-4" aria-hidden="true" />
+              Duplica
+            </Button>
+          </div>
         </FloatingPanel>
+      )}
+      {reserveItem && reserveProject && (
+        <ContingencyDialog
+          key={reserveItem.id}
+          item={reserveItem}
+          onClose={() => setReserveEditor(null)}
+          onSave={(changes) =>
+            onChange(reserveProject.id, {
+              contingency: changeContingency(reserveProject, reserveItem.id, changes),
+              arrangement: 'manual',
+            })
+          }
+          onDelete={() =>
+            onChange(reserveProject.id, {
+              contingency: removeContingency(reserveProject, reserveItem.id),
+              arrangement: 'manual',
+            })
+          }
+        />
       )}
       {drag && (
         <DragHint>

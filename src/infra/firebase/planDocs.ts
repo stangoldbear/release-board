@@ -198,6 +198,8 @@ export function projectContent(project: Omit<Project, 'id'>): DocumentData {
     data.contingency = {
       startDate: project.contingency.startDate,
       manDays: project.contingency.manDays,
+      ...(project.contingency.note ? { note: project.contingency.note } : {}),
+      ...(project.contingency.segments?.length ? { segments: project.contingency.segments } : {}),
     };
   }
   if (project.arrangement && project.arrangement !== DEFAULT_ARRANGEMENT) {
@@ -212,7 +214,7 @@ export function projectContent(project: Omit<Project, 'id'>): DocumentData {
 
 /** A project from its document; an unknown color, from an older version, becomes the default. */
 export function readProject(id: string, data: DocumentData): Project | null {
-  const parsed = parseProjectData(data, true);
+  const parsed = parseProjectData({ ...data, id }, true);
   return 'content' in parsed ? { id, ...parsed.content } : null;
 }
 

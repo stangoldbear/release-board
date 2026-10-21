@@ -1,4 +1,5 @@
 import type { KeyboardEvent, PointerEvent } from 'react';
+import { Info } from 'lucide-react';
 import type { TaskColorId } from '../../domain/colors';
 import { PROJECT_STATUS_LABELS } from '../../domain/projects';
 import type { ProjectWithEnd } from '../../domain/projects';
@@ -12,6 +13,8 @@ import { fadedParts, formatManDays } from './barRendering';
 import type { Lanes, WorkItem } from './barRendering';
 import { ProjectStatusMark } from './projectUi';
 import { useClickOrDoubleClick } from './useClickOrDoubleClick';
+import { useBarMenu } from './useBarMenu';
+import { Tooltip } from '../../shared/ui/Tooltip';
 
 /** The arrows move a project by a week: a day is too little to see on a roadmap. */
 const KEY_STEP_DAYS = 7;
@@ -52,6 +55,8 @@ interface ProjectBarProps {
   ignoreClick: () => boolean;
   onPointerDown: (event: PointerEvent) => void;
   onOpen: () => void;
+  onShowInfo: (anchor: HTMLElement) => void;
+  onDuplicate?: () => void;
   /** Moves the project with the work of its team by some days. */
   onMove: (days: number) => void;
   /** Moves the project up or down by a row in the order of the members. */
@@ -81,11 +86,14 @@ export function ProjectBar({
   ignoreClick,
   onPointerDown,
   onOpen,
+  onShowInfo,
+  onDuplicate,
   onMove,
   onMoveRow,
 }: ProjectBarProps) {
   const formatDate = useFormatDate();
   const clicks = useClickOrDoubleClick(onOpen, undefined, ignoreClick);
+  const commands = useBarMenu(placed.task.title, onShowInfo, onDuplicate);
   const { task: project, first, last, continuesBefore, continuesAfter } = placed;
   const width = (last - first + 1) * dayWidth - 2;
   const current = useIsCurrentResult('project', project.id);
@@ -95,7 +103,8 @@ export function ProjectBar({
   const spanWidth = (start: string, end: string) => (diffDays(start, end) + 1) * dayWidth - 2;
   const people = work.map((item) => `${item.name} · ${formatManDays(item.manDays)}`);
 
-  const handleKeyDown = (event: KeyboardEvent) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (commands.onMenuKeyDown(event)) return;
     if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
       event.preventDefault();
       onMoveRow(event.key === 'ArrowDown' ? 1 : -1);
@@ -107,102 +116,125 @@ export function ProjectBar({
   };
 
   return (
-    <button
-      type="button"
-      id={projectBarId(project.id)}
-      aria-label={[
-        project.title,
-        `dal ${formatDate(project.startDate)} al ${formatDate(project.endDate)}`,
-        days ? `${days.replace(/ gg?$/, '')} giorni uomo` : null,
-        PROJECT_STATUS_LABELS[project.status],
-        project.owner ? `responsabile ${project.owner}` : null,
-        project.deadline ? `deadline il ${formatDate(project.deadline)}` : null,
-        span.late ? 'oltre la deadline' : null,
-      ]
-        .filter(Boolean)
-        .join(', ')}
-      aria-describedby={describedBy}
-      title={[
-        project.title,
-        `${formatDate(project.startDate)} → ${formatDate(project.endDate)}${
-          days ? ` · ${days.replace(/ gg?$/, '')} giorni uomo` : ''
-        }`,
-        project.deadline
-          ? `Deadline ${formatDate(project.deadline)}${span.late ? ', superata' : ''}`
-          : null,
-        ...people,
-      ]
-        .filter(Boolean)
-        .join('\n')}
-      onPointerDown={(event) => {
-        clicks.onPointerDown(event);
-        onPointerDown(event);
-      }}
-      onClick={clicks.onClick}
-      onDoubleClick={clicks.onDoubleClick}
-      onKeyDown={handleKeyDown}
-      style={{
-        ...taskColorStyle(colorId),
-        left: first * dayWidth + 1,
-        width: Math.max(width, 6),
-        top,
-        height,
-      }}
-      // Clipped rather than hidden: a hidden overflow would keep the title from sticking.
-      className={`group/bar pointer-events-auto absolute flex cursor-grab items-start border-2 px-2 text-left text-xs font-semibold active:cursor-grabbing in-data-compact:px-1 ${
-        overflowTitle ? 'overflow-visible' : 'overflow-clip'
-      } ${
-        continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'
-      } ${continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'} ${
-        dragging ? 'z-[1000] opacity-90 shadow-xl ring-2 ring-fg' : 'z-10 shadow-xs hover:shadow-md'
-      } ${current ? `z-[500] ${CURRENT_RESULT}` : ''}`}
-    >
-      {/* The days without work: the surface shows through, under oblique dashes. */}
-      {fadedParts(span).map((part) => (
-        <span
-          key={part.start}
-          aria-hidden="true"
-          style={{
-            left: offset(part.start),
-            width: spanWidth(part.start, part.end),
-            backgroundImage: FADED_STRIPES,
-          }}
-          className="pointer-events-none absolute inset-y-0 bg-surface/60"
-        />
-      ))}
-      {/* The title stays in view while the start of a long bar scrolls past the left edge. */}
-      <span
-        style={{ height: titleHeight - 4 }}
-        className={`sticky left-[calc(var(--gantt-label-width)+6px)] z-[2] flex items-center gap-1 ${
-          overflowTitle ? 'max-w-none' : 'max-w-full min-w-0'
-        }`}
+    <>
+      <button
+        type="button"
+        id={projectBarId(project.id)}
+        aria-label={[
+          project.title,
+          `dal ${formatDate(project.startDate)} al ${formatDate(project.endDate)}`,
+          days ? `${days.replace(/ gg?$/, '')} giorni uomo` : null,
+          PROJECT_STATUS_LABELS[project.status],
+          project.owner ? `responsabile ${project.owner}` : null,
+          project.deadline ? `deadline il ${formatDate(project.deadline)}` : null,
+          span.late ? 'oltre la deadline' : null,
+        ]
+          .filter(Boolean)
+          .join(', ')}
+        aria-describedby={describedBy}
+        title={[
+          project.title,
+          `${formatDate(project.startDate)} → ${formatDate(project.endDate)}${
+            days ? ` · ${days.replace(/ gg?$/, '')} giorni uomo` : ''
+          }`,
+          project.deadline
+            ? `Deadline ${formatDate(project.deadline)}${span.late ? ', superata' : ''}`
+            : null,
+          ...people,
+        ]
+          .filter(Boolean)
+          .join('\n')}
+        onPointerDown={(event) => {
+          clicks.onPointerDown(event);
+          onPointerDown(event);
+        }}
+        onClick={clicks.onClick}
+        onDoubleClick={clicks.onDoubleClick}
+        onKeyDown={handleKeyDown}
+        onContextMenu={commands.onContextMenu}
+        style={{
+          ...taskColorStyle(colorId),
+          left: first * dayWidth + 1,
+          width: Math.max(width, 6),
+          top,
+          height,
+        }}
+        // Clipped rather than hidden: a hidden overflow would keep the title from sticking.
+        className={`group/bar pointer-events-auto absolute flex cursor-grab items-start border-2 px-2 text-left text-xs font-semibold active:cursor-grabbing in-data-compact:px-1 ${
+          overflowTitle ? 'overflow-visible' : 'overflow-clip'
+        } ${
+          continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-xs'
+        } ${continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-xs'} ${
+          dragging
+            ? 'z-[1000] opacity-90 shadow-xl ring-2 ring-fg'
+            : 'z-10 shadow-xs hover:shadow-md'
+        } ${current ? `z-[500] ${CURRENT_RESULT}` : ''}`}
       >
-        <ProjectStatusMark status={project.status} iconOnly />
-        <span className={overflowTitle ? 'whitespace-nowrap' : 'truncate'}>
-          <Highlight text={project.title} />
-        </span>
-        {days && <span className="shrink-0 font-normal tabular-nums opacity-80">· {days}</span>}
-      </span>
-      {lanes &&
-        work.map((item, index) => (
+        {/* The days without work: the surface shows through, under oblique dashes. */}
+        {fadedParts(span).map((part) => (
           <span
-            key={`${item.kind}-${item.id}`}
+            key={part.start}
             aria-hidden="true"
-            title={`${item.name} · ${formatManDays(item.manDays)}`}
-            // A lane is part of the picture of the project: it does not move on its own.
-            onPointerDown={(event) => event.stopPropagation()}
             style={{
-              ...(item.colorId ? taskColorStyle(item.colorId) : undefined),
-              left: offset(item.schedule.start),
-              width: spanWidth(item.schedule.start, item.schedule.end),
-              top: titleHeight - 2 + index * (lanes.height + lanes.gap),
-              height: lanes.height,
+              left: offset(part.start),
+              width: spanWidth(part.start, part.end),
+              backgroundImage: FADED_STRIPES,
             }}
-            className={`pointer-events-auto absolute z-[1] cursor-default rounded-[2px] border ${
-              item.colorId ? '' : 'border-line-strong bg-surface-strong'
-            }`}
+            className="pointer-events-none absolute inset-y-0 bg-surface/60"
           />
         ))}
-    </button>
+        {/* The title stays in view while the start of a long bar scrolls past the left edge. */}
+        <span
+          style={{ height: titleHeight - 4 }}
+          className={`sticky left-[calc(var(--gantt-label-width)+6px)] z-[2] flex items-center gap-1 pl-4 ${
+            overflowTitle ? 'max-w-none' : 'max-w-full min-w-0'
+          }`}
+        >
+          <ProjectStatusMark status={project.status} iconOnly />
+          <span className={overflowTitle ? 'whitespace-nowrap' : 'truncate'}>
+            <Highlight text={project.title} />
+          </span>
+          {days && <span className="shrink-0 font-normal tabular-nums opacity-80">· {days}</span>}
+        </span>
+        {lanes &&
+          work.map((item, index) => (
+            <span
+              key={`${item.kind}-${item.id}`}
+              aria-hidden="true"
+              title={`${item.name} · ${formatManDays(item.manDays)}`}
+              // A lane is part of the picture of the project: it does not move on its own.
+              onPointerDown={(event) => event.stopPropagation()}
+              style={{
+                ...(item.colorId ? taskColorStyle(item.colorId) : undefined),
+                left: offset(item.schedule.start),
+                width: spanWidth(item.schedule.start, item.schedule.end),
+                top: titleHeight - 2 + index * (lanes.height + lanes.gap),
+                height: lanes.height,
+              }}
+              className={`pointer-events-auto absolute z-[1] cursor-default rounded-[2px] border ${
+                item.colorId ? '' : 'border-line-strong bg-surface-strong'
+              }`}
+            />
+          ))}
+      </button>
+      <div
+        className="pointer-events-none absolute z-30"
+        style={{ left: first * dayWidth + 1, width: Math.max(width, 6), top, height: titleHeight }}
+      >
+        <Tooltip text={`Informazioni su «${project.title}»`}>
+          <button
+            type="button"
+            aria-label={`Informazioni sulla barra di «${project.title}»`}
+            onClick={(event) => onShowInfo(event.currentTarget)}
+            onContextMenu={commands.onContextMenu}
+            style={{ ...taskColorStyle(colorId), height: titleHeight - 2 }}
+            className="pointer-events-auto sticky left-[calc(var(--gantt-label-width)+2px)] flex w-5 cursor-pointer items-center justify-center rounded-xs"
+          >
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </Tooltip>
+      </div>
+      {commands.menu}
+    </>
   );
 }

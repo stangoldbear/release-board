@@ -14,6 +14,32 @@ import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { SEGMENT, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from '../../shared/ui/segmented';
 import { isIsoDate } from '../../utils/dateUtils';
 
+export interface NoteDraft {
+  text: string;
+  status: '' | ProjectNoteStatus;
+  dueOn: string;
+  remind: boolean;
+  owners: string;
+  tags: string;
+}
+
+export function emptyNoteDraft(): NoteDraft {
+  return { text: '', status: '', dueOn: '', remind: false, owners: '', tags: '' };
+}
+
+export function noteDraftContent(projectId: string, draft: NoteDraft): ProjectNoteContent | null {
+  if (!draft.text.trim() || (draft.dueOn !== '' && !isIsoDate(draft.dueOn))) return null;
+  const content: ProjectNoteContent = { projectId, text: draft.text.trim() };
+  if (draft.status) content.status = draft.status;
+  if (draft.dueOn) content.dueOn = draft.dueOn;
+  if (draft.dueOn && draft.remind) content.remind = true;
+  const owners = splitList(draft.owners);
+  const tags = splitList(draft.tags);
+  if (owners.length > 0) content.owners = owners;
+  if (tags.length > 0) content.tags = tags;
+  return content;
+}
+
 interface NoteEditorProps {
   /** What the editor starts from: the project and, for a note being edited, its content. */
   initial: ProjectNoteContent;
@@ -28,6 +54,8 @@ interface NoteEditorProps {
   onSubmit: (content: ProjectNoteContent) => void;
   onCancel?: () => void;
   autoFocus?: boolean;
+  draft?: NoteDraft;
+  onDraftChange?: (draft: NoteDraft) => void;
 }
 
 /** The three states a note can have: none, to do, done. */
@@ -51,13 +79,24 @@ export function NoteEditor({
   onSubmit,
   onCancel,
   autoFocus = false,
+  draft: controlledDraft,
+  onDraftChange,
 }: NoteEditorProps) {
-  const [text, setText] = useState(initial.text);
-  const [status, setStatus] = useState<'' | ProjectNoteStatus>(initial.status ?? '');
-  const [dueOn, setDueOn] = useState(initial.dueOn ?? '');
-  const [remind, setRemind] = useState(initial.remind === true);
-  const [owners, setOwners] = useState((initial.owners ?? []).join(', '));
-  const [tags, setTags] = useState((initial.tags ?? []).join(', '));
+  const [localDraft, setLocalDraft] = useState<NoteDraft>(() => ({
+    text: initial.text,
+    status: initial.status ?? '',
+    dueOn: initial.dueOn ?? '',
+    remind: initial.remind === true,
+    owners: (initial.owners ?? []).join(', '),
+    tags: (initial.tags ?? []).join(', '),
+  }));
+  const draft = controlledDraft ?? localDraft;
+  const { text, status, dueOn, remind, owners, tags } = draft;
+  const setDraft = (next: NoteDraft) => {
+    setLocalDraft(next);
+    onDraftChange?.(next);
+  };
+  const change = (changes: Partial<NoteDraft>) => setDraft({ ...draft, ...changes });
   const textId = useId();
   const dueId = useId();
   const ownersId = useId();
@@ -69,23 +108,11 @@ export function NoteEditor({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!canSubmit) return;
-    const content: ProjectNoteContent = { projectId: initial.projectId, text: text.trim() };
-    if (status) content.status = status;
-    if (dueOn) content.dueOn = dueOn;
-    if (dueOn && remind) content.remind = true;
-    const ownerList = splitList(owners);
-    if (ownerList.length > 0) content.owners = ownerList;
-    const tagList = splitList(tags);
-    if (tagList.length > 0) content.tags = tagList;
+    const content = noteDraftContent(initial.projectId, draft);
+    if (!content) return;
     onSubmit(content);
     if (resetOnSubmit) {
-      setText('');
-      setStatus('');
-      setDueOn('');
-      setRemind(false);
-      setOwners('');
-      setTags('');
+      setDraft(emptyNoteDraft());
     }
   };
 
@@ -98,7 +125,7 @@ export function NoteEditor({
           rows={expanded ? 3 : 1}
           maxLength={PROJECT_NOTE_TEXT_MAX}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => change({ text: event.target.value })}
           onKeyDown={(event) => {
             // Enter adds the note; Shift + Enter goes to a new line.
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -144,7 +171,7 @@ export function NoteEditor({
                   key={option.value}
                   type="button"
                   aria-pressed={status === option.value}
-                  onClick={() => setStatus(option.value)}
+                  onClick={() => change({ status: option.value })}
                   className={`${SEGMENT} ${status === option.value ? SEGMENT_ON : SEGMENT_OFF}`}
                 >
                   {status === option.value && (
@@ -164,7 +191,7 @@ export function NoteEditor({
               type="date"
               max={DATE_MAX}
               value={dueOn}
-              onChange={(event) => setDueOn(event.target.value)}
+              onChange={(event) => change({ dueOn: event.target.value })}
               className={FIELD_CLASS}
             />
           </div>
@@ -175,7 +202,7 @@ export function NoteEditor({
               type="checkbox"
               checked={remind && dueOn !== ''}
               disabled={dueOn === ''}
-              onChange={(event) => setRemind(event.target.checked)}
+              onChange={(event) => change({ remind: event.target.checked })}
             />
             Avvisa alla scadenza
           </label>
@@ -194,7 +221,7 @@ export function NoteEditor({
               type="text"
               list={ownersListId}
               value={owners}
-              onChange={(event) => setOwners(event.target.value)}
+              onChange={(event) => change({ owners: event.target.value })}
               placeholder="Nomi separati da virgola"
               className={FIELD_CLASS}
             />
@@ -213,7 +240,7 @@ export function NoteEditor({
               type="text"
               list={tagsListId}
               value={tags}
-              onChange={(event) => setTags(event.target.value)}
+              onChange={(event) => change({ tags: event.target.value })}
               placeholder="Parole separate da virgola"
               className={FIELD_CLASS}
             />

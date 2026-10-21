@@ -24,7 +24,8 @@ import {
   rememberReminders,
 } from '../domain/memos';
 import type { MemoContent } from '../domain/memos';
-import { assignmentsOfProject, moveAssignment } from '../domain/assignments';
+import { assignmentsOfProject, copyAfterAssignment, moveAssignment } from '../domain/assignments';
+import { moveContingency } from '../domain/contingency';
 import type { AssignmentChanges, AssignmentContent } from '../domain/assignments';
 import { copyOfTask, diffTask, isPlanEmpty } from '../domain/plan';
 import { notesOfProject, rememberNoteReminders } from '../domain/projectNotes';
@@ -550,7 +551,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     const changes: ProjectChanges = { startDate: addDaysIso(project.startDate, days) };
     const closures = plan.roadmap.closures ?? [];
     if (project.contingency) {
-      changes.contingency = moveAssignment(project.contingency, days, closures);
+      changes.contingency = moveContingency(project.contingency, days, closures);
     }
     repository.updateProject(projectId, changes);
     for (const assignment of assignmentsOfProject(plan.assignments, projectId)) {
@@ -573,6 +574,36 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     focusAfterClosing(NEW_ITEM_ID);
   };
 
+  const handleDuplicateProject = (project: Project) => {
+    const saved = plan.projects.find((item) => item.id === project.id);
+    if (!saved) return;
+    const { id: _id, ...content } = saved;
+    const copy = structuredClone(content);
+    if (copy.contingency?.segments) {
+      copy.contingency.segments = copy.contingency.segments.map((segment) => ({
+        ...segment,
+        id: createId(),
+      }));
+    }
+    const projectId = repository.createProject({
+      ...copy,
+      position: nextProjectPosition(plan.projects),
+    });
+    for (const assignment of assignmentsOfProject(plan.assignments, saved.id)) {
+      const { id: _assignmentId, ...work } = assignment;
+      repository.createAssignment({ ...work, projectId });
+    }
+    for (const note of notesOfProject(plan.projectNotes, saved.id)) {
+      const { id: _noteId, createdAt: _createdAt, author: _author, ...content } = note;
+      repository.createProjectNote({ ...content, projectId });
+    }
+    for (const milestone of plan.milestones.filter((item) => item.projectId === saved.id)) {
+      const { id: _milestoneId, ...content } = milestone;
+      repository.createMilestone({ ...content, projectId });
+    }
+    showToast(`Progetto «${oneLine(saved.title)}» duplicato`);
+  };
+
   // The notes of the projects, who works on them, and the people themselves.
   const noteActions = {
     onCreate: (content: ProjectNoteContent) => {
@@ -587,6 +618,23 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     },
   };
   const assignmentActions = {
+    onDuplicate: (assignmentId: string) => {
+      const assignment = plan.assignments.find((item) => item.id === assignmentId);
+      if (!assignment) return;
+      const person = plan.roadmap.stakeholders.find((item) => item.id === assignment.stakeholderId);
+      const content = copyAfterAssignment(
+        assignment,
+        person?.absences ?? [],
+        plan.roadmap.closures ?? [],
+      );
+      if (!content) {
+        showToast('Il nuovo segmento non entra nel calendario');
+        return;
+      }
+      repository.createAssignment(content);
+      repository.updateProject(assignment.projectId, { arrangement: 'manual' });
+      showToast('Segmento di lavoro duplicato');
+    },
     onCreate: (content: AssignmentContent) => {
       repository.createAssignment(content);
       showToast('Persona aggiunta al progetto');
@@ -1035,6 +1083,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
                 me,
                 nameOf,
                 projectActions: {
+                  onDuplicate: handleDuplicateProject,
                   onCreate: handleCreateProject,
                   onUpdate: (projectId, changes) => repository.updateProject(projectId, changes),
                   onMove: handleMoveProject,

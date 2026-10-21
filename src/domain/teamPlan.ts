@@ -70,6 +70,7 @@ export function planTeam(
   }
   if (contingencyDays && arranged.contingencyStart) {
     plan.contingency = {
+      ...project.contingency,
       startDate:
         project.arrangement === 'manual' && project.contingency
           ? project.contingency.startDate

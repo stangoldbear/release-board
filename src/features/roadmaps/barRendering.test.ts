@@ -5,6 +5,7 @@ import type { Assignment, Project } from '../../domain/types';
 import {
   fadedParts,
   formatManDays,
+  groupWorkItems,
   laneLayout,
   peopleRows,
   projectRowGeometry,
@@ -38,6 +39,21 @@ const assignments: Assignment[] = [
 const span = projectSpan(project, assignments, config);
 
 describe('the bars of the work of a project', () => {
+  it('keeps successive segments on one person row and stacks overlapping ones', () => {
+    const bars = [assignments[0]!, { ...assignments[0]!, id: 'second', startDate: '2026-12-01' }];
+    const items = workItemsOf(project, projectSpan(project, bars, config), config);
+    const groups = groupWorkItems(items);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.items).toHaveLength(2);
+    expect(groups[0]?.lines).toBe(1);
+    const overlapping = workItemsOf(
+      project,
+      projectSpan(project, [bars[0]!, { ...bars[1]!, startDate: bars[0]!.startDate }], config),
+      config,
+    );
+    expect(groupWorkItems(overlapping)[0]?.lines).toBe(2);
+  });
+
   it('are in the order of the work, with the contingency last and the unknown person before it', () => {
     const items = workItemsOf(project, span, config);
     expect(items.map((item) => item.name)).toEqual([

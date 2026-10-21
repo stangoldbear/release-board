@@ -730,6 +730,37 @@ describe('projects', () => {
     );
   });
 
+  it('validates split reserve segments, their notes and unique identifiers', async () => {
+    const segment = { id: 'reserve-2', startDate: '2026-12-01', manDays: 2, note: 'Second' };
+    const reserve = { startDate: '2026-11-20', manDays: 3, note: 'First', segments: [segment] };
+    await assertSucceeds(writeProject(editor, EDITOR, { ...PROJECT, contingency: reserve }));
+    for (const segments of [
+      [{ ...segment, startDate: 'invalid' }],
+      [{ ...segment, manDays: 0 }],
+      [{ ...segment, note: 'x'.repeat(501) }],
+      [{ ...segment, extra: true }],
+      [{ ...segment, id: 'p1' }],
+      [segment, { ...segment, manDays: 3 }],
+      Array.from({ length: 6 }, (_, index) => ({ ...segment, id: `reserve-${index}` })),
+    ]) {
+      await assertFails(
+        writeProject(editor, EDITOR, { ...PROJECT, contingency: { ...reserve, segments } }),
+      );
+    }
+    await assertSucceeds(
+      writeProject(editor, EDITOR, {
+        ...PROJECT,
+        contingency: {
+          ...reserve,
+          segments: Array.from({ length: 5 }, (_, index) => ({
+            ...segment,
+            id: `reserve-${index}`,
+          })),
+        },
+      }),
+    );
+  });
+
   it('keeps strangers and anonymous visitors out', async () => {
     await assertSucceeds(writeProject(editor, EDITOR, PROJECT));
     await assertFails(writeProject(stranger, STRANGER, PROJECT, 'p2'));

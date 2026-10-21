@@ -899,10 +899,14 @@ export function TimelineArea({
                               teamLevelAvailable={!roadmap.detailsUnavailable}
                               config={plan.roadmap}
                               assignments={plan.assignments}
+                              notes={plan.projectNotes}
+                              nameOf={roadmap.nameOf}
                               searching={searching}
                               groupBy={groupBy}
                               metrics={metrics}
                               onOpen={(project) => dialogs.openProject(project)}
+                              onDuplicateProject={roadmap.projectActions.onDuplicate}
+                              onDuplicateAssignment={roadmap.assignmentActions.onDuplicate}
                               onAdd={() => dialogs.openNewProject(defaultDay)}
                               onAddAt={dialogs.openNewProject}
                               onChange={roadmap.projectActions.onUpdate}
@@ -914,6 +918,7 @@ export function TimelineArea({
                               onSetProjectLevel={controls.setProjectLevel}
                               onReorder={roadmap.projectActions.onReorder}
                               milestones={roadmap.milestones}
+                              allMilestones={plan.milestones}
                               milestoneTools={milestone.tools}
                               onAddMilestone={searching ? undefined : dialogs.addMilestone}
                             />
@@ -967,6 +972,7 @@ export function TimelineArea({
                               onOpenAssignment={dialogs.openAssignment}
                               onChangeAssignment={roadmap.assignmentActions.onUpdate}
                               onOpenStakeholder={dialogs.openStakeholder}
+                              onDuplicateAssignment={roadmap.assignmentActions.onDuplicate}
                             />
                           ))}
                       </div>

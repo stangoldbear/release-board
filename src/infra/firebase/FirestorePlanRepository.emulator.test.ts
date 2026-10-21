@@ -517,6 +517,49 @@ describe('changes', () => {
     });
   });
 
+  it('shares split reserve segments and records their changes in project history', async () => {
+    const other = repositoryFor(editorDb, EDITOR);
+    await other.whenReady();
+    const reserve = {
+      startDate: '2026-11-02',
+      manDays: 2,
+      note: 'First',
+      segments: [{ id: 'reserve-2', startDate: '2026-11-09', manDays: 3, note: 'After the pause' }],
+    };
+    const id = repository.createProject({
+      title: 'Split reserve',
+      startDate: '2026-11-02',
+      colorId: 'gray',
+      status: 'planned',
+      arrangement: 'manual',
+      contingency: reserve,
+    });
+    const created = await planWhere(other, (plan) => plan.projects.some((item) => item.id === id));
+    expect(created.projects.find((item) => item.id === id)?.contingency).toEqual(reserve);
+    const changed = {
+      ...reserve,
+      segments: [{ ...reserve.segments[0]!, note: 'Updated second segment' }],
+    };
+    other.updateProject(id, { contingency: changed });
+    const updated = await planWhere(
+      repository,
+      (plan) =>
+        plan.projects.find((item) => item.id === id)?.contingency?.segments?.[0]?.note ===
+        'Updated second segment',
+    );
+    expect(updated.projects.find((item) => item.id === id)?.contingency?.note).toBe('First');
+    await whenSynced(repository);
+    await whenSynced(other);
+    const history = await getDocs(collection(ownerDb, `plans/${PLAN_ID}/history`));
+    const entries = history.docs
+      .map((item) => item.data() as HistoryEntry)
+      .filter((item) => item.entity === 'project' && item.entityId === id);
+    expect(entries.map((item) => item.action).sort()).toEqual(['create', 'update']);
+    expect(entries.find((item) => item.action === 'update')?.after).toMatchObject({
+      contingency: changed,
+    });
+  });
+
   it('adds, changes, moves and deletes free notes, and another member sees them', async () => {
     const other = repositoryFor(editorDb, EDITOR);
     await other.whenReady();

@@ -10,6 +10,7 @@ import type { MilestoneChanges, MilestoneContent } from '../../domain/milestones
 // one object each instead of a dozen callbacks.
 
 export interface ProjectActions {
+  onDuplicate: (project: Project) => void;
   /** Adds a project and returns its id, so that the work of its team can follow. */
   onCreate: (content: ProjectContent) => string;
   onUpdate: (projectId: string, changes: ProjectChanges) => void;
@@ -33,6 +34,7 @@ export interface NoteActions {
 }
 
 export interface AssignmentActions {
+  onDuplicate: (assignmentId: string) => void;
   onCreate: (content: AssignmentContent) => void;
   onUpdate: (assignmentId: string, changes: AssignmentChanges) => void;
   onDelete: (assignmentId: string) => void;
