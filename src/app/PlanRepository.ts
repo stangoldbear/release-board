@@ -39,13 +39,17 @@ export const PART_NAMES: Record<PlanPart, string> = {
   contacts: 'Contatti',
 };
 
-/** "Note libere e progetti non disponibili: chi gestisce l'istanza deve pubblicare le regole…". */
-export function unavailableMessage(parts: readonly PlanPart[]): string {
+/** "Note libere e progetti". */
+function partList(parts: readonly PlanPart[]): string {
   const [first = '', ...others] = parts.map((part) => PART_NAMES[part]);
   const names = [first, ...others.map((part) => part.toLowerCase())];
-  const list =
-    names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names.at(-1) ?? ''}` : first;
-  return `${list} non disponibili: chi gestisce l'istanza deve pubblicare le regole di sicurezza aggiornate.`;
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names.at(-1) ?? ''}` : first;
+}
+
+/** "Note libere e progetti non disponibili: chi gestisce l'istanza deve pubblicare le regole…". */
+export function unavailableMessage(parts: readonly PlanPart[]): string {
+  // A part refused when the page opened stays out until it opens again, rules published or not.
+  return `${partList(parts)} non disponibili: chi gestisce l'istanza deve pubblicare le regole di sicurezza aggiornate. Se sono già pubblicate, ricarica la pagina.`;
 }
 
 export interface SyncState {
@@ -73,6 +77,16 @@ export interface SyncState {
 /** What the page says when the published rules are older than the site. */
 export const OUTDATED_RULES_MESSAGE =
   'Le regole di sicurezza pubblicate sono di una versione precedente del sito: alcune modifiche vengono rifiutate e spariscono subito dopo. Chi gestisce l’istanza deve pubblicare le regole di questa versione.';
+
+/**
+ * The rules older than the site, and the parts missing because of them: the cause first, as the
+ * missing parts follow from it.
+ */
+export function outdatedRulesMessage(missing: readonly PlanPart[]): string {
+  return missing.length > 0
+    ? `${OUTDATED_RULES_MESSAGE} Finché non lo fa, non sono disponibili: ${partList(missing)}.`
+    : OUTDATED_RULES_MESSAGE;
+}
 
 /** The state of a repository before it says otherwise. */
 export const INITIAL_SYNC: SyncState = {

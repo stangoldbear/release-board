@@ -1,4 +1,5 @@
 import type { NameLookup } from './authorNames';
+import type { ChangeUndo } from './ChangeUndo';
 import type { HistoryReader } from './HistoryReader';
 import type { MembersRepository, Role } from './MembersRepository';
 
@@ -28,6 +29,8 @@ export type Instance =
       role: Role;
       members: MembersRepository;
       history: HistoryReader;
+      /** Undo and redo of the member's own changes, from the history. */
+      undo: ChangeUndo;
       /** The full name of a member, from their GitHub profile, to show beside what they wrote. */
       lookupName: NameLookup;
       signOut: () => Promise<void>;

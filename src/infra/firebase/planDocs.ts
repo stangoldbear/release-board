@@ -73,7 +73,7 @@ export const PLAN_ID = 'main';
  * The version of the security rules this site needs: the rules let members read
  * `rulesVersion/<this>`, and older rules refuse it. It changes with a release that changes them.
  */
-export const RULES_VERSION = '0.21.0';
+export const RULES_VERSION = '0.22.0';
 export const METRIC_ID: string = DAILY_METRIC.id;
 
 /** A document to write under the plan: its path relative to the plan, and its content. */

@@ -303,6 +303,7 @@ function MemberSession({
     role: access.role,
     members: session.members,
     history: session.repository,
+    undo: session.repository,
     lookupName: lookupGitHubNameById,
     signOut: onSignOut,
   };

@@ -461,6 +461,28 @@ describe('values, notes and history', () => {
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/history`)));
   });
 
+  it('accepts what undoes a change in its history entry, and nothing else there', async () => {
+    const attempt = (id: string, undo: unknown) => {
+      const batch = writeBatch(editor);
+      batch.set(doc(editor, `${PLAN}/tasks/${id}`), { ...TASK, ...audit(EDITOR, `h-${id}`) });
+      batch.set(doc(editor, `${PLAN}/history/h-${id}`), {
+        ...historyEntry(EDITOR, 'task', id),
+        undo,
+      });
+      return batch.commit();
+    };
+    const documents = [{ path: 'tasks/u1', before: null, after: TASK }];
+    await assertSucceeds(attempt('u1', { documents }));
+    await assertSucceeds(attempt('u2', { reverts: 'h-u1' }));
+    await assertSucceeds(attempt('u3', { reapplies: 'h-u1' }));
+    await assertFails(attempt('u4', { documents, extra: true }));
+    await assertFails(attempt('u5', { documents: 'tasks/u1' }));
+    await assertFails(attempt('u6', { reverts: 7 }));
+    await assertFails(attempt('u7', 'undo'));
+    const many = Array.from({ length: 501 }, () => documents[0]);
+    await assertFails(attempt('u8', { documents: many }));
+  });
+
   it('accepts an import of many documents that share one history entry', async () => {
     const batch = writeBatch(owner);
     batch.set(doc(owner, `${PLAN}/history/import-1`), {

@@ -169,7 +169,7 @@ service cloud.firestore {
       // published rules says so, instead of seeing its changes refused and undone in silence.
       // A release that changes the rules changes the version, here and in the app.
       match /rulesVersion/{version} {
-        allow get: if isMember(planId) && version == '0.21.0';
+        allow get: if isMember(planId) && version == '0.22.0';
       }
 
       match /members/{memberId} {
@@ -661,11 +661,22 @@ service cloud.firestore {
       // their member document; creating the plan and restoring a backup are the owner's.
       match /history/{entryId} {
         allow read: if isMember(planId);
+        // What undoes a change (0.22): the documents it wrote, before and after, at most as many as
+        // a batch writes; or the entry that an undo or a redo is about. The undo itself is a change
+        // like the others: each of its writes meets the rules of its document.
+        function validUndo(undo) {
+          return undo is map
+            && undo.keys().hasOnly(['documents', 'reverts', 'reapplies'])
+            && (!('documents' in undo) || (undo.documents is list && undo.documents.size() <= 500))
+            && (!('reverts' in undo) || isText(undo.reverts, 100))
+            && (!('reapplies' in undo) || isText(undo.reapplies, 100));
+        }
+
         function validEntry() {
           let data = request.resource.data;
           let member = getAfter(memberPath(planId)).data;
           return data.keys().hasOnly(
-              ['entity', 'entityId', 'action', 'actor', 'at', 'before', 'after', 'summary'])
+              ['entity', 'entityId', 'action', 'actor', 'at', 'before', 'after', 'summary', 'undo'])
             && data.entity
               in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'memo', 'project',
                 'projectNote', 'assignment', 'projectField', 'team', 'stakeholder',
@@ -682,7 +693,8 @@ service cloud.firestore {
             && data.at == request.time
             && (!('summary' in data) || isText(data.summary, 500))
             && (!('before' in data) || data.before is map)
-            && (!('after' in data) || data.after is map);
+            && (!('after' in data) || data.after is map)
+            && (!('undo' in data) || validUndo(data.undo));
         }
 
         allow create: if isMemberAfter(planId) && validEntry();

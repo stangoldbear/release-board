@@ -12,7 +12,7 @@ import { Button } from '../shared/ui/Button';
 import { HoverCard, useHoverCard } from '../shared/ui/HoverCard';
 import { useNow } from '../shared/useNow';
 import { formatDateTimeLongIT, timeAgo } from '../utils/dateUtils';
-import { OUTDATED_RULES_MESSAGE, unavailableMessage } from './PlanRepository';
+import { OUTDATED_RULES_MESSAGE, outdatedRulesMessage, unavailableMessage } from './PlanRepository';
 import type { PlanPart, PlanRepository, SyncState, SyncStatus } from './PlanRepository';
 import { useSyncState } from './useSyncState';
 
@@ -49,20 +49,24 @@ const LIMITED = { text: 'Parti non disponibili', Icon: TriangleAlert, tone: 'tex
 /** Rules older than the site: a limit of the instance too, until they are published. */
 const OUTDATED = { text: 'Regole da aggiornare', Icon: TriangleAlert, tone: 'text-warning' };
 
-/** What the indicator shows, and the words it adds to its name when something is wrong. */
-function presentation(sync: SyncState): {
+/**
+ * What the indicator shows, and the words it adds to its name when something is wrong. Rules older
+ * than the site come before the missing parts: they are their cause, and what to do about both.
+ */
+export function syncPresentation(sync: SyncState): {
   text: string;
   Icon: LucideIcon;
   tone: string;
   detail: string;
   announced: string;
 } {
+  if (sync.status !== 'error' && sync.outdatedRules) {
+    const detail = outdatedRulesMessage(sync.missing);
+    return { ...OUTDATED, detail, announced: detail };
+  }
   if (sync.status !== 'error' && sync.missing.length > 0) {
     const detail = unavailableMessage(sync.missing);
     return { ...LIMITED, detail, announced: detail };
-  }
-  if (sync.status !== 'error' && sync.outdatedRules) {
-    return { ...OUTDATED, detail: OUTDATED_RULES_MESSAGE, announced: OUTDATED_RULES_MESSAGE };
   }
   const { text, Icon, tone, detail } = LABELS[sync.status];
   // A refusal of rules older than the site: the reason, rather than a guess.
@@ -103,7 +107,7 @@ function SyncDetails({
   onOpenHistory: () => void;
 }) {
   const now = useNow(REFRESH_MS);
-  const { text, Icon, tone, detail } = presentation(sync);
+  const { text, Icon, tone, detail } = syncPresentation(sync);
   return (
     <div className="space-y-2 text-xs">
       <p className={`flex items-center gap-1.5 text-sm font-bold ${tone}`}>
@@ -173,7 +177,7 @@ export function SyncIndicator({
       ? state
       : { ...state, missing: state.missing.filter((part) => !hiddenParts.includes(part)) };
   const { card, triggerProps, cardProps, close } = useHoverCard<true>();
-  const { text, Icon, tone, announced } = presentation(sync);
+  const { text, Icon, tone, announced } = syncPresentation(sync);
   const when = sync.lastSyncedAt
     ? `Ultima sincronizzazione: ${formatDateTimeLongIT(sync.lastSyncedAt)}`
     : NEVER_SYNCED;

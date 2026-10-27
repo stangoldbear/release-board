@@ -296,7 +296,8 @@ Note:
   regole non sono della stessa versione alcune modifiche vengono rifiutate, e il sito dice quali
   parti non sono disponibili nell'indicatore di sincronizzazione. Dalla 0.21.0 il sito controlla
   da solo la versione delle regole: se sono più vecchie, l'indicatore dice «Regole da aggiornare»
-  finché non le ripubblichi. Chi tiene il sito aperto lo ricarichi.
+  finché non le ripubblichi, e dalla 0.22.0 l'avviso sparisce da solo quando le hai pubblicate.
+  Chi tiene il sito aperto lo ricarichi.
 - Dalla 0.16.0 il workflow Deploy Pages controlla le dipendenze (`npm audit`), lint, tipi e test
   prima di pubblicare: se si ferma su un avviso di sicurezza nuovo di una dipendenza, il sito
   resta com'era; aggiorna alla versione che lo corregge.

@@ -405,6 +405,11 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     return (
       <HistoryPage
         history={instance.kind === 'cloud' ? instance.history : null}
+        undo={
+          instance.kind === 'cloud'
+            ? { changes: instance.undo, githubId: instance.user.githubId }
+            : null
+        }
         lanes={plan.lanes}
         onBack={() => goToPage('calendar')}
       />

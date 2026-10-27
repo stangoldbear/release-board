@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, History } from 'lucide-react';
+import type { ChangeUndo } from '../../app/ChangeUndo';
 import type { HistoryReader } from '../../app/HistoryReader';
 import { HISTORY_KINDS, HISTORY_KIND_LABELS, historyKind } from '../../domain/history';
 import type { HistoryEntry, HistoryKind } from '../../domain/history';
@@ -17,6 +18,7 @@ import { parseISODate, todayIso } from '../../utils/dateUtils';
 import { ActivityChart, Breakdown } from './ActivityChart';
 import { HistoryList } from './HistoryList';
 import { KindIcon, dayHeading, timeOf } from './historyUi';
+import { UndoPanel } from './UndoPanel';
 import { useFormatDate } from '../..//shared/dateFormat';
 
 /** Changes loaded at a time; "Mostra altre" loads as many more. */
@@ -28,6 +30,8 @@ const FIELD =
 interface HistoryPageProps {
   /** Null where the changes are not recorded: the app without an account. */
   history: HistoryReader | null;
+  /** Undo and redo of the signed-in member's changes; null without an account. */
+  undo: { changes: ChangeUndo; githubId: string } | null;
   lanes: Lane[];
   onBack: () => void;
 }
@@ -46,7 +50,7 @@ function StatTile({ label, value, detail }: { label: string; value: string; deta
  * Every change to the plan, with day, time and author: counts, a chart of the changes over time,
  * the most active people and kinds of change, and the list, all scoped by the filters on top.
  */
-export function HistoryPage({ history, lanes, onBack }: HistoryPageProps) {
+export function HistoryPage({ history, undo, lanes, onBack }: HistoryPageProps) {
   const formatDate = useFormatDate();
   const [period, setPeriod] = useState<HistoryPeriod>('30');
   const [author, setAuthor] = useState('');
@@ -116,6 +120,14 @@ export function HistoryPage({ history, lanes, onBack }: HistoryPageProps) {
           </section>
         ) : (
           <>
+            {undo && (
+              <UndoPanel
+                history={history}
+                changes={undo.changes}
+                githubId={undo.githubId}
+                today={today}
+              />
+            )}
             <div
               role="group"
               aria-label="Filtri della cronologia"

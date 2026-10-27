@@ -139,6 +139,11 @@ export function HelpPanel({ releases, projects, people }: HelpPanelProps) {
             <Key>Invio</Key> apre, <Key>Esc</Key> annulla un trascinamento
             {releases ? ', il tasto menu mostra le altre azioni di un’attività' : ''}.
           </li>
+          <li>
+            Nell&apos;istanza condivisa le tue modifiche si annullano dalla cronologia (clic su
+            «Sincronizzato»): «Annulla» o <Key>Ctrl</Key> + <Key>Z</Key>, una alla volta, e
+            «Ripeti».
+          </li>
         </ul>
       </Section>
       <Section title="Legenda">

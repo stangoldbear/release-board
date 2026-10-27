@@ -16,6 +16,7 @@ import {
   isTeamPhase,
 } from './roadmapConfig';
 import type { ProjectNoteStatus, ProjectStatus, TaskStatus } from './types';
+import type { UndoRecord } from './undo';
 
 export type HistoryEntity =
   | 'plan'
@@ -53,6 +54,8 @@ export interface HistoryEntry {
   after?: Record<string, unknown>;
   /** A sentence for changes too large to keep, such as imports. */
   summary?: string;
+  /** Since the 0.22: what undoes the change, or the entry an undo or a redo is about. */
+  undo?: UndoRecord;
 }
 
 /** The longest summary of an entry, as the security rules allow it. */

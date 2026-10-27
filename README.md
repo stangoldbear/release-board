@@ -80,8 +80,9 @@ giornalieri.
 - Con un progetto Firebase: piano condiviso con il team in tempo reale, con l'ora dell'ultima
   sincronizzazione; accesso con GitHub, membri invitati per username, domini email ammessi a
   scelta del proprietario, un proprietario si toglie solo scrivendo il suo username; cronologia di
-  ogni modifica, cancellazioni comprese, in una pagina con grafici e filtri. Il browser non tiene
-  nulla sul disco: l'accesso dura quanto la scheda.
+  ogni modifica, cancellazioni comprese, in una pagina con grafici e filtri, da cui ognuno annulla
+  e ripete le proprie modifiche una alla volta. Il browser non tiene nulla sul disco: l'accesso
+  dura quanto la scheda.
 
 Senza progetto Firebase i dati restano nel browser che li ha creati. Per spostarli altrove usa
 Impostazioni → Dati → Backup.

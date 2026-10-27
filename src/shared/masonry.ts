@@ -58,6 +58,13 @@ export function useMasonry<T extends HTMLElement>(enabled: boolean, gap: number)
       return;
     }
     const place = () => {
+      // A placed item makes a column of its own past the grid's: after a window grew narrower, the
+      // columns read would stay as many as before, the extra ones a few pixels wide. Back to the
+      // grid's own places first, the template alone says how many columns there are now.
+      for (const item of items) {
+        item.style.gridColumn = '';
+        item.style.gridRow = '';
+      }
       const columns = getComputedStyle(list).gridTemplateColumns.split(' ').filter(Boolean).length;
       const heights = items.map((item) => item.getBoundingClientRect().height);
       packMasonry(heights, columns, gap).forEach(({ column, row, span }, index) => {

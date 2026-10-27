@@ -6,6 +6,38 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-27
+
+**Le regole Firestore cambiano**: aggiornare il sito e ripubblicare le regole uno subito dopo
+l'altro, e fare ricaricare la pagina a tutti i membri. Le regole nuove ammettono nelle voci della
+cronologia ciò che serve ad annullare una modifica. Backup invariati.
+
+### Aggiunto
+
+- Annullare e ripetere le proprie modifiche, una alla volta e dalla più recente, dalla
+  cronologia (clic su «Sincronizzato»): «Annulla» e «Ripeti», o `Ctrl+Z` e `Ctrl+Maiusc+Z` (`⌘Z`
+  e `⇧⌘Z` sul Mac), con scritto cosa annullano e cosa ripetono. Valgono per le modifiche fatte
+  dalla 0.22.0, anche dopo aver ricaricato la pagina o da un altro computer: ogni voce della
+  cronologia conserva i documenti che la modifica ha scritto, com'erano prima e dopo, e
+  annullarla li riscrive com'erano prima, insieme (un progetto eliminato torna con le sue note e
+  le sue note sulla timeline). L'annullamento resta nella cronologia come la modifica inversa.
+  Non si annulla una modifica se dopo qualcuno ha cambiato le stesse cose, né se riporterebbe la
+  nota di un altro membro, che solo lui può scrivere: la pagina dice perché. Restano fuori le note
+  private, i membri, i domini email ammessi e le importazioni.
+
+### Corretto
+
+- La lavagna di Notes in «Muratura», anche con le note raggruppate per utente, dopo aver ristretto
+  la finestra teneva le colonne di prima: quelle che non entravano diventavano larghe pochi pixel,
+  con il testo in verticale. Ora le colonne seguono la larghezza della finestra, in tutti e due i
+  sensi.
+- Con le regole Firestore di una versione precedente l'indicatore di sincronizzazione diceva
+  «Parti non disponibili» e nascondeva la causa: ora dice «Regole da aggiornare», con le parti
+  che mancano finché non vengono pubblicate. Dopo una modifica rifiutata il sito rilegge la
+  versione delle regole, così l'avviso sparisce appena le regole giuste sono pubblicate, senza
+  ricaricare la pagina. Le parti che mancavano all'apertura tornano ricaricandola, e l'avviso lo
+  dice.
+
 ## [0.21.0] - 2026-10-27
 
 **Le regole Firestore cambiano**: aggiornare il sito e ripubblicare le regole uno subito dopo
@@ -1202,7 +1234,10 @@ Prima versione pubblica. I dati restano nel browser che li ha creati.
 - Impostazioni con backup e ripristino in JSON e informazioni sulla versione.
 - Dati di esempio per provare l'app partendo da un piano vuoto.
 
-[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/stangoldbear/release-board/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/stangoldbear/release-board/compare/v0.21.0...v0.22.0
+[0.21.0]: https://github.com/stangoldbear/release-board/compare/v0.20.0...v0.21.0
+[0.20.0]: https://github.com/stangoldbear/release-board/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/stangoldbear/release-board/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/stangoldbear/release-board/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/stangoldbear/release-board/compare/v0.16.0...v0.17.0

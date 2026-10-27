@@ -18,6 +18,7 @@ function cloud(role: 'owner' | 'editor'): Instance {
     role,
     members: {} as never,
     history: {} as never,
+    undo: {} as never,
     lookupName: () => Promise.resolve(null),
     signOut: () => Promise.resolve(),
   };

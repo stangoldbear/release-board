@@ -40,6 +40,7 @@ import {
 import { FORMULA_MAX } from '../../domain/teamFormula';
 import { MILESTONE_BODY_MAX, MILESTONE_TITLE_MAX } from '../../domain/milestones';
 import { METRIC_ID, PLAN_ID, RULES_VERSION } from './planDocs';
+import { UNDO_DOCUMENTS_MAX } from '../../domain/undo';
 import {
   CONTACT_EMAIL_MAX,
   CONTACT_NAME_MAX,
@@ -91,6 +92,7 @@ describe('the security rules', () => {
     expect(allowedLists('entity')).toEqual([sorted(HISTORY_ENTITIES)]);
     expect(allowedLists('action')).toEqual([sorted(HISTORY_ACTIONS)]);
     expect(rules).toContain(`isText(data.summary, ${HISTORY_SUMMARY_MAX})`);
+    expect(rules).toContain(`undo.documents.size() <= ${UNDO_DOCUMENTS_MAX}`);
   });
 
   it('know the one plan and the one metric of the app', () => {

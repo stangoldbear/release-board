@@ -9,7 +9,6 @@ import {
   query,
   serverTimestamp,
   where,
-  writeBatch,
 } from 'firebase/firestore';
 import type {
   DocumentData,
@@ -17,8 +16,8 @@ import type {
   FirestoreError,
   QuerySnapshot,
   Timestamp,
-  WriteBatch,
 } from 'firebase/firestore';
+import type { ChangeUndo, UndoOutcome } from '../../app/ChangeUndo';
 import type { HistoryQuery, HistoryReader } from '../../app/HistoryReader';
 import { INITIAL_SYNC } from '../../app/PlanRepository';
 import type { PlanPart, PlanRepository, SyncState, SyncStatus } from '../../app/PlanRepository';
@@ -54,6 +53,15 @@ import type {
   TaskItem,
   Team,
 } from '../../domain/types';
+import {
+  fitsInHistory,
+  inverseChange,
+  parseUndoRecord,
+  undoBlocker,
+  undoDocuments,
+  withoutAudit,
+} from '../../domain/undo';
+import type { UndoRecord } from '../../domain/undo';
 import { formatDate } from '../../utils/dateUtils';
 import {
   METRIC_ID,
@@ -98,6 +106,7 @@ import {
   valueContent,
 } from './planDocs';
 import type { RoadmapSettings } from './planDocs';
+import { PlanBatch } from './planBatch';
 import type { MilestoneChanges, MilestoneContent } from '../../domain/milestones';
 import { reportsMovedUp } from '../../domain/contacts';
 import type {
@@ -202,7 +211,7 @@ function defined(values: Record<string, unknown>): Record<string, unknown> {
  * with the entity writes and a history entry, as the security rules require; the cache of the
  * SDK, in memory, applies it at once and sends it when the network allows.
  */
-export class FirestorePlanRepository implements PlanRepository, HistoryReader {
+export class FirestorePlanRepository implements PlanRepository, HistoryReader, ChangeUndo {
   private readonly db: Firestore;
   private readonly planPath: string;
   private readonly actor: Actor;
@@ -211,6 +220,11 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
 
   private parts: Parts = {};
   private plan: PlanSnapshot | null = null;
+  /**
+   * Every document of the plan as stored, by its path in the plan and without the audit fields:
+   * what a change finds before it writes, kept with it to undo it.
+   */
+  private readonly documents = new Map<string, DocumentData>();
   private readonly planListeners = new Set<(plan: PlanSnapshot) => void>();
 
   private readonly syncListeners = new Set<(state: SyncState) => void>();
@@ -376,7 +390,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
 
   createTask(content: Omit<TaskItem, 'id'>): string {
     const id = this.createId();
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, 'task', id, 'create', { after: taskContent(content) });
     batch.set(this.ref(`tasks/${id}`), { ...taskContent(content), ...this.audit(historyId) });
     this.commit(batch);
@@ -394,7 +408,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
         value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
       update[field] = cleared && OPTIONAL_TASK_FIELDS.has(field) ? deleteField() : value;
     }
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, 'task', taskId, 'update', {
       before: before ? defined(Object.fromEntries(fields.map((f) => [f, before[f]]))) : undefined,
       // The title is kept so that the history can name the task.
@@ -406,7 +420,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
 
   deleteTask(taskId: string): void {
     const before = this.plan?.tasks.find((task) => task.id === taskId);
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, 'task', taskId, 'delete', {
       before: before ? taskContent(before) : undefined,
     });
@@ -460,7 +474,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       stored.get(lane.id) === position ? [] : [{ lane, position }],
     );
     if (changed.length === 0) return;
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, 'lane', laneId, 'update', {
       before: { position: lanes.indexOf(moved) },
       after: { name: moved.name, position: order.indexOf(moved) },
@@ -482,7 +496,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const trimmed = text.trim();
     const before = this.plan?.dailyNotes[date];
     if (trimmed === (before ?? '')) return;
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const path = `notes/${date}`;
     if (trimmed === '') {
       const historyId = this.record(batch, 'note', date, 'delete', { before: { text: before } });
@@ -502,7 +516,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const before = this.plan?.dailyNotes[from];
     const moved = (text ?? before)?.trim();
     if (!moved || from === to || this.plan?.dailyNotes[to] !== undefined) return;
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     // One entry for the whole move: the history reads it from the dates before and after.
     const historyId = this.record(batch, 'note', to, before ? 'update' : 'create', {
       before: before ? { date: from, text: before } : undefined,
@@ -522,7 +536,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     if (effective.length === 0) return;
     // One write of the group may be the definition of the metric.
     for (const group of chunk(effective, CHUNK_SIZE - 1)) {
-      const batch = writeBatch(this.db);
+      const batch = new PlanBatch();
       const historyId = this.record(batch, 'metric', METRIC_ID, 'update', {
         summary: `${group.length} ${group.length === 1 ? 'valore giornaliero' : 'valori giornalieri'}`,
         after: Object.fromEntries(group.map(({ date, value }) => [date, value])),
@@ -552,7 +566,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const what = `${sorted.length} ${sorted.length === 1 ? 'giorno' : 'giorni'} di fatturato previsto, dal ${formatDate(first.date)} al ${formatDate(last.date)}`;
     const groups = chunk(sorted, CHUNK_SIZE - 1);
     groups.forEach((group, index) => {
-      const batch = writeBatch(this.db);
+      const batch = new PlanBatch();
       const part = groups.length > 1 ? ` (parte ${index + 1} di ${groups.length})` : '';
       const historyId = this.record(batch, 'metric', METRIC_ID, 'import', {
         summary: `${what}${part}`,
@@ -578,7 +592,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const id = this.createId();
     if (this.refusedParts.has('memos')) return id;
     const memo = { ...content, position: endPosition(this.plan?.memos ?? []), author: this.author };
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     if (memo.private) {
       batch.set(this.privateRef(id), memoContent(memo));
     } else {
@@ -618,7 +632,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const fields = Object.keys(update) as (keyof Memo)[];
     if (!visibility && fields.length === 0 && moves.size === 0) return memoId;
 
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     let historyId: string | null = null;
     if (visibility && next.private) {
       // The others see the note leave, under the title they knew.
@@ -680,7 +694,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const before = this.plan?.memos.find((memo) => memo.id === memoId);
     // Unknown, it could be a private note on its way: nothing is written about it.
     if (!before) return;
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     if (before.private) {
       batch.delete(this.privateRef(memoId));
     } else {
@@ -702,7 +716,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     // The published rules do not know projects yet: the write would fail, and the plan says why.
     if (this.refusedParts.has('projects')) return id;
     const data = projectContent(content);
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, 'project', id, 'create', { after: data });
     batch.set(this.ref(`projects/${id}`), { ...data, ...this.audit(historyId) });
     this.commit(batch);
@@ -723,7 +737,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const before = this.plan?.projects.find((project) => project.id === projectId);
     // Already deleted by someone else: nothing to delete, nor to record.
     if (!before) return;
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, 'project', projectId, 'delete', {
       before: projectContent(before),
     });
@@ -790,7 +804,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const before = contacts.find((contact) => contact.id === contactId);
     if (!before || this.refusedParts.has('contacts')) return;
     const { id, ...content } = before;
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, 'contact', id, 'delete', {
       before: contactContent(content),
     });
@@ -942,7 +956,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
   deleteStakeholder(stakeholderId: string): void {
     const before = this.plan?.roadmap.stakeholders.find((item) => item.id === stakeholderId);
     if (!before || this.refusedParts.has('roadmap')) return;
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, 'stakeholder', stakeholderId, 'delete', {
       before: stakeholderContent(before),
     });
@@ -1052,7 +1066,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
   ): void {
     const groups = chunk(operations, CHUNK_SIZE);
     groups.forEach((group, index) => {
-      const batch = writeBatch(this.db);
+      const batch = new PlanBatch();
       const part = groups.length > 1 ? ` (parte ${index + 1} di ${groups.length})` : '';
       const historyId = this.record(batch, entity, entityId, 'import', {
         summary: `${summary}${part}`,
@@ -1084,7 +1098,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     data: DocumentData,
     naming: DocumentData = {},
   ): void {
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, entity, id, 'create', { after: { ...data, ...naming } });
     batch.set(this.ref(`${path}/${id}`), { ...data, ...this.audit(historyId) });
     this.commit(batch);
@@ -1098,7 +1112,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     data: DocumentData,
     before: DocumentData | undefined,
   ): void {
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, entity, id, before ? 'update' : 'create', {
       before,
       after: data,
@@ -1108,7 +1122,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
   }
 
   private deleteDocument(path: string, entity: HistoryEntity, id: string, before: DocumentData) {
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, entity, id, 'delete', { before });
     batch.delete(this.ref(`${path}/${id}`));
     this.recordDeletions(batch, historyId);
@@ -1139,7 +1153,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       const value = changes[field];
       update[field] = value === null ? deleteField() : value;
     }
-    const batch = writeBatch(this.db);
+    const batch = new PlanBatch();
     const historyId = this.record(batch, entity, current.id, 'update', {
       before: defined(Object.fromEntries(fields.map((field) => [field, current[field]]))),
       after: defined({
@@ -1169,24 +1183,33 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     return { updatedAt: serverTimestamp(), updatedBy: this.actor.uid, lastHistoryId: historyId };
   }
 
-  /** Adds the history entry of a change to the batch and returns its id. */
+  /**
+   * Adds the history entry of a change to the batch and returns its id. A change made by hand
+   * keeps the documents it writes, to undo it; an undo or a redo says which entry it is about.
+   */
   private record(
-    batch: WriteBatch,
+    batch: PlanBatch,
     entity: HistoryEntity,
     entityId: string,
     action: HistoryAction,
-    details: { before?: DocumentData; after?: DocumentData; summary?: string },
+    details: { before?: DocumentData; after?: DocumentData; summary?: string; undo?: UndoRecord },
   ): string {
     const id = this.createId();
-    const { summary, ...changes } = details;
-    batch.set(this.ref(`history/${id}`), {
-      entity,
-      entityId,
-      action,
-      actor: { ...this.actor },
-      at: serverTimestamp(),
-      ...defined({ ...changes, summary: summary?.slice(0, HISTORY_SUMMARY_MAX) }),
-    });
+    const { summary, undo, ...changes } = details;
+    batch.entry = {
+      ref: this.ref(`history/${id}`),
+      data: {
+        entity,
+        entityId,
+        action,
+        actor: { ...this.actor },
+        at: serverTimestamp(),
+        ...defined({ ...changes, summary: summary?.slice(0, HISTORY_SUMMARY_MAX) }),
+      },
+      undo,
+      // Imports and the setup are too large to keep, and no undo undoes another one.
+      keepsDocuments: !undo && (action === 'create' || action === 'update' || action === 'delete'),
+    };
     return id;
   }
 
@@ -1194,40 +1217,110 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
    * A deleted document cannot say which history entry records its deletion: the writer's
    * document does it for the whole batch, once, as the rules require.
    */
-  private recordDeletions(batch: WriteBatch, historyId: string): void {
+  private recordDeletions(batch: PlanBatch, historyId: string): void {
     batch.set(this.ref(`writers/${this.actor.uid}`), { historyId, at: serverTimestamp() });
   }
 
-  private commit(batch: WriteBatch): void {
+  private commit(batch: PlanBatch): void {
     this.pendingCommits += 1;
     this.updateSync();
-    batch.commit().then(
-      () => {
-        this.lastError = null;
-        this.lastSyncedAt = this.now();
-        this.pendingCommits -= 1;
-        this.updateSync();
-      },
-      (error: unknown) => {
-        this.lastError = describeFirestoreError(error);
-        this.pendingCommits -= 1;
-        this.updateSync();
-      },
-    );
+    batch
+      .toWriteBatch(this.db, this.undoRecordOf(batch))
+      .commit()
+      .then(
+        () => {
+          this.lastError = null;
+          this.lastSyncedAt = this.now();
+          this.pendingCommits -= 1;
+          this.updateSync();
+        },
+        (error: unknown) => {
+          this.lastError = describeFirestoreError(error);
+          this.pendingCommits -= 1;
+          this.updateSync();
+          // A refusal may come from rules published, or not, since the page opened: the version
+          // is read again, so that what the page says about them is never stale.
+          if ((error as Partial<FirestoreError>).code === 'permission-denied') {
+            this.checkRulesVersion();
+          }
+        },
+      );
+  }
+
+  /**
+   * What the entry of a batch keeps to undo it: the documents the change writes, before and after,
+   * when they are all of the plan and fit in the entry; or what an undo or a redo is about.
+   */
+  private undoRecordOf(batch: PlanBatch): UndoRecord | undefined {
+    if (!batch.entry) return undefined;
+    if (batch.entry.undo) return batch.entry.undo;
+    if (!batch.entry.keepsDocuments) return undefined;
+    const writes = batch.undoWrites(this.planPath);
+    const documents = writes && undoDocuments(writes, (path) => this.documents.get(path) ?? null);
+    return documents && fitsInHistory(documents) ? { documents } : undefined;
+  }
+
+  undoChange(entry: HistoryEntry): UndoOutcome {
+    return this.restore(entry, 'undo');
+  }
+
+  redoChange(entry: HistoryEntry): UndoOutcome {
+    return this.restore(entry, 'redo');
+  }
+
+  /**
+   * Writes back the documents of a change as they were before it (undo) or after it (redo), in one
+   * batch recorded as the change the other way round, or the same change again. Refused when
+   * someone changed them since, or when they would bring back a note in someone else's name.
+   */
+  private restore(entry: HistoryEntry, direction: 'undo' | 'redo'): UndoOutcome {
+    const documents = entry.undo?.documents;
+    if (!documents || documents.length === 0) {
+      return { done: false, reason: 'Questa modifica non si può annullare.' };
+    }
+    const current = (path: string) => this.documents.get(path) ?? null;
+    const blocker = undoBlocker(documents, direction, current, this.actor.githubId);
+    if (blocker) return { done: false, reason: blocker };
+    const batch = new PlanBatch();
+    const change =
+      direction === 'undo'
+        ? inverseChange(entry)
+        : { action: entry.action, before: entry.before, after: entry.after };
+    const historyId = this.record(batch, entry.entity, entry.entityId, change.action, {
+      ...change,
+      summary: entry.summary,
+      undo: direction === 'undo' ? { reverts: entry.id } : { reapplies: entry.id },
+    });
+    let deletes = false;
+    for (const document of documents) {
+      const target = direction === 'undo' ? document.before : document.after;
+      if (target === null) {
+        batch.delete(this.ref(document.path));
+        deletes = true;
+      } else {
+        batch.set(this.ref(document.path), { ...target, ...this.audit(historyId) });
+      }
+    }
+    if (deletes) this.recordDeletions(batch, historyId);
+    this.commit(batch);
+    return { done: true };
   }
 
   /**
    * Reads the version of the rules this site needs, a document that never exists: newer rules
    * answer that it is missing, older ones refuse it. Any other failure, such as no network, says
-   * nothing about the rules.
+   * nothing about the rules. Read when the page opens and after every refused change.
    */
   private checkRulesVersion(): void {
+    const settle = (outdated: boolean) => {
+      if (this.outdatedRules === outdated) return;
+      this.outdatedRules = outdated;
+      this.updateSync();
+    };
     getDoc(doc(this.db, `${this.planPath}/rulesVersion/${RULES_VERSION}`)).then(
-      () => undefined,
+      () => settle(false),
       (error: unknown) => {
-        if ((error as Partial<FirestoreError>).code !== 'permission-denied') return;
-        this.outdatedRules = true;
-        this.updateSync();
+        if ((error as Partial<FirestoreError>).code === 'permission-denied') settle(true);
       },
     );
   }
@@ -1276,6 +1369,11 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
         if (!snapshot.metadata.fromCache) {
           this.lastSyncedAt = this.now();
           this.updateSync();
+        }
+        for (const change of snapshot.docChanges()) {
+          const key = `${path}/${change.doc.id}`;
+          if (change.type === 'removed') this.documents.delete(key);
+          else this.documents.set(key, withoutAudit(change.doc.data()));
         }
         // A change of metadata alone leaves the plan as it is.
         if (!first && snapshot.docChanges().length === 0) return;
@@ -1358,6 +1456,8 @@ function readHistoryEntry(id: string, data: DocumentData): HistoryEntry | null {
   if (typeof data.after === 'object' && data.after !== null)
     entry.after = data.after as Record<string, unknown>;
   if (typeof data.summary === 'string') entry.summary = data.summary;
+  const undo = parseUndoRecord(data.undo);
+  if (undo) entry.undo = undo;
   return entry;
 }
 

@@ -15,6 +15,7 @@ import {
 } from '../../domain/labels';
 import type { HistoryEntry } from '../../domain/history';
 import { createEmptyPlan } from '../../domain/plan';
+import { undoStacks } from '../../domain/undo';
 import { buildSamplePlan } from '../../domain/sample';
 import type { PlanSnapshot, TaskItem } from '../../domain/types';
 import { isIsoDateTime } from '../../utils/dateUtils';
@@ -1005,6 +1006,237 @@ describe('rules older than the site', () => {
     } finally {
       await older.cleanup();
     }
+  });
+
+  it('reads the version again after a refused change, and stops saying it once they are published', async () => {
+    const projectId = 'demo-release-board-republished';
+    const older = await setupRulesEnvironment({ rules: olderRules, projectId });
+    try {
+      const db = clientAs(OWNER, projectId);
+      await createPlan(db, PLAN_ID, actorOf(OWNER), 'Piano', '', createId);
+      const repository = new FirestorePlanRepository({
+        db,
+        planId: PLAN_ID,
+        actor: actorOf(OWNER),
+        createId,
+      });
+      repositories.push(repository);
+      await repository.whenReady();
+      const syncWhere = (test: (state: SyncState) => boolean) =>
+        new Promise<SyncState>((resolve) => {
+          const stop = repository.subscribeSync((current) => {
+            if (!test(current)) return;
+            resolve(current);
+            setTimeout(() => stop());
+          });
+        });
+      await syncWhere((state) => state.outdatedRules);
+      // The owner publishes the rules of this version while the page stays open.
+      const current = await setupRulesEnvironment({ rules, projectId });
+      try {
+        // A note longer than the rules allow: refused by any version of them.
+        const contactId = repository.createContact({ name: 'Elena' });
+        await planWhere(repository, (plan) => plan.contacts.length === 1);
+        repository.createContactNote({ contactId, text: 'x'.repeat(5001) });
+        const state = await syncWhere((state) => state.status === 'error' && !state.outdatedRules);
+        expect(state.error).toMatch(/^Modifica rifiutata/);
+      } finally {
+        await current.cleanup();
+      }
+    } finally {
+      await older.cleanup();
+    }
+  });
+});
+
+describe('undo and redo', () => {
+  let repository: FirestorePlanRepository;
+
+  beforeEach(async () => {
+    repository = await bootstrap();
+  });
+
+  /** The latest entries of the history, once they satisfy the condition. */
+  function historyWhere(
+    reader: FirestorePlanRepository,
+    condition: (entries: HistoryEntry[]) => boolean,
+  ): Promise<HistoryEntry[]> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('The history never matched.')), 10_000);
+      const subscription: { stop?: () => void } = {};
+      let settled = false;
+      subscription.stop = reader.subscribeHistory({ limit: 50 }, (entries) => {
+        if (settled || !condition(entries)) return;
+        settled = true;
+        clearTimeout(timer);
+        subscription.stop?.();
+        resolve(entries);
+      });
+      if (settled) subscription.stop();
+    });
+  }
+
+  const task = {
+    laneId: 'lane-1',
+    title: 'Rilascio',
+    startDate: '2026-09-20',
+    endDate: '2026-09-21',
+    colorId: 'green',
+    borderStyle: 'solid',
+    status: 'planned',
+    assignee: '',
+    deliverables: [],
+  } as const;
+
+  it('undoes and redoes its own changes, recorded as the changes the other way round', async () => {
+    const other = repositoryFor(editorDb, EDITOR);
+    await other.whenReady();
+    const id = repository.createTask({ ...task, deliverables: [] });
+    let entries = await historyWhere(repository, (items) => items[0]?.entity === 'task');
+    const created = entries[0] as HistoryEntry;
+    expect(created.undo?.documents).toEqual([
+      {
+        path: `tasks/${id}`,
+        before: null,
+        after: {
+          laneId: 'lane-1',
+          title: 'Rilascio',
+          startDate: '2026-09-20',
+          endDate: '2026-09-21',
+          colorId: 'green',
+          borderStyle: 'solid',
+          status: 'planned',
+        },
+      },
+    ]);
+    repository.updateTask(id, { title: 'Rilascio 2', assignee: 'Giulia' });
+    entries = await historyWhere(
+      repository,
+      (items) => items.length >= 3 && items[0]?.action === 'update',
+    );
+    expect(undoStacks(entries, OWNER.githubId).undo.map((entry) => entry.action)).toEqual([
+      'create',
+      'update',
+    ]);
+
+    // Undo the update, then the creation: the task goes back, then away.
+    const updated = undoStacks(entries, OWNER.githubId).undo.at(-1) as HistoryEntry;
+    expect(repository.undoChange(updated)).toEqual({ done: true });
+    const back = await planWhere(other, (plan) =>
+      plan.tasks.some((item) => item.id === id && item.title === 'Rilascio'),
+    );
+    expect(back.tasks.find((item) => item.id === id)?.assignee).toBeUndefined();
+    entries = await historyWhere(repository, (items) => items[0]?.undo?.reverts === updated.id);
+    expect(entries[0]).toMatchObject({
+      entity: 'task',
+      entityId: id,
+      action: 'update',
+      before: { title: 'Rilascio 2', assignee: 'Giulia' },
+      after: { title: 'Rilascio' },
+    });
+    expect(repository.undoChange(created)).toEqual({ done: true });
+    await planWhere(other, (plan) => !plan.tasks.some((item) => item.id === id));
+    entries = await historyWhere(repository, (items) => items[0]?.undo?.reverts === created.id);
+    expect(entries[0]).toMatchObject({ action: 'delete', before: { title: 'Rilascio' } });
+    expect(undoStacks(entries, OWNER.githubId)).toMatchObject({
+      undo: [],
+      redo: [{ id: updated.id }, { id: created.id }],
+    });
+
+    // Redo the creation: the same task, with its id.
+    expect(repository.redoChange(created)).toEqual({ done: true });
+    const again = await planWhere(other, (plan) => plan.tasks.some((item) => item.id === id));
+    expect(again.tasks.find((item) => item.id === id)).toMatchObject({ title: 'Rilascio' });
+    entries = await historyWhere(repository, (items) => items[0]?.undo?.reapplies === created.id);
+    expect(entries[0]).toMatchObject({ action: 'create', after: { title: 'Rilascio' } });
+    expect(undoStacks(entries, OWNER.githubId)).toMatchObject({
+      undo: [{ id: created.id }],
+      redo: [{ id: updated.id }],
+    });
+    // Nothing of it was refused by the rules.
+    await whenSynced(repository);
+    expect((await currentSync(repository)).status).toBe('synced');
+  });
+
+  it('brings back a deleted project with its notes and notes on the timeline', async () => {
+    const projectId = repository.createProject({
+      title: 'Nuovo magazzino',
+      startDate: '2026-11-01',
+      colorId: 'gray',
+      status: 'idea',
+    });
+    const noteId = repository.createProjectNote({ projectId, text: 'Stima', status: 'open' });
+    const milestoneId = repository.createMilestone({
+      date: '2026-11-20',
+      title: 'Demo',
+      colorId: 'purple',
+      projectId,
+    });
+    const full = await planWhere(
+      repository,
+      (plan) => plan.projectNotes.length === 1 && plan.milestones.length === 1,
+    );
+    repository.deleteProject(projectId);
+    await planWhere(
+      repository,
+      (plan) => plan.projects.length === 0 && plan.milestones.length === 0,
+    );
+    const entries = await historyWhere(repository, (items) => items[0]?.action === 'delete');
+    expect(entries[0]?.undo?.documents?.map((document) => document.path).sort()).toEqual(
+      [`milestones/${milestoneId}`, `projectNotes/${noteId}`, `projects/${projectId}`].sort(),
+    );
+    expect(repository.undoChange(entries[0] as HistoryEntry)).toEqual({ done: true });
+    const restored = await planWhere(
+      repository,
+      (plan) => plan.projects.length === 1 && plan.milestones.length === 1,
+    );
+    expect(restored.projects).toEqual(full.projects);
+    expect(restored.projectNotes).toEqual(full.projectNotes);
+    expect(restored.milestones).toEqual(full.milestones);
+    await whenSynced(repository);
+    expect((await currentSync(repository)).status).toBe('synced');
+  });
+
+  it('refuses to undo over the work of someone else, or to bring back a note in their name', async () => {
+    const other = repositoryFor(editorDb, EDITOR);
+    await other.whenReady();
+    const id = repository.createTask({ ...task, deliverables: [] });
+    await planWhere(other, (plan) => plan.tasks.some((item) => item.id === id));
+    other.updateTask(id, { title: 'Loro' });
+    await planWhere(repository, (plan) => plan.tasks.some((item) => item.title === 'Loro'));
+    let entries = await historyWhere(
+      repository,
+      (items) => items[0]?.actor.githubId === EDITOR.githubId,
+    );
+    const mine = undoStacks(entries, OWNER.githubId).undo.at(-1) as HistoryEntry;
+    const refused = repository.undoChange(mine);
+    expect(!refused.done && refused.reason).toMatch(/qualcuno ha cambiato/);
+
+    const projectId = repository.createProject({
+      title: 'Condiviso',
+      startDate: '2026-11-01',
+      colorId: 'gray',
+      status: 'idea',
+    });
+    await planWhere(other, (plan) => plan.projects.length === 1);
+    other.createProjectNote({ projectId, text: 'Mia', status: 'open' });
+    await planWhere(repository, (plan) => plan.projectNotes.length === 1);
+    repository.deleteProject(projectId);
+    entries = await historyWhere(repository, (items) => items[0]?.action === 'delete');
+    const inTheirName = repository.undoChange(entries[0] as HistoryEntry);
+    expect(!inTheirName.done && inTheirName.reason).toMatch(/altro membro/);
+  });
+
+  it('keeps no undo for what touches the private notes', async () => {
+    const memoId = repository.createMemo({ title: 'Condivisa', colorId: 'yellow' });
+    await historyWhere(repository, (items) => items[0]?.entity === 'memo');
+    repository.updateMemo(memoId, { private: true });
+    const entries = await historyWhere(
+      repository,
+      (items) => items[0]?.entity === 'memo' && items[0].action === 'update',
+    );
+    expect(entries[0]?.undo).toBeUndefined();
+    expect(undoStacks(entries, OWNER.githubId)).toEqual({ undo: [], redo: [] });
   });
 });
 
