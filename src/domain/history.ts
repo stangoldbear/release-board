@@ -1,4 +1,5 @@
 import { DEFAULT_DATE_FORMAT, formatDate } from '../utils/dateUtils';
+import { markdownToPlainText } from '../utils/markdown';
 import type { DateFormat } from '../utils/dateUtils';
 import { TASK_COLORS } from './colors';
 import { formatLocaleNumber } from './numberFormat';
@@ -33,7 +34,9 @@ export type HistoryEntity =
   | 'stakeholder'
   | 'roadmapSettings'
   | 'member'
-  | 'access';
+  | 'access'
+  | 'contact'
+  | 'contactNote';
 export type HistoryAction = 'create' | 'update' | 'delete' | 'import' | 'setup';
 
 /** One change to the plan: who did what, and when. */
@@ -73,6 +76,8 @@ const ENTITY_LABELS: Record<HistoryEntity, string> = {
   roadmapSettings: 'le impostazioni della roadmap',
   member: 'il membro',
   access: 'i domini email ammessi',
+  contact: 'il contatto',
+  contactNote: 'la nota del contatto',
 };
 
 /** Entities named by what they are and their title: "il progetto «App mobile»". */
@@ -86,6 +91,8 @@ const TITLED_ENTITIES: readonly HistoryEntity[] = [
   'projectField',
   'team',
   'stakeholder',
+  'contact',
+  'contactNote',
 ];
 
 /** The longest piece of a note's text that names it in the history. */
@@ -116,11 +123,13 @@ function titleOf(entry: HistoryEntry): string | null {
   const first = (field: string) => entry.after?.[field] ?? entry.before?.[field];
   const title = first('title') ?? first('name') ?? first('label') ?? first('login');
   if (typeof title === 'string' && title.trim()) return `«${title.replace(/\s+/g, ' ').trim()}»`;
-  // Only the notes of the projects go by their text: a note of a day goes by its day.
-  if (entry.entity !== 'projectNote') return null;
+  // Only the notes of the projects and of the contacts go by their text: a note of a day goes by
+  // its day.
+  if (entry.entity !== 'projectNote' && entry.entity !== 'contactNote') return null;
   const text = first('text');
   if (typeof text !== 'string' || !text.trim()) return null;
-  const line = text.replace(/\s+/g, ' ').trim();
+  // The words of the note, without the marks of its Markdown.
+  const line = markdownToPlainText(text).replace(/\s+/g, ' ').trim();
   return `«${line.length > NOTE_TITLE_MAX ? `${line.slice(0, NOTE_TITLE_MAX - 1).trimEnd()}…` : line}»`;
 }
 
@@ -206,7 +215,16 @@ export function describeHistoryEntry(
 
 /** What a change is about, as the history page groups and filters it. */
 export type HistoryKind =
-  'task' | 'note' | 'memo' | 'project' | 'roadmap' | 'revenue' | 'lane' | 'member' | 'plan';
+  | 'task'
+  | 'note'
+  | 'memo'
+  | 'project'
+  | 'roadmap'
+  | 'revenue'
+  | 'lane'
+  | 'contact'
+  | 'member'
+  | 'plan';
 
 export const HISTORY_KIND_LABELS: Record<HistoryKind, string> = {
   task: 'Attività',
@@ -216,6 +234,7 @@ export const HISTORY_KIND_LABELS: Record<HistoryKind, string> = {
   roadmap: 'Team e campi',
   revenue: 'Fatturato',
   lane: 'Corsie',
+  contact: 'Contatti',
   member: 'Membri',
   plan: 'Piano',
 };
@@ -242,6 +261,8 @@ export function historyKind(entry: HistoryEntry): HistoryKind {
       return 'roadmap';
     case 'access':
       return 'member';
+    case 'contactNote':
+      return 'contact';
     default:
       return entry.entity;
   }
@@ -347,6 +368,22 @@ const ROADMAP_FIELDS: Partial<Record<HistoryEntity, Record<string, string>>> = {
     projectColors: 'Colori dei progetti',
     colorFieldId: 'Campo dei colori',
     closures: 'Chiusure aziendali',
+    dayNotesColorId: 'Colore delle note dei giorni',
+  },
+  lane: {
+    name: 'Nome',
+    colorId: 'Colore',
+  },
+  contact: {
+    name: 'Nome',
+    role: 'Ruolo',
+    team: 'Team o ufficio',
+    email: 'Email',
+    phone: 'Telefono',
+    managerId: 'Responsabile',
+  },
+  contactNote: {
+    text: 'Testo',
   },
 };
 
@@ -356,6 +393,7 @@ const MEMO_FIELDS: Record<string, string> = {
   colorId: 'Colore',
   remindOn: 'Promemoria',
   private: 'Visibilità',
+  pinned: 'In evidenza',
 };
 
 /** Options shown by name in a change: beyond these, the rest is counted. */
@@ -431,6 +469,7 @@ function formatField(
     case 'type':
       return isFieldType(value) ? `${value} (${FIELD_TYPE_INFO[value].label})` : value;
     case 'colorId':
+    case 'dayNotesColorId':
       return TASK_COLORS.find((color) => color.id === value)?.name ?? value;
     case 'borderStyle':
       return value === 'dashed' ? 'Tratteggiato' : 'Continuo';

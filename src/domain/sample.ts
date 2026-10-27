@@ -1,6 +1,8 @@
 import type { TaskColorId } from './colors';
 import type {
   Assignment,
+  Contact,
+  ContactNote,
   BorderStyle,
   DailyMetric,
   Memo,
@@ -20,6 +22,7 @@ import { DEFAULT_LANES } from './plan';
 import { sortProjectNotes } from './projectNotes';
 import { defaultRoadmapConfig } from './roadmapConfig';
 import { sortMilestones } from './milestones';
+import { sortContactNotes, sortContacts } from './contacts';
 
 interface SampleTask {
   title: string;
@@ -56,7 +59,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'API ordini',
-    laneId: 'lane-2',
+    laneId: 'lane-4',
     day: 3,
     days: 6,
     colorId: 'yellow',
@@ -66,7 +69,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Calendario editoriale',
-    laneId: 'lane-3',
+    laneId: 'lane-5',
     day: 5,
     days: 9,
     colorId: 'purple',
@@ -76,7 +79,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Migrazione database',
-    laneId: 'lane-2',
+    laneId: 'lane-4',
     day: 10,
     days: 2,
     colorId: 'yellow',
@@ -85,7 +88,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Collaudo',
-    laneId: 'lane-4',
+    laneId: 'lane-3',
     day: 12,
     days: 3,
     colorId: 'ice',
@@ -94,7 +97,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Rilascio in produzione',
-    laneId: 'lane-2',
+    laneId: 'lane-4',
     day: 16,
     days: 1,
     colorId: 'green',
@@ -103,7 +106,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Pubblicazione sugli store',
-    laneId: 'lane-1',
+    laneId: 'lane-2',
     day: 17,
     days: 2,
     colorId: 'gray',
@@ -112,7 +115,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Newsletter clienti',
-    laneId: 'lane-3',
+    laneId: 'lane-5',
     day: 19,
     days: 1,
     colorId: 'indigo',
@@ -121,7 +124,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   },
   {
     title: 'Correzione pagamenti',
-    laneId: 'lane-2',
+    laneId: 'lane-4',
     day: 22,
     days: 1,
     colorId: 'red',
@@ -338,6 +341,57 @@ const SAMPLE_MILESTONES: {
   },
 ];
 
+/** An invented organization chart for the area «Contatti» (beta), with notes in Markdown. */
+const SAMPLE_CONTACTS: Contact[] = [
+  { id: 'sample-contact-1', name: 'Elena', role: 'Direzione generale', team: 'Direzione' },
+  {
+    id: 'sample-contact-2',
+    name: 'Paolo',
+    role: 'Responsabile prodotto',
+    team: 'Prodotto',
+    email: 'paolo@example.com',
+    managerId: 'sample-contact-1',
+  },
+  {
+    id: 'sample-contact-3',
+    name: 'Giulia',
+    role: 'Sviluppo app',
+    team: 'Mobile',
+    managerId: 'sample-contact-2',
+  },
+  {
+    id: 'sample-contact-4',
+    name: 'Marco',
+    role: 'Backend',
+    team: 'Server',
+    managerId: 'sample-contact-2',
+  },
+  {
+    id: 'sample-contact-5',
+    name: 'Sara',
+    role: 'Marketing e contenuti',
+    team: 'Contenuti',
+    phone: '+39 000 0000000',
+    managerId: 'sample-contact-1',
+  },
+  {
+    id: 'sample-contact-6',
+    name: 'Luca',
+    role: 'Amministrazione',
+    team: 'Finanza',
+    managerId: 'sample-contact-1',
+  },
+];
+
+const SAMPLE_CONTACT_NOTES: { contact: number; day: number; text: string }[] = [
+  {
+    contact: 2,
+    day: 3,
+    text: '**Riunione di prodotto** il lunedì alle 10.\n- roadmap del trimestre\n- priorità dei rilasci',
+  },
+  { contact: 5, day: 8, text: 'Vuole le note di rilascio _due giorni prima_ della pubblicazione.' },
+];
+
 export function buildSamplePlan(year: number, month: number): PlanSnapshot {
   const lanes = DEFAULT_LANES.map((lane) => ({ ...lane }));
   const dateOf = (day: number) => formatDateToISO(new Date(year, month, day));
@@ -462,7 +516,16 @@ export function buildSamplePlan(year: number, month: number): PlanSnapshot {
       : stakeholder,
   );
 
+  const contactNotes: ContactNote[] = SAMPLE_CONTACT_NOTES.map((sample, index) => ({
+    id: `sample-contact-note-${index + 1}`,
+    contactId: `sample-contact-${sample.contact}`,
+    text: sample.text,
+    createdAt: new Date(year, month, sample.day, 9, 0).toISOString(),
+  }));
+
   return {
+    contacts: sortContacts(SAMPLE_CONTACTS.map((contact) => ({ ...contact }))),
+    contactNotes: sortContactNotes(contactNotes),
     lanes,
     tasks,
     metrics,

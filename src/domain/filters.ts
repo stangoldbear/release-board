@@ -1,5 +1,5 @@
 import { formatDate } from '../utils/dateUtils';
-import type { DailyNotes, Memo, Milestone, Project, TaskItem, TaskStatus } from './types';
+import type { Contact, DailyNotes, Memo, Milestone, Project, TaskItem, TaskStatus } from './types';
 
 /** A search finds the items with all its words, or with at least one of them. */
 export type SearchMode = 'all' | 'any';
@@ -162,7 +162,7 @@ export function highlightRanges(text: string, words: readonly string[]): [number
 }
 
 /** What a search can find, in the order of the areas on the page. */
-export type SearchResultKind = 'memo' | 'task' | 'note' | 'project' | 'milestone';
+export type SearchResultKind = 'memo' | 'task' | 'note' | 'project' | 'milestone' | 'contact';
 
 /** One thing a search found, to bring into view. */
 export interface SearchResult {
@@ -187,6 +187,8 @@ export function searchResults(found: {
   notes: Readonly<Record<string, string>>;
   projects: readonly Project[];
   milestones?: readonly Milestone[];
+  /** The people of the contacts (0.21, beta), last: they have a tab of their own. */
+  contacts?: readonly Contact[];
 }): SearchResult[] {
   const quoted = (text: string) => `«${text.replace(/\s+/g, ' ').trim()}»`;
   const dated: SearchResult[] = [
@@ -223,6 +225,11 @@ export function searchResults(found: {
       date: milestone.date,
       endDate: milestone.date,
       label: `nota sulla timeline ${quoted(milestone.title)}`,
+    })),
+    ...(found.contacts ?? []).map((contact) => ({
+      kind: 'contact' as const,
+      id: contact.id,
+      label: `contatto ${quoted(contact.name)}`,
     })),
   ];
 }

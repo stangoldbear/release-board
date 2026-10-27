@@ -10,6 +10,7 @@ import {
   isProjectColorsMode,
   isRoadmapId,
   parseClosure,
+  parseDayNotesColor,
   sortClosures,
   parseProjectField,
   parseStakeholder,
@@ -18,6 +19,8 @@ import {
 } from './roadmapConfig';
 import type {
   Assignment,
+  Contact,
+  ContactNote,
   DailyMetric,
   DailyNotes,
   Lane,
@@ -36,16 +39,19 @@ import { parseLocaleNumber } from './numberFormat';
 import { FORMULA_MAX } from './teamFormula';
 import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES } from './plan';
 import { parseMilestone, sortMilestones } from './milestones';
+import { parseContact, parseContactNote, sortContactNotes, sortContacts } from './contacts';
 
 export const BACKUP_FORMAT = 'release-board/backup';
-export const BACKUP_SCHEMA_VERSION = 8;
+export const BACKUP_SCHEMA_VERSION = 9;
 /**
  * Older schemas this version still reads: 3 had no free notes, 4 no projects, 5 no notes of the
  * projects, assignments or roadmap configuration, 6 no phases, formulas and default members of
  * the teams, nor the settings of the roadmap. Schema 7 had no split reserve segments: schema 8
- * prevents older versions from importing a backup whose project data they cannot read.
+ * prevents older versions from importing a backup whose project data they cannot read. Schema 9
+ * (0.21) adds the contacts and the notes on them, the colors of the lanes and the notes in
+ * evidence, which an older version would drop.
  */
-const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, 4, 5, 6, 7, BACKUP_SCHEMA_VERSION];
+const READABLE_SCHEMA_VERSIONS: readonly unknown[] = [3, 4, 5, 6, 7, 8, BACKUP_SCHEMA_VERSION];
 /** Larger files are rejected before parsing: a real plan weighs a few hundred kilobytes. */
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 const MAX_REPORTED_ERRORS = 20;
@@ -74,6 +80,9 @@ export interface BackupFile {
   /** Absent in the backups written before the notes on the timeline. */
   milestones?: Milestone[];
   roadmap: RoadmapConfig;
+  /** Absent in the backups written before the contacts (schema 9). */
+  contacts?: Contact[];
+  contactNotes?: ContactNote[];
 }
 
 /** Where a restored plan came from: a current backup or a file of the previous app version. */
@@ -108,6 +117,8 @@ export function createBackupFile(plan: PlanSnapshot, exportedAt: Date): BackupFi
       teams: sortByPosition(plan.roadmap.teams),
       stakeholders: sortByPosition(plan.roadmap.stakeholders),
     },
+    contacts: sortContacts(plan.contacts),
+    contactNotes: sortContactNotes(plan.contactNotes),
   };
 }
 
@@ -243,6 +254,12 @@ function readPlan(
     errors,
   );
   const milestones = readMilestones(file.milestones, projectIds, errors);
+  const contacts = readContacts(file.contacts, errors);
+  const contactNotes = readContactNotes(
+    file.contactNotes,
+    new Set(contacts.map((contact) => contact.id)),
+    errors,
+  );
 
   if (errors.length > 0) return { ok: false, errors: limitErrors(errors) };
   return {
@@ -258,10 +275,60 @@ function readPlan(
       assignments,
       milestones,
       roadmap,
+      contacts,
+      contactNotes,
     },
     source,
     exportedAt: typeof file.exportedAt === 'string' ? file.exportedAt : null,
   };
+}
+
+/** The people of the contacts: a backup before the schema 9 has none. */
+function readContacts(value: unknown, errors: string[]): Contact[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push('Contatti: formato non valido.');
+    return [];
+  }
+  const contacts: Contact[] = [];
+  value.forEach((item: unknown, index) => {
+    const id = isObject(item) && isFilledString(item.id) ? item.id : '';
+    const contact = parseContact(id, item);
+    if (!contact) errors.push(`Contatto ${index + 1}: dati non validi.`);
+    else if (contacts.some((other) => other.id === contact.id))
+      errors.push(`Contatto ${index + 1}: identificativo "${contact.id}" ripetuto.`);
+    else contacts.push(contact);
+  });
+  // A manager that is not among the people: the person goes to the top of the chart.
+  const ids = new Set(contacts.map((contact) => contact.id));
+  return sortContacts(
+    contacts.map((contact) => {
+      if (!contact.managerId || ids.has(contact.managerId)) return contact;
+      const { managerId: _gone, ...rest } = contact;
+      return rest;
+    }),
+  );
+}
+
+function readContactNotes(
+  value: unknown,
+  contactIds: ReadonlySet<string>,
+  errors: string[],
+): ContactNote[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push('Note dei contatti: formato non valido.');
+    return [];
+  }
+  const notes: ContactNote[] = [];
+  value.forEach((item: unknown, index) => {
+    const id = isObject(item) && isFilledString(item.id) ? item.id : '';
+    const note = parseContactNote(id, item);
+    if (!note || !contactIds.has(note.contactId))
+      errors.push(`Nota del contatto ${index + 1}: dati non validi.`);
+    else notes.push(note);
+  });
+  return sortContactNotes(notes);
 }
 
 function readLanes(value: unknown, errors: string[]): Lane[] {
@@ -277,7 +344,12 @@ function readLanes(value: unknown, errors: string[]): Lane[] {
     } else if (lanes.some((lane) => lane.id === item.id)) {
       errors.push(`${where}: identificativo "${item.id}" ripetuto.`);
     } else {
-      lanes.push({ id: item.id, name: item.name });
+      const lane: Lane = { id: item.id, name: item.name };
+      // A color the app does not know leaves the row without: its tasks keep their own.
+      if (typeof item.colorId === 'string' && isKnownColorId(item.colorId)) {
+        lane.colorId = item.colorId;
+      }
+      lanes.push(lane);
     }
   });
   return lanes;
@@ -475,6 +547,7 @@ function readMemos(value: unknown, errors: string[]): Memo[] {
     if (typeof item.colorId === 'string' && isKnownColorId(item.colorId))
       memo.colorId = item.colorId;
     if (isIsoDate(item.remindOn)) memo.remindOn = item.remindOn;
+    if (item.pinned === true) memo.pinned = true;
     if (author) memo.author = author;
     memos.push(memo);
   });
@@ -657,6 +730,10 @@ function readRoadmap(value: unknown, errors: string[]): RoadmapConfig {
     } else {
       errors.push('Chiusure aziendali: formato non valido.');
     }
+  }
+  if (value.dayNotesColorId !== undefined) {
+    const color = parseDayNotesColor(value.dayNotesColorId);
+    if (color) config.dayNotesColorId = color;
   }
   return config;
 }

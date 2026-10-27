@@ -10,10 +10,13 @@ import { NotesRow, noteCellId } from './NotesRow';
 import { dayName } from './timelineLayout';
 import type { TimelineMetrics } from './timelineLayout';
 import { useNoteDrag } from './useNoteDrag';
+import type { TaskColorId } from '../../domain/colors';
 
 interface NotesSectionProps {
   geometry: TimelineGeometry;
   dailyNotes: DailyNotes;
+  /** The color of the row and of its notes, from the shared settings. */
+  colorId: TaskColorId;
   /** The days whose note the search finds; null while nothing is searched. */
   noteMatches: Set<string> | null;
   sizes: Pick<TimelineMetrics, 'noteHeight' | 'weekNoteHeight' | 'noteLines'>;
@@ -34,6 +37,7 @@ interface NotesSectionProps {
 export function NotesSection({
   geometry,
   dailyNotes,
+  colorId,
   noteMatches,
   sizes,
   oneLineTitles,
@@ -74,6 +78,7 @@ export function NotesSection({
       <NotesRow
         columns={columns}
         dailyNotes={dailyNotes}
+        colorId={colorId}
         matches={noteMatches}
         weekColumns={weekColumns}
         dayHeight={sizes.noteHeight}

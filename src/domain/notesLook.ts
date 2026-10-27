@@ -43,7 +43,8 @@ export const NOTES_LAYOUTS: readonly { id: NotesLayout; label: string; descripti
   {
     id: 'masonry',
     label: 'Muratura',
-    description: 'Colonne di note alte quanto il loro testo, in ordine da sinistra a destra.',
+    description:
+      'Note alte quanto il loro testo: quelle in evidenza nella prima riga, poi ognuna nella colonna più corta, senza vuoti sotto le note brevi.',
   },
   {
     id: 'grid',

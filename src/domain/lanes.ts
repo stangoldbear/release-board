@@ -1,9 +1,35 @@
+import { TASK_COLOR_IDS } from './colors';
+import type { TaskColorId } from './colors';
 import { followerAt, moveBefore } from './listOrder';
 import type { Lane, PlanSnapshot, TaskItem } from './types';
 
 // The rows of the tasks of Next Releases ("corsie"): part of the plan, shared by every member,
-// added, renamed, put in order and removed from the settings. The row of the notes of the days is
-// no lane: it stays under the last one.
+// added, renamed, colored, put in order and removed from the settings. The row of the notes of
+// the days is no lane: it stays under the last one, with a color of its own in the settings.
+
+/**
+ * The color a task shows: its row's, when the row has one (0.21), or its own. The task keeps its
+ * own color, which comes back should the row lose its color.
+ */
+export function taskColorOf(
+  task: Pick<TaskItem, 'colorId'>,
+  lane: Pick<Lane, 'colorId'> | undefined,
+): TaskColorId {
+  return lane?.colorId ?? task.colorId;
+}
+
+/**
+ * The color of a new row: the first of the palette that no row has, so that every row differs,
+ * and after the last the first again.
+ */
+export function nextLaneColor(lanes: readonly Pick<Lane, 'colorId'>[]): TaskColorId {
+  const used = new Set(lanes.map((lane) => lane.colorId));
+  return (
+    TASK_COLOR_IDS.find((color) => !used.has(color)) ??
+    TASK_COLOR_IDS[lanes.length % TASK_COLOR_IDS.length] ??
+    'blue'
+  );
+}
 
 /** The longest name of a lane; the security rules enforce the same. */
 export const LANE_NAME_MAX = 60;
@@ -55,7 +81,25 @@ export function laneFollowerAt(
 
 /** The plan with a lane more, at the end. */
 export function addLane(plan: PlanSnapshot, lane: Lane): PlanSnapshot {
-  return { ...plan, lanes: [...plan.lanes, { id: lane.id, name: lane.name.trim() }] };
+  const added: Lane = { id: lane.id, name: lane.name.trim() };
+  if (lane.colorId) added.colorId = lane.colorId;
+  return { ...plan, lanes: [...plan.lanes, added] };
+}
+
+/** The plan with the color of a lane changed, or removed with null: its tasks keep their own. */
+export function recolorLane(
+  plan: PlanSnapshot,
+  laneId: string,
+  colorId: TaskColorId | null,
+): PlanSnapshot {
+  return {
+    ...plan,
+    lanes: plan.lanes.map((lane) => {
+      if (lane.id !== laneId) return lane;
+      const { colorId: _old, ...rest } = lane;
+      return colorId ? { ...rest, colorId } : rest;
+    }),
+  };
 }
 
 /** The plan with a lane renamed; a lane that no longer exists stays removed. */

@@ -2,7 +2,8 @@ import { INITIAL_SYNC } from '../app/PlanRepository';
 import type { PlanRepository, SyncState } from '../app/PlanRepository';
 import type { AssignmentChanges, AssignmentContent } from '../domain/assignments';
 import { createBackupFile, parseBackupText, serializeBackup } from '../domain/backup';
-import { addLane, moveLane, removeLane, renameLane } from '../domain/lanes';
+import { addLane, moveLane, recolorLane, removeLane, renameLane } from '../domain/lanes';
+import type { TaskColorId } from '../domain/colors';
 import { endPosition } from '../domain/memos';
 import type { MemoChanges, MemoContent } from '../domain/memos';
 import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
@@ -54,6 +55,20 @@ import type {
   TaskItem,
   Team,
 } from '../domain/types';
+import {
+  addContact,
+  addContactNote,
+  removeContact,
+  removeContactNote,
+  updateContact,
+  updateContactNote,
+} from '../domain/contacts';
+import type {
+  ContactChanges,
+  ContactContent,
+  ContactNoteChanges,
+  ContactNoteContent,
+} from '../domain/contacts';
 
 export const PLAN_STORAGE_KEY = 'release-board:plan';
 
@@ -121,14 +136,18 @@ export class LocalPlanRepository implements PlanRepository {
     this.change(removeTask(this.plan, taskId));
   }
 
-  createLane(name: string): string {
+  createLane(name: string, colorId?: TaskColorId): string {
     const id = this.createId();
-    this.change(addLane(this.plan, { id, name }));
+    this.change(addLane(this.plan, colorId ? { id, name, colorId } : { id, name }));
     return id;
   }
 
   renameLane(laneId: string, name: string): void {
     this.change(renameLane(this.plan, laneId, name));
+  }
+
+  recolorLane(laneId: string, colorId: TaskColorId | null): void {
+    this.change(recolorLane(this.plan, laneId, colorId));
   }
 
   moveLane(laneId: string, beforeId: string | null): void {
@@ -188,6 +207,35 @@ export class LocalPlanRepository implements PlanRepository {
 
   updateProject(projectId: string, changes: ProjectChanges): void {
     this.change(updateProject(this.plan, projectId, changes));
+  }
+
+  createContact(content: ContactContent): string {
+    const id = this.createId();
+    this.change(addContact(this.plan, { ...content, id }));
+    return id;
+  }
+
+  updateContact(contactId: string, changes: ContactChanges): void {
+    this.change(updateContact(this.plan, contactId, changes));
+  }
+
+  deleteContact(contactId: string): void {
+    this.change(removeContact(this.plan, contactId));
+  }
+
+  // One browser, one person: the notes on the contacts have no author.
+  createContactNote(content: ContactNoteContent): string {
+    const id = this.createId();
+    this.change(addContactNote(this.plan, { ...content, id, createdAt: this.now().toISOString() }));
+    return id;
+  }
+
+  updateContactNote(noteId: string, changes: ContactNoteChanges): void {
+    this.change(updateContactNote(this.plan, noteId, changes));
+  }
+
+  deleteContactNote(noteId: string): void {
+    this.change(removeContactNote(this.plan, noteId));
   }
 
   deleteProject(projectId: string): void {

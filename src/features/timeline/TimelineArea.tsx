@@ -37,7 +37,7 @@ import { PROJECT_STATUSES } from '../../domain/projects';
 import type { ProjectWithEnd } from '../../domain/projects';
 import type { ProjectSpan } from '../../domain/projectSpan';
 import type { ProjectOfDay } from '../../domain/projectStatus';
-import { isGroupable, projectColorField } from '../../domain/roadmapConfig';
+import { dayNotesColorOf, isGroupable, projectColorField } from '../../domain/roadmapConfig';
 import { isInRange, weekRange } from '../../domain/schedule';
 import { countByStatus } from '../../domain/stats';
 import type { TaskColorId } from '../../domain/colors';
@@ -118,6 +118,8 @@ export interface ReleasesProps {
   onOpenTask: (task: TaskItem) => void;
   onChangeTask: (taskId: string, changes: TaskChanges) => void;
   onDuplicateTask: (task: TaskItem) => void;
+  /** Opens the window that splits a task in parts. */
+  onSplitTask: (task: TaskItem) => void;
   onDeleteTask: (taskId: string) => void;
   onAddTaskAt: (date: string, laneId: string) => void;
   /** Puts a lane right before another one, or last when `beforeId` is null. */
@@ -711,6 +713,7 @@ export function TimelineArea({
               lanes={plan.lanes}
               metrics={plan.metrics}
               dailyNotes={plan.dailyNotes}
+              dayNotesColorId={dayNotesColorOf(plan.roadmap)}
               noteMatches={releases.noteMatches}
               showMetrics={display.showMetrics}
               highlightWeekends={display.highlightWeekends}
@@ -841,6 +844,7 @@ export function TimelineArea({
                                 onChangeTask={releases.onChangeTask}
                                 onOpenTask={releases.onOpenTask}
                                 onDuplicateTask={releases.onDuplicateTask}
+                                onSplitTask={releases.onSplitTask}
                                 onDeleteTask={releases.onDeleteTask}
                                 onAddTaskAt={releases.onAddTaskAt}
                                 onMoveLane={releases.onMoveLane}
@@ -850,6 +854,7 @@ export function TimelineArea({
                               <NotesSection
                                 geometry={geometry}
                                 dailyNotes={plan.dailyNotes}
+                                colorId={dayNotesColorOf(plan.roadmap)}
                                 noteMatches={releases.noteMatches}
                                 sizes={sizes}
                                 oneLineTitles={oneLineTitles}
@@ -907,6 +912,16 @@ export function TimelineArea({
                               onOpen={(project) => dialogs.openProject(project)}
                               onDuplicateProject={roadmap.projectActions.onDuplicate}
                               onDuplicateAssignment={roadmap.assignmentActions.onDuplicate}
+                              onDuplicateContingency={roadmap.projectActions.onDuplicateContingency}
+                              onSplitWork={(item, choice) =>
+                                item.kind === 'assignment'
+                                  ? roadmap.assignmentActions.onSplit(item.id, choice)
+                                  : roadmap.projectActions.onSplitContingency(
+                                      item.projectId,
+                                      item.id,
+                                      choice,
+                                    )
+                              }
                               onAdd={() => dialogs.openNewProject(defaultDay)}
                               onAddAt={dialogs.openNewProject}
                               onChange={roadmap.projectActions.onUpdate}
@@ -973,6 +988,7 @@ export function TimelineArea({
                               onChangeAssignment={roadmap.assignmentActions.onUpdate}
                               onOpenStakeholder={dialogs.openStakeholder}
                               onDuplicateAssignment={roadmap.assignmentActions.onDuplicate}
+                              onSplitAssignment={roadmap.assignmentActions.onSplit}
                             />
                           ))}
                       </div>

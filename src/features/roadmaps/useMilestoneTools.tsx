@@ -10,6 +10,7 @@ import { usePointerDrag } from '../calendar/usePointerDrag';
 import { DiamondSymbol } from '../notes/noteSymbols';
 import { milestoneElementId } from './MilestoneDiamond';
 import type { MilestoneTools } from './MilestoneDiamond';
+import { Markdown } from '../../shared/ui/Markdown';
 
 /** The text of a note on the timeline, in the card that opens on it. */
 function MilestoneDetails({
@@ -31,7 +32,7 @@ function MilestoneDetails({
         {projectTitle ? ` · ${projectTitle}` : ' · nessun progetto'}
         {milestone.remind ? ' · con avviso' : ''}
       </p>
-      {milestone.body && <p className="break-words whitespace-pre-line">{milestone.body}</p>}
+      {milestone.body && <Markdown text={milestone.body} />}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { Dialog } from '../../shared/ui/Dialog';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { taskColorStyle } from '../../themes';
 import { isIsoDate } from '../../utils/dateUtils';
+import { MarkdownTextarea } from '../../shared/ui/MarkdownTextarea';
 
 interface MilestoneDialogProps {
   /** The note to edit; null for a new one on `date`, of `projectId` when given. */
@@ -172,14 +173,14 @@ export function MilestoneDialog({
             <label htmlFor={bodyId} className={LABEL_CLASS}>
               Testo
             </label>
-            <textarea
+            <MarkdownTextarea
               id={bodyId}
+              label="Testo"
               rows={3}
               maxLength={MILESTONE_BODY_MAX}
               placeholder="Cosa succede quel giorno, link, promemoria…"
               value={body}
               onChange={(event) => setBody(event.target.value)}
-              className={FIELD_CLASS}
             />
           </div>
           <label htmlFor={remindId} className="flex items-start gap-2 text-sm">

@@ -16,6 +16,7 @@ export interface MemoChanges {
   colorId?: TaskColorId | null;
   remindOn?: string | null;
   private?: true | null;
+  pinned?: true | null;
 }
 
 /** Whose notes the strip shows in a shared instance: the user's own, or all those they can see. */
@@ -51,7 +52,26 @@ export function diffMemo(before: Memo, after: MemoContent): MemoChanges {
   const remindOn = after.remindOn || undefined;
   if (remindOn !== before.remindOn) changes.remindOn = remindOn ?? null;
   if (Boolean(after.private) !== Boolean(before.private)) changes.private = after.private ?? null;
+  if (Boolean(after.pinned) !== Boolean(before.pinned)) changes.pinned = after.pinned ?? null;
   return changes;
+}
+
+/**
+ * The notes as the board shows them: those in evidence first, then the others, each part in the
+ * order of the strip.
+ */
+export function pinnedFirst(memos: readonly Memo[]): Memo[] {
+  return [...memos.filter((memo) => memo.pinned), ...memos.filter((memo) => !memo.pinned)];
+}
+
+/**
+ * Where a note can go among the notes as the board shows them: within its part, those in evidence
+ * or the others, which never mix. The first and the last index of that part.
+ */
+export function pinnedRange(shown: readonly Memo[], memoId: string): [number, number] {
+  const memo = shown.find((item) => item.id === memoId);
+  const pinned = shown.filter((item) => item.pinned).length;
+  return memo?.pinned ? [0, pinned - 1] : [pinned, shown.length - 1];
 }
 
 /**

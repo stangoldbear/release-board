@@ -20,6 +20,8 @@ import { ABSENCE_STRIPES, WorkBar } from '../roadmaps/WorkBar';
 import type { TimelineGeometry } from '../timeline/TimelineFrame';
 import type { PeopleWork, PersonRow, PersonWorkBar } from './usePeopleWork';
 import { PERSON_ROW_ATTRIBUTE, usePersonWorkDrag } from './usePersonWorkDrag';
+import { useWorkSplit, workSplitParts } from '../roadmaps/useWorkSplit';
+import type { SplitChoice } from '../split/SplitDialog';
 
 /** The element of the bar of an assignment in the part «Persone»: the roadmap has its own. */
 export function personWorkBarId(assignmentId: string): string {
@@ -53,6 +55,7 @@ interface PeopleSectionProps {
   metrics: RoadmapMetrics;
   onOpenAssignment: (assignment: Assignment) => void;
   onDuplicateAssignment: (assignmentId: string) => void;
+  onSplitAssignment: (assignmentId: string, choice: SplitChoice) => void;
   onChangeAssignment: (assignmentId: string, changes: AssignmentChanges) => void;
   onOpenStakeholder: (stakeholder: Stakeholder) => void;
 }
@@ -71,9 +74,11 @@ export function PeopleSection({
   metrics,
   onOpenAssignment,
   onDuplicateAssignment,
+  onSplitAssignment,
   onChangeAssignment,
   onOpenStakeholder,
 }: PeopleSectionProps) {
+  const workSplit = useWorkSplit((item, choice) => onSplitAssignment(item.id, choice));
   const formatDate = useFormatDate();
   const { range, dayWidth, columns, totalWidth, todayOffset } = geometry;
   const lineHeight = metrics.labeledRowHeight;
@@ -251,6 +256,11 @@ export function PeopleSection({
                   onPointerDown={(event, kind) => drag.startDrag(event, bar.item, kind)}
                   onOpen={() => open(bar)}
                   onDuplicate={() => onDuplicateAssignment(bar.item.id)}
+                  onSplit={
+                    workSplitParts(bar.item) >= 2
+                      ? () => workSplit.open(bar.item, bar.project.title)
+                      : undefined
+                  }
                   onEditDays={() => setEditing(bar.item.id)}
                   onChange={(changes: WorkChanges) => change(bar, changes)}
                   elementId={personWorkBarId(bar.item.id)}
@@ -290,6 +300,7 @@ export function PeopleSection({
 
   return (
     <>
+      {workSplit.dialog}
       <p role="status" className="sr-only">
         {announcement}
       </p>

@@ -9,6 +9,7 @@ import { useNow } from '../../shared/useNow';
 import { formatDateToISO } from '../../utils/dateUtils';
 import { MemoDot, MemoTitle, memoSurface, reminderText } from './memoUi';
 import { useDateFormat } from '../..//shared/dateFormat';
+import { Markdown } from '../../shared/ui/Markdown';
 
 /** How often the day is checked, so that a calendar left open shows the reminders of a new day. */
 const CHECK_MS = 60_000;
@@ -67,7 +68,7 @@ export function MemoReminders({ memos, seen, onSeen, onOpen }: MemoRemindersProp
                 <MemoTitle title={memo.title} />
               </span>
             </p>
-            {memo.body && <p className="mt-1 whitespace-pre-line wrap-break-word">{memo.body}</p>}
+            {memo.body && <Markdown text={memo.body} className="mt-1" />}
             <div className="mt-2 flex items-center justify-between gap-2 text-xs">
               <span className="first-letter:uppercase">
                 {reminderText(memo.remindOn ?? today, today, dateFormat)}

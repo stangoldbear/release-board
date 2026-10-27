@@ -6,6 +6,7 @@ import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { emptyDraft } from './fieldDrafts';
 import type { FieldDraft, FieldDrafts } from './fieldDrafts';
 import { FieldTag, linkLabel } from './fieldUi';
+import { MarkdownTextarea } from '../../shared/ui/MarkdownTextarea';
 
 interface ProjectFieldsEditorProps {
   /** The fields, in their order. */
@@ -131,6 +132,20 @@ function FieldControl({
             ? 'Una data per riga, come 2026-10-05'
             : 'Un valore per riga'
       : undefined;
+    // A long text takes Markdown; a list keeps one value per line.
+    if (field.type === 'textarea' && !field.multiple) {
+      return (
+        <MarkdownTextarea
+          id={controlId}
+          label={field.label}
+          rows={4}
+          value={draft.text}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
+          onChange={(event) => onChange({ kind: 'text', text: event.target.value })}
+        />
+      );
+    }
     return (
       <>
         <textarea

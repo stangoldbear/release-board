@@ -58,6 +58,7 @@ import {
 } from './settingsSections';
 import type { SettingsCategoryId, SettingsSectionId } from './settingsSections';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
+import { dayNotesColorOf } from '../../domain/roadmapConfig';
 
 const CATEGORY_ICONS: Record<SettingsCategoryId, LucideIcon> = {
   appearance: Palette,
@@ -225,13 +226,22 @@ export function SettingsDialog({
       case 'notes':
         return <NotesLookSettings look={notesLook} onChange={onNotesLookChange} />;
       case 'lanes':
-        return <LanesSettings lanes={plan.lanes} tasks={plan.tasks} actions={laneActions} />;
+        return (
+          <LanesSettings
+            lanes={plan.lanes}
+            tasks={plan.tasks}
+            notesColorId={dayNotesColorOf(plan.roadmap)}
+            actions={laneActions}
+          />
+        );
       case 'roadmap-config':
         return (
           <RoadmapConfigSettings
             config={plan.roadmap}
+            lanes={plan.lanes.length}
             unavailable={roadmapUnavailable}
             actions={roadmapActions}
+            onOpenLanes={() => select('lanes')}
           />
         );
       case 'labels': {

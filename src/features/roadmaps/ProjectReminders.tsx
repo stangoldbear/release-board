@@ -12,6 +12,7 @@ import { diffDays, formatDateToISO } from '../../utils/dateUtils';
 import { ProjectStatusMark } from './projectUi';
 import { dueMilestones } from '../../domain/milestones';
 import { taskColorStyle } from '../../themes';
+import { Markdown } from '../../shared/ui/Markdown';
 
 /** How often the day is checked, so that a page left open shows the alerts of a new day. */
 const CHECK_MS = 60_000;
@@ -116,7 +117,7 @@ export function ProjectReminders({
               {milestone.projectId &&
                 `, ${projects.find((item) => item.id === milestone.projectId)?.title ?? 'progetto'}`}
               {milestone.body && (
-                <span className="mt-1 block whitespace-pre-line text-fg">{milestone.body}</span>
+                <Markdown text={milestone.body} phrasing className="mt-1 text-fg" />
               )}
             </p>
             <div className="mt-2 flex justify-end">

@@ -9,6 +9,8 @@ import { useNow } from '../../shared/useNow';
 import { formatDateToISO } from '../../utils/dateUtils';
 import { dueText } from './noteUi';
 import { useDateFormat } from '../..//shared/dateFormat';
+import { Markdown } from '../../shared/ui/Markdown';
+import { markdownToPlainText } from '../../utils/markdown';
 
 /** How often the day is checked, so that a calendar left open shows the deadlines of a new day. */
 const CHECK_MS = 60_000;
@@ -72,12 +74,16 @@ export function ProjectNoteReminders({
             <p className="text-xs font-bold tracking-wide text-fg-muted uppercase">
               {titleOf(note)}
             </p>
-            <p className="mt-1 whitespace-pre-line wrap-break-word">{note.text}</p>
+            <Markdown text={note.text} className="mt-1" />
             <div className="mt-2 flex items-center justify-between gap-2 text-xs">
               <span className="font-semibold first-letter:uppercase">
                 {dueText(note, today, dateFormat)}
               </span>
-              <Button size="sm" onClick={() => onDone(note.id)} aria-label={`Fatta: ${note.text}`}>
+              <Button
+                size="sm"
+                onClick={() => onDone(note.id)}
+                aria-label={`Fatta: ${markdownToPlainText(note.text)}`}
+              >
                 <Check className="h-3.5 w-3.5" aria-hidden="true" />
                 Fatta
               </Button>

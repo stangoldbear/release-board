@@ -1,7 +1,8 @@
 import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Copy, Layers, Plus, SquareCheckBig, Tag, Trash, User, X } from 'lucide-react';
+import { Copy, Layers, Plus, Scissors, SquareCheckBig, Tag, Trash, User, X } from 'lucide-react';
 import { DEFAULT_COLOR_ID, TASK_COLORS } from '../../domain/colors';
+import { taskColorOf } from '../../domain/lanes';
 import type { TaskColorId } from '../../domain/colors';
 import { TASK_STATUSES, TASK_STATUS_LABELS } from '../../domain/plan';
 import type { BorderStyle, Lane, TaskItem, TaskStatus } from '../../domain/types';
@@ -12,12 +13,16 @@ import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { taskColorStyle } from '../../themes';
 import { addDaysIso, daysBetween, formatDateToISO, isIsoDate } from '../../utils/dateUtils';
 import { useFormatDate } from '../..//shared/dateFormat';
+import { MarkdownTextarea } from '../../shared/ui/MarkdownTextarea';
+import { taskSplitParts } from './taskSplit';
 
 interface TaskDialogProps {
   onClose: () => void;
   onSave: (content: Omit<TaskItem, 'id'>) => void;
   onDelete: (taskId: string) => void;
   onDuplicate: (task: TaskItem) => void;
+  /** Opens the window that splits the task in parts, in place of this one. */
+  onSplit: (task: TaskItem) => void;
   /** The task to edit; null to create a new one. */
   initialTask: TaskItem | null;
   lanes: Lane[];
@@ -37,6 +42,7 @@ export function TaskDialog({
   onSave,
   onDelete,
   onDuplicate,
+  onSplit,
   initialTask,
   lanes,
   defaultDate,
@@ -57,6 +63,9 @@ export function TaskDialog({
   const [newDeliverable, setNewDeliverable] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const formId = useId();
+  // A row with a color colors its tasks: the task takes it, and its own color is not asked.
+  const lane = lanes.find((item) => item.id === laneId);
+  const shownColor = taskColorOf({ colorId }, lane);
 
   const handleAddDeliverable = () => {
     if (!newDeliverable.trim()) return;
@@ -72,7 +81,7 @@ export function TaskDialog({
       laneId,
       startDate: startDate <= endDate ? startDate : endDate,
       endDate: startDate <= endDate ? endDate : startDate,
-      colorId,
+      colorId: shownColor,
       borderStyle,
       status,
       assignee: assignee.trim(),
@@ -108,6 +117,15 @@ export function TaskDialog({
                   <Copy className="h-4 w-4" aria-hidden="true" />
                   Duplica
                 </Button>
+                {taskSplitParts(initialTask) >= 2 && (
+                  <Button
+                    onClick={() => onSplit(initialTask)}
+                    title="Dividi l’attività in più parti"
+                  >
+                    <Scissors className="h-4 w-4" aria-hidden="true" />
+                    Dividi…
+                  </Button>
+                )}
               </div>
             )}
             <Button onClick={onClose}>Annulla</Button>
@@ -222,23 +240,38 @@ export function TaskDialog({
               Aspetto nel calendario
             </legend>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {TASK_COLORS.map((color) => (
-                <button
-                  key={color.id}
-                  type="button"
-                  onClick={() => setColorId(color.id)}
-                  aria-pressed={colorId === color.id}
-                  style={taskColorStyle(color.id)}
-                  className={`flex items-center gap-2 rounded-lg border-2 p-2 text-left text-xs font-medium transition-shadow ${
-                    colorId === color.id ? 'ring-2 ring-fg ring-offset-1 ring-offset-surface' : ''
-                  }`}
-                >
-                  <span className="h-3 w-3 shrink-0 rounded-full border-2 border-current" />
-                  <span className="truncate">{color.name}</span>
-                </button>
-              ))}
-            </div>
+            {lane?.colorId ? (
+              <p className="flex items-center gap-2 text-sm">
+                <span
+                  aria-hidden="true"
+                  style={taskColorStyle(lane.colorId)}
+                  className="h-4 w-6 shrink-0 rounded-sm border-2"
+                />
+                <span>
+                  Colore della corsia «{lane.name}»:{' '}
+                  {TASK_COLORS.find((color) => color.id === lane.colorId)?.name}. Si cambia in
+                  Impostazioni → Next Releases → Corsie.
+                </span>
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {TASK_COLORS.map((color) => (
+                  <button
+                    key={color.id}
+                    type="button"
+                    onClick={() => setColorId(color.id)}
+                    aria-pressed={colorId === color.id}
+                    style={taskColorStyle(color.id)}
+                    className={`flex items-center gap-2 rounded-lg border-2 p-2 text-left text-xs font-medium transition-shadow ${
+                      colorId === color.id ? 'ring-2 ring-fg ring-offset-1 ring-offset-surface' : ''
+                    }`}
+                  >
+                    <span className="h-3 w-3 shrink-0 rounded-full border-2 border-current" />
+                    <span className="truncate">{color.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-4 pt-1 text-sm">
               <span className="text-fg-muted">Bordo:</span>
@@ -270,7 +303,7 @@ export function TaskDialog({
                 Anteprima
               </span>
               <div
-                style={taskColorStyle(colorId)}
+                style={taskColorStyle(shownColor)}
                 className={`rounded-xs border-2 p-2.5 text-center text-xs font-bold uppercase shadow-xs ${
                   borderStyle === 'dashed' ? 'border-dashed' : 'border-solid'
                 }`}
@@ -373,13 +406,13 @@ export function TaskDialog({
             <label htmlFor="task-description-input" className={LABEL_CLASS}>
               Note
             </label>
-            <textarea
+            <MarkdownTextarea
               id="task-description-input"
+              label="Note"
               rows={2}
               placeholder="Dettagli, link o note di rilascio…"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              className={FIELD_CLASS}
             />
           </div>
         </form>

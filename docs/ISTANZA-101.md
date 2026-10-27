@@ -294,8 +294,9 @@ Note:
 - Se il CHANGELOG della versione dice che le regole di Firestore sono cambiate, ripubblica
   `firestore/firestore.rules` nella console Firebase subito dopo il push: finché il sito e le
   regole non sono della stessa versione alcune modifiche vengono rifiutate, e il sito dice quali
-  parti non sono disponibili nell'indicatore di sincronizzazione. Chi tiene il sito aperto lo
-  ricarichi.
+  parti non sono disponibili nell'indicatore di sincronizzazione. Dalla 0.21.0 il sito controlla
+  da solo la versione delle regole: se sono più vecchie, l'indicatore dice «Regole da aggiornare»
+  finché non le ripubblichi. Chi tiene il sito aperto lo ricarichi.
 - Dalla 0.16.0 il workflow Deploy Pages controlla le dipendenze (`npm audit`), lint, tipi e test
   prima di pubblicare: se si ferma su un avviso di sicurezza nuovo di una dipendenza, il sito
   resta com'era; aggiorna alla versione che lo corregge.

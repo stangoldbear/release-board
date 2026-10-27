@@ -21,6 +21,8 @@ import { formatManDays } from './barRendering';
 import type { WorkItem } from './barRendering';
 import { FieldTag, FieldValues } from './fieldUi';
 import { ProjectStatusMark } from './projectUi';
+import { Markdown } from '../../shared/ui/Markdown';
+import { markdownToPlainText } from '../../utils/markdown';
 
 interface ProjectCardProps {
   project: ProjectWithEnd & { statusChange?: StatusChange };
@@ -139,13 +141,9 @@ export function ProjectCard({
         </div>
 
         {project.description && (
-          <p
-            style={clampLines(6)}
-            className="text-xs break-words whitespace-pre-line text-fg-muted"
-            title={project.description}
-          >
-            {project.description}
-          </p>
+          <div style={clampLines(8)} title={markdownToPlainText(project.description)}>
+            <Markdown text={project.description} className="text-xs text-fg-muted" />
+          </div>
         )}
 
         {mainFields.length > 0 && (
@@ -194,11 +192,10 @@ export function ProjectCard({
                 Progetto · {note.author ? `${nameOf(note.author)} · ` : ''}
                 {formatDateTimeIT(note.createdAt)}
               </p>
-              <p
-                className={`whitespace-pre-wrap break-words ${note.status === 'done' ? 'text-fg-muted line-through' : ''}`}
-              >
-                <Highlight text={note.text} />
-              </p>
+              <Markdown
+                text={note.text}
+                className={note.status === 'done' ? 'text-fg-muted line-through' : ''}
+              />
               {note.status && (
                 <p className="text-fg-muted">{note.status === 'done' ? 'Fatta' : 'Da fare'}</p>
               )}
@@ -216,9 +213,7 @@ export function ProjectCard({
               <p className="font-semibold text-fg-muted">
                 {item.name} · {formatDate(item.schedule.start)} → {formatDate(item.schedule.end)}
               </p>
-              <p className="whitespace-pre-wrap break-words">
-                <Highlight text={item.note!} />
-              </p>
+              <Markdown text={item.note!} />
             </li>
           ))}
           {datedNotes.map((item) => (
@@ -229,11 +224,7 @@ export function ProjectCard({
               <p className="font-semibold break-words">
                 <Highlight text={item.title} />
               </p>
-              {item.body && (
-                <p className="whitespace-pre-wrap break-words">
-                  <Highlight text={item.body} />
-                </p>
-              )}
+              {item.body && <Markdown text={item.body} />}
             </li>
           ))}
         </ol>

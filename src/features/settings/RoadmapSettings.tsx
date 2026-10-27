@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RotateCcw, SlidersHorizontal, Users } from 'lucide-react';
+import { CalendarRange, RotateCcw, SlidersHorizontal, Users } from 'lucide-react';
 import {
   DEFAULT_PROJECT_COLORS,
   PROJECT_COLORS_INFO,
@@ -30,6 +30,7 @@ function defaultsKeeping(config: RoadmapConfig): RoadmapConfig {
     ...defaults,
     ...(labels && { fields: [...defaults.fields, labels] }),
     ...(config.closures && { closures: config.closures }),
+    ...(config.dayNotesColorId && { dayNotesColorId: config.dayNotesColorId }),
   };
 }
 
@@ -44,7 +45,17 @@ interface RoadmapSettingsProps {
  * How the projects of the roadmap are described: the custom fields, the teams and the people,
  * each edited in a window of its own, and the defaults of the repository to load or to restore.
  */
-export function RoadmapConfigSettings({ config, unavailable, actions }: RoadmapSettingsProps) {
+export function RoadmapConfigSettings({
+  config,
+  lanes,
+  unavailable,
+  actions,
+  onOpenLanes,
+}: RoadmapSettingsProps & {
+  /** How many lanes Next Releases has, for the card that leads to them. */
+  lanes: number;
+  onOpenLanes: () => void;
+}) {
   const [open, setOpen] = useState<'fields' | 'team' | null>(null);
   const [confirmDefaults, setConfirmDefaults] = useState(false);
   // The labels have a section of their own.
@@ -57,7 +68,8 @@ export function RoadmapConfigSettings({ config, unavailable, actions }: RoadmapS
   return (
     <div className="space-y-3">
       <p className="text-xs text-fg-muted">
-        Come sono descritti i progetti: i campi personalizzati, i team e le persone che ci lavorano.
+        Come sono descritti i progetti: i campi personalizzati, i team e le persone che ci lavorano;
+        accanto, le corsie di Next Releases.
       </p>
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="flex flex-col gap-2 rounded-lg border border-line p-3">
@@ -85,6 +97,19 @@ export function RoadmapConfigSettings({ config, unavailable, actions }: RoadmapS
           </p>
           <Button size="sm" className="self-start" onClick={() => setOpen('team')}>
             Modifica team e persone…
+          </Button>
+        </div>
+        {/* The rows of Next Releases are edited in their own section: the card leads there. */}
+        <div className="flex flex-col gap-2 rounded-lg border border-line p-3">
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <CalendarRange className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+            Corsie di Next Releases
+          </p>
+          <p className="text-xs text-fg-muted">
+            {lanes} {lanes === 1 ? 'corsia' : 'corsie'} e la riga «Note», ognuna con il suo colore
+          </p>
+          <Button size="sm" className="self-start" onClick={onOpenLanes}>
+            Modifica le corsie…
           </Button>
         </div>
       </div>

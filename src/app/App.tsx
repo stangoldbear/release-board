@@ -25,12 +25,21 @@ import {
 } from '../domain/memos';
 import type { MemoContent } from '../domain/memos';
 import { assignmentsOfProject, copyAfterAssignment, moveAssignment } from '../domain/assignments';
-import { moveContingency } from '../domain/contingency';
+import {
+  contingencySegments,
+  duplicateContingency,
+  moveContingency,
+  splitContingency,
+} from '../domain/contingency';
+import { splitDays, splitWork } from '../domain/split';
+import { SplitDialog } from '../features/split/SplitDialog';
+import type { SplitChoice } from '../features/split/SplitDialog';
+import { taskSplitTarget } from '../features/tasks/taskSplit';
 import type { AssignmentChanges, AssignmentContent } from '../domain/assignments';
 import { copyOfTask, diffTask, isPlanEmpty } from '../domain/plan';
 import { notesOfProject, rememberNoteReminders } from '../domain/projectNotes';
 import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
-import { arrangementOf, diffProject } from '../domain/projects';
+import { CONTINGENCY_SEGMENTS_MAX, arrangementOf, diffProject } from '../domain/projects';
 import type { ProjectChanges, ProjectContent } from '../domain/projects';
 import {
   nextProjectPosition,
@@ -54,6 +63,7 @@ import { projectColorField } from '../domain/roadmapConfig';
 import type { TeamPlan } from '../domain/teamPlan';
 import type { RoadmapSettingsChanges } from '../domain/roadmapConfig';
 import type { TaskColorId } from '../domain/colors';
+import { nextLaneColor, taskColorOf } from '../domain/lanes';
 import type { MetricValueChange, TaskChanges } from '../domain/plan';
 import { buildSamplePlan } from '../domain/sample';
 import type {
@@ -100,7 +110,7 @@ import { TEXT_SCALES } from '../shared/ui/textScale';
 import { useToast } from '../shared/ui/Toast';
 import { DEFAULT_DENSITY, DENSITY_IDS, isTight } from '../shared/ui/density';
 import { VersionStamp } from '../shared/ui/VersionStamp';
-import { addDaysIso, parseISODate, todayIso } from '../utils/dateUtils';
+import { addDaysIso, formatDate, parseISODate, todayIso } from '../utils/dateUtils';
 import { createId } from '../utils/id';
 import {
   ALL_AREAS_VISIBLE,
@@ -148,6 +158,12 @@ import { DailyNoteDialog } from '../features/notes/DailyNoteDialog';
 import { MilestoneDialog } from '../features/roadmaps/MilestoneDialog';
 import type { MilestoneChanges, MilestoneContent } from '../domain/milestones';
 import { milestoneElementId } from '../features/roadmaps/MilestoneDiamond';
+import { diffContact, filterContacts } from '../domain/contacts';
+import { ContactDialog } from '../features/contacts/ContactDialog';
+import type { ContactActions } from '../features/contacts/ContactDialog';
+import { ContactsArea } from '../features/contacts/ContactsArea';
+import { contactElementId } from '../features/contacts/OrgChart';
+import type { ContactsView } from '../features/contacts/OrgChart';
 
 /** Where each kind of search result is: its area, and its element in the area. */
 const RESULT_TARGETS: Record<
@@ -159,11 +175,15 @@ const RESULT_TARGETS: Record<
   note: { area: 'releases', elementId: noteCellId },
   project: { area: 'roadmaps', elementId: projectBarId },
   milestone: { area: 'roadmaps', elementId: milestoneElementId },
+  contact: { area: 'contacts', elementId: contactElementId },
 };
 
 /** The dialog on screen, if any: only one at a time; projects have theirs in their own area. */
 type OpenDialog =
   | { kind: 'task'; task: TaskItem }
+  /** A person of the contacts, or a new one, reporting to `managerId` when given. */
+  | { kind: 'contact'; contactId: string | null; managerId?: string }
+  | { kind: 'splitTask'; task: TaskItem }
   /** A new task, with suggested date and lane. */
   | { kind: 'task'; task: null; date: string; laneId: string }
   | { kind: 'memo'; memo: Memo }
@@ -320,6 +340,14 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   const [page, goToPage] = useHashPage();
   const [filters, setFilters] = useState<TaskFilter>(NO_FILTER);
   const [searchMode, setSearchMode] = usePreference('search-mode', oneOf(SEARCH_MODES), 'all');
+  // The contacts as a chart, or as a list on phones, where a wide chart would only scroll.
+  const [contactsView, setContactsView] = usePreference<ContactsView>(
+    'contacts-view',
+    oneOf(['chart', 'list'] as const),
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+      ? 'list'
+      : 'chart',
+  );
   // The result brought into view, by its key; the search forgets it when it finds other things.
   const [currentResult, setCurrentResult] = useState<string | null>(null);
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
@@ -413,6 +441,24 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
 
   const openTask = (task: TaskItem) => setDialog({ kind: 'task', task });
 
+  // A task split in parts: the first keeps its start, the others are new tasks like it, with its
+  // note when asked; the checklist stays with the first.
+  const handleSplitTask = (task: TaskItem, choice: SplitChoice) => {
+    const [first, ...rest] = splitDays(task.startDate, choice.sizes, choice.pause);
+    if (!first) return;
+    repository.updateTask(task.id, { endDate: first.end });
+    const { description, deliverables: _deliverables, ...content } = copyOfTask(task);
+    for (const part of rest) {
+      repository.createTask({
+        ...content,
+        startDate: part.start,
+        endDate: part.end,
+        ...(description && choice.copyNote ? { description } : {}),
+      });
+    }
+    showToast(`Attività "${oneLine(task.title)}" divisa in ${rest.length + 1} parti`);
+  };
+
   const handleAddTaskAt = (date: string, laneId: string) => {
     setDialog({ kind: 'task', task: null, date, laneId });
   };
@@ -494,16 +540,20 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
    * The places a note can take from its window: in its group when the notes are grouped, otherwise
    * in the strip as shown, or in the whole strip for a note the search found outside it.
    */
+  // The places a note can take: among the notes of its group, if any, and of its part, those in
+  // evidence or the others, which the board never mixes.
   const memoPlaces = (memo: Memo) => {
     const strip = scopedMemos.some((item) => item.id === memo.id) ? scopedMemos : plan.memos;
     const group = grouped
       ? groupMemos(strip, memoGroupOrder).find((item) => item.key === (memo.author?.id ?? ''))
       : undefined;
-    if (!group) return { strip, inGroup: false };
+    const part = (group?.memos ?? strip).filter(
+      (item) => Boolean(item.pinned) === Boolean(memo.pinned),
+    );
     return {
-      strip: group.memos,
-      inGroup: true,
-      follower: (index: number) => followerInGroup(strip, group.memos, memo.id, index),
+      strip: part,
+      inGroup: group !== undefined,
+      follower: (index: number) => followerInGroup(strip, part, memo.id, index),
     };
   };
 
@@ -604,6 +654,52 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
     showToast(`Progetto «${oneLine(saved.title)}» duplicato`);
   };
 
+  // A block of contingency more, after the one copied: the project keeps its bars where they are.
+  const handleDuplicateContingency = (projectId: string, segmentId: string) => {
+    const project = plan.projects.find((item) => item.id === projectId);
+    if (!project) return;
+    const contingency = duplicateContingency(
+      project,
+      segmentId,
+      createId(),
+      plan.roadmap.closures ?? [],
+    );
+    if (!contingency) {
+      const full = (project.contingency?.segments?.length ?? 0) >= CONTINGENCY_SEGMENTS_MAX;
+      showToast(
+        full
+          ? `Al massimo ${CONTINGENCY_SEGMENTS_MAX + 1} blocchi di contingency per progetto`
+          : 'Il nuovo blocco non entra nel calendario',
+      );
+      return;
+    }
+    repository.updateProject(projectId, { contingency, arrangement: 'manual' });
+    showToast('Blocco di contingency duplicato');
+  };
+
+  // A block of contingency split in parts, which take its place among the blocks of the project.
+  const handleSplitContingency = (projectId: string, segmentId: string, choice: SplitChoice) => {
+    const project = plan.projects.find((item) => item.id === projectId);
+    const block = project && contingencySegments(project).find((item) => item.id === segmentId);
+    if (!project || !block) return;
+    const parts = splitWork(block, choice.sizes, choice.pause, [], plan.roadmap.closures ?? []);
+    const contingency =
+      parts &&
+      splitContingency(
+        project,
+        segmentId,
+        parts,
+        parts.slice(1).map(() => createId()),
+        choice.copyNote,
+      );
+    if (!contingency) {
+      showToast('Le parti non entrano nel calendario o nei blocchi della contingency');
+      return;
+    }
+    repository.updateProject(projectId, { contingency, arrangement: 'manual' });
+    showToast(`Contingency divisa in ${parts.length} parti`);
+  };
+
   // The notes of the projects, who works on them, and the people themselves.
   const noteActions = {
     onCreate: (content: ProjectNoteContent) => {
@@ -635,6 +731,37 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       repository.updateProject(assignment.projectId, { arrangement: 'manual' });
       showToast('Segmento di lavoro duplicato');
     },
+    // The first part stays the assignment, with its start; the others are new assignments of the
+    // same person, with the note when asked. The bars stay where they are put.
+    onSplit: (assignmentId: string, choice: SplitChoice) => {
+      const assignment = plan.assignments.find((item) => item.id === assignmentId);
+      if (!assignment) return;
+      const person = plan.roadmap.stakeholders.find((item) => item.id === assignment.stakeholderId);
+      const parts = splitWork(
+        assignment,
+        choice.sizes,
+        choice.pause,
+        person?.absences ?? [],
+        plan.roadmap.closures ?? [],
+      );
+      const [first, ...rest] = parts ?? [];
+      if (!first) {
+        showToast('Le parti non entrano nel calendario');
+        return;
+      }
+      repository.updateAssignment(assignment.id, { manDays: first.manDays });
+      for (const part of rest) {
+        const { id: _id, note, ...content } = assignment;
+        repository.createAssignment({
+          ...content,
+          startDate: part.startDate,
+          manDays: part.manDays,
+          ...(note && choice.copyNote ? { note } : {}),
+        });
+      }
+      repository.updateProject(assignment.projectId, { arrangement: 'manual' });
+      showToast(`Lavoro diviso in ${rest.length + 1} parti`);
+    },
     onCreate: (content: AssignmentContent) => {
       repository.createAssignment(content);
       showToast('Persona aggiunta al progetto');
@@ -658,10 +785,14 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
   // The rows of the tasks of Next Releases, for every member.
   const laneActions = {
     onCreate: (name: string) => {
-      repository.createLane(name);
+      repository.createLane(name, nextLaneColor(plan.lanes));
       showToast(`Corsia «${name}» aggiunta`);
     },
     onRename: (laneId: string, name: string) => repository.renameLane(laneId, name),
+    onRecolor: (laneId: string, colorId: TaskColorId | undefined) =>
+      repository.recolorLane(laneId, colorId ?? null),
+    onRecolorNotes: (colorId: TaskColorId) =>
+      repository.updateRoadmapSettings({ dayNotesColorId: colorId }),
     onMove: (laneId: string, beforeId: string | null) => repository.moveLane(laneId, beforeId),
     onDelete: (laneId: string) => {
       repository.deleteLane(laneId);
@@ -764,6 +895,41 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       ])
     : plan.milestones;
 
+  // The contacts are in beta: without the beta features, the search does not look there.
+  const foundContacts =
+    betaFeatures && searching
+      ? filterContacts(plan.contacts, plan.contactNotes, filters.search, searchMode)
+      : null;
+  const contactActions: ContactActions = {
+    onSave: (contactId, content) => {
+      if (contactId === null) {
+        const id = repository.createContact(content);
+        showToast(`Persona «${oneLine(content.name)}» aggiunta ai contatti`);
+        return id;
+      }
+      const before = plan.contacts.find((contact) => contact.id === contactId);
+      if (before) {
+        const changes = diffContact(before, content);
+        if (Object.keys(changes).length > 0) repository.updateContact(contactId, changes);
+      }
+      showToast(`Persona «${oneLine(content.name)}» salvata`);
+      return contactId;
+    },
+    onDelete: (contactId) => {
+      repository.deleteContact(contactId);
+      showToast('Persona eliminata dai contatti');
+    },
+    onAddNote: (contactId, text) => {
+      repository.createContactNote({ contactId, text });
+      showToast('Nota aggiunta');
+    },
+    onEditNote: (noteId, text) => repository.updateContactNote(noteId, { text }),
+    onDeleteNote: (noteId) => {
+      repository.deleteContactNote(noteId);
+      showToast('Nota eliminata');
+    },
+  };
+
   // Search
   const results: SearchResult[] = searching
     ? searchResults({
@@ -777,6 +943,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
         ),
         projects: shownProjects,
         milestones: shownMilestones,
+        contacts: foundContacts ?? [],
       })
     : [];
   const searchCounts: FoundCount[] = [
@@ -795,6 +962,16 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
       one: 'nota sulla timeline',
       many: 'note sulla timeline',
     },
+    ...(foundContacts
+      ? [
+          {
+            found: foundContacts.length,
+            total: plan.contacts.length,
+            one: 'contatto',
+            many: 'contatti',
+          },
+        ]
+      : []),
   ];
   const currentIndex = results.findIndex(
     (result) => resultKey(result.kind, result.id) === currentResult,
@@ -1063,6 +1240,7 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
                 onOpenTask: openTask,
                 onChangeTask: handleChangeTask,
                 onDuplicateTask: handleDuplicateTask,
+                onSplitTask: (task) => setDialog({ kind: 'splitTask', task }),
                 onDeleteTask: handleDeleteTask,
                 onAddTaskAt: handleAddTaskAt,
                 onMoveLane: laneActions.onMove,
@@ -1084,6 +1262,8 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
                 nameOf,
                 projectActions: {
                   onDuplicate: handleDuplicateProject,
+                  onDuplicateContingency: handleDuplicateContingency,
+                  onSplitContingency: handleSplitContingency,
                   onCreate: handleCreateProject,
                   onUpdate: (projectId, changes) => repository.updateProject(projectId, changes),
                   onMove: handleMoveProject,
@@ -1104,6 +1284,20 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
                 onOpenDayNote: (date) => setDialog({ kind: 'dayNote', date }),
                 onOpenMemo: (memo) => setDialog({ kind: 'memo', memo }),
               }}
+            />
+          )}
+
+          {betaFeatures && isShown('contacts') && (
+            <ContactsArea
+              id={areaElementId('contacts')}
+              contacts={plan.contacts}
+              notes={plan.contactNotes}
+              found={foundContacts}
+              unavailable={sync.missing.includes('contacts')}
+              view={contactsView}
+              onViewChange={setContactsView}
+              onOpen={(contact) => setDialog({ kind: 'contact', contactId: contact.id })}
+              onAdd={() => setDialog({ kind: 'contact', contactId: null })}
             />
           )}
 
@@ -1156,6 +1350,38 @@ export default function App({ repository, instance, loadWarning }: AppProps) {
             onSave={handleSaveTask}
             onDelete={handleDeleteTask}
             onDuplicate={handleDuplicateTask}
+            onSplit={(task) => setDialog({ kind: 'splitTask', task })}
+          />
+        )}
+
+        {/* A person deleted meanwhile, by someone else, closes their window. */}
+        {dialog?.kind === 'contact' &&
+          betaFeatures &&
+          (dialog.contactId === null ||
+            plan.contacts.some((contact) => contact.id === dialog.contactId)) && (
+            <ContactDialog
+              contact={plan.contacts.find((contact) => contact.id === dialog.contactId) ?? null}
+              initialManagerId={dialog.managerId}
+              contacts={plan.contacts}
+              notes={plan.contactNotes}
+              nameOf={nameOf}
+              actions={contactActions}
+              onClose={() => setDialog(null)}
+            />
+          )}
+
+        {dialog?.kind === 'splitTask' && (
+          <SplitDialog
+            target={taskSplitTarget(
+              dialog.task,
+              taskColorOf(
+                dialog.task,
+                plan.lanes.find((lane) => lane.id === dialog.task.laneId),
+              ),
+              (iso) => formatDate(iso, dateFormat),
+            )}
+            onSplit={(choice) => handleSplitTask(dialog.task, choice)}
+            onClose={() => setDialog(null)}
           />
         )}
 

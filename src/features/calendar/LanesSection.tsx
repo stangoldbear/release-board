@@ -1,7 +1,7 @@
 import { memo, useId, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { GripVertical } from 'lucide-react';
-import { laneFollowerAt } from '../../domain/lanes';
+import { laneFollowerAt, taskColorOf } from '../../domain/lanes';
 import type { TaskChanges } from '../../domain/plan';
 import { placeTasks } from '../../domain/schedule';
 import type { Lane, TaskItem } from '../../domain/types';
@@ -15,6 +15,7 @@ import { TaskContextMenu } from './TaskContextMenu';
 import { LABEL_CELL, columnEdge, columnFill, stackingOrder } from './timelineLayout';
 import type { Column, TimelineMetrics } from './timelineLayout';
 import { draggedTask, useTaskDrag } from './useTaskDrag';
+import { taskSplitParts } from '../tasks/taskSplit';
 
 interface LaneCellsProps {
   columns: Column[];
@@ -46,6 +47,7 @@ interface LanesSectionProps {
   onChangeTask: (taskId: string, changes: TaskChanges) => void;
   onOpenTask: (task: TaskItem) => void;
   onDuplicateTask: (task: TaskItem) => void;
+  onSplitTask: (task: TaskItem) => void;
   onDeleteTask: (taskId: string) => void;
   onAddTaskAt: (date: string, laneId: string) => void;
   /** Puts a lane right before another one, or last when `beforeId` is null. */
@@ -74,6 +76,7 @@ export function LanesSection({
   onChangeTask,
   onOpenTask,
   onDuplicateTask,
+  onSplitTask,
   onDeleteTask,
   onAddTaskAt,
   onMoveLane,
@@ -160,6 +163,14 @@ export function LanesSection({
                 draggable={lanes.length > 1}
                 {...(lanes.length > 1 ? laneDrag.source(lane.id, 'lanes') : {})}
               >
+                {/* The color of the row, which its tasks take: the name says the rest. */}
+                {lane.colorId && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-1 left-0 w-1 rounded-r-sm"
+                    style={{ backgroundColor: `var(--rb-task-${lane.colorId}-border)` }}
+                  />
+                )}
                 {lanes.length > 1 && (
                   <button
                     type="button"
@@ -200,6 +211,7 @@ export function LanesSection({
                     <TaskBar
                       key={item.task.id}
                       placed={item}
+                      colorId={taskColorOf(item.task, lane)}
                       dayWidth={dayWidth}
                       top={lanePadding + item.track * (barHeight + trackGap)}
                       height={barHeight}
@@ -244,6 +256,7 @@ export function LanesSection({
           y={menu.y}
           onEdit={() => onOpenTask(menu.task)}
           onDuplicate={() => onDuplicateTask(menu.task)}
+          onSplit={taskSplitParts(menu.task) >= 2 ? () => onSplitTask(menu.task) : undefined}
           onDelete={() => setTaskToDelete(menu.task)}
           onClose={() => {
             focusBar(menu.task.id);

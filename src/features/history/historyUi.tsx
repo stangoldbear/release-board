@@ -1,5 +1,6 @@
 import {
   CalendarRange,
+  Contact as ContactIcon,
   ListTodo,
   Milestone,
   NotebookPen,
@@ -21,6 +22,7 @@ const KIND_ICONS: Record<HistoryKind, LucideIcon> = {
   roadmap: SlidersHorizontal,
   revenue: TrendingUp,
   lane: Rows3,
+  contact: ContactIcon,
   member: Users,
   plan: CalendarRange,
 };

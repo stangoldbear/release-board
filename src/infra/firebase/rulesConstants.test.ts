@@ -39,7 +39,14 @@ import {
 } from '../../domain/roadmapConfig';
 import { FORMULA_MAX } from '../../domain/teamFormula';
 import { MILESTONE_BODY_MAX, MILESTONE_TITLE_MAX } from '../../domain/milestones';
-import { METRIC_ID, PLAN_ID } from './planDocs';
+import { METRIC_ID, PLAN_ID, RULES_VERSION } from './planDocs';
+import {
+  CONTACT_EMAIL_MAX,
+  CONTACT_NAME_MAX,
+  CONTACT_NOTE_MAX,
+  CONTACT_PHONE_MAX,
+  CONTACT_TEXT_MAX,
+} from '../../domain/contacts';
 
 // The security rules repeat some lists and limits of the app. When they part, saving in a shared
 // instance fails, and only there: these tests compare the two without the emulator.
@@ -55,14 +62,16 @@ function allowedLists(field: string): string[][] {
 const sorted = (values: readonly string[]) => [...values].sort();
 
 describe('the security rules', () => {
-  it('allow the colors of tasks, free notes, projects, notes on the timeline and teams that the app has', () => {
+  it('allow the colors of rows, tasks, free notes, projects, notes on the timeline and teams that the app has', () => {
     expect(allowedLists('colorId')).toEqual([
       sorted(TASK_COLOR_IDS),
       sorted(TASK_COLOR_IDS),
       sorted(TASK_COLOR_IDS),
       sorted(TASK_COLOR_IDS),
       sorted(TASK_COLOR_IDS),
+      sorted(TASK_COLOR_IDS),
     ]);
+    expect(allowedLists('dayNotesColorId')).toEqual([sorted(TASK_COLOR_IDS)]);
   });
 
   it('allow the states, borders and approval lights that the app has', () => {
@@ -87,6 +96,22 @@ describe('the security rules', () => {
   it('know the one plan and the one metric of the app', () => {
     expect(rules).toContain(`return planId == '${PLAN_ID}';`);
     expect(rules.match(new RegExp(`metricId == '${METRIC_ID}'`, 'g'))).toHaveLength(2);
+  });
+
+  it('answer the version of the rules that the site needs', () => {
+    expect(rules).toContain(`version == '${RULES_VERSION}'`);
+  });
+
+  it('limit the contacts and the notes on them as the app does', () => {
+    const block = (start: string, end: string) =>
+      rules.slice(rules.indexOf(`match /${start}/`), rules.indexOf(`match /${end}/`));
+    const contacts = block('contacts', 'contactNotes');
+    expect(contacts).toContain(`isText(data.name, ${CONTACT_NAME_MAX})`);
+    expect(contacts).toContain(`isText(data.role, ${CONTACT_TEXT_MAX})`);
+    expect(contacts).toContain(`isText(data.team, ${CONTACT_TEXT_MAX})`);
+    expect(contacts).toContain(`isText(data.email, ${CONTACT_EMAIL_MAX})`);
+    expect(contacts).toContain(`isText(data.phone, ${CONTACT_PHONE_MAX})`);
+    expect(block('contactNotes', 'writers')).toContain(`isText(data.text, ${CONTACT_NOTE_MAX})`);
   });
 
   it('limit the names of the lanes as the app does', () => {

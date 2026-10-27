@@ -1,13 +1,15 @@
 import type { PlanPart } from './PlanRepository';
 
 /** The areas of the page, one under the other; the header shows or hides each of them. */
-export type AreaId = 'notes' | 'releases' | 'roadmaps' | 'people';
+export type AreaId = 'notes' | 'releases' | 'roadmaps' | 'people' | 'contacts';
 
 export interface Area {
   id: AreaId;
   label: string;
   /** Still in development: only who turns the beta features on sees it. */
   beta?: true;
+  /** Shown in its own tab only, not with the others in «All». */
+  ownTab?: true;
 }
 
 export const AREAS: readonly Area[] = [
@@ -15,13 +17,15 @@ export const AREAS: readonly Area[] = [
   { id: 'releases', label: 'Next Releases' },
   { id: 'roadmaps', label: 'Roadmap' },
   { id: 'people', label: 'Persone' },
+  // The organization chart (0.21): a page of its own, not part of the timeline.
+  { id: 'contacts', label: 'Contatti', beta: true, ownTab: true },
 ];
 
 /** The browser preference that shows the parts of the app still in development. */
 export const BETA_FEATURES_PREFERENCE = 'beta-features';
 
-/** The parts of the plan that only the beta features show; none since the roadmap came out of beta. */
-export const BETA_PARTS: readonly PlanPart[] = [];
+/** The parts of the plan that only the beta features show: the contacts, since the 0.21. */
+export const BETA_PARTS: readonly PlanPart[] = ['contacts'];
 
 /** Whether anything is in beta: the settings offer the switch only then; the mechanism stays. */
 export const HAS_BETA_FEATURES = AREAS.some((area) => area.beta) || BETA_PARTS.length > 0;
@@ -38,6 +42,7 @@ export const ALL_AREAS_VISIBLE: AreaVisibility = {
   releases: true,
   roadmaps: true,
   people: true,
+  contacts: true,
 };
 
 /**

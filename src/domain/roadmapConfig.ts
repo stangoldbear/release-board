@@ -144,6 +144,16 @@ export interface RoadmapSettingsChanges {
   colorFieldId?: string | null;
   /** All the company closures; an empty list removes them. */
   closures?: readonly Closure[];
+  /** The color of the notes of the days of Next Releases; null for the default one. */
+  dayNotesColorId?: TaskColorId | null;
+}
+
+/** The color of the notes of the days when the settings choose none: the yellow of a post-it. */
+export const DEFAULT_DAY_NOTES_COLOR: TaskColorId = 'yellow';
+
+/** The color of the row «Note» of Next Releases and of the notes of the days. */
+export function dayNotesColorOf(config: Pick<RoadmapConfig, 'dayNotesColorId'>): TaskColorId {
+  return config.dayNotesColorId ?? DEFAULT_DAY_NOTES_COLOR;
 }
 
 export const PROJECT_COLORS_MODES: readonly ProjectColorsMode[] = ['field', 'free'];
@@ -190,6 +200,11 @@ export function applyRoadmapSettings(
   if (changes.closures !== undefined) {
     if (changes.closures.length > 0) next.closures = sortClosures(changes.closures);
     else delete next.closures;
+  }
+  if (changes.dayNotesColorId !== undefined) {
+    if (changes.dayNotesColorId && changes.dayNotesColorId !== DEFAULT_DAY_NOTES_COLOR) {
+      next.dayNotesColorId = changes.dayNotesColorId;
+    } else delete next.dayNotesColorId;
   }
   return next;
 }
@@ -482,7 +497,16 @@ export function parseRoadmapConfig(value: unknown): RoadmapConfig {
   if (isRoadmapId(data.colorFieldId)) config.colorFieldId = data.colorFieldId;
   const closures = parseClosures(data.closures);
   if (closures.length > 0) config.closures = closures;
+  const notesColor = parseDayNotesColor(data.dayNotesColorId);
+  if (notesColor) config.dayNotesColorId = notesColor;
   return config;
+}
+
+/** The color of the notes of the days, as stored: a known color other than the default. */
+export function parseDayNotesColor(value: unknown): TaskColorId | null {
+  return typeof value === 'string' && isKnownColorId(value) && value !== DEFAULT_DAY_NOTES_COLOR
+    ? value
+    : null;
 }
 
 /** The configuration a plan starts with, from roadmapDefaults.json. */

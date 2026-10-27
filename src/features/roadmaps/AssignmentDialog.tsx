@@ -18,6 +18,8 @@ import { Dialog } from '../../shared/ui/Dialog';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { isIsoDate } from '../../utils/dateUtils';
 import { useFormatDate } from '../..//shared/dateFormat';
+import { MarkdownTextarea } from '../../shared/ui/MarkdownTextarea';
+import { Markdown } from '../../shared/ui/Markdown';
 
 interface AssignmentDialogProps {
   /** The assignment to edit; null for a new one on the project. */
@@ -148,7 +150,9 @@ export function AssignmentDialog({
                 </optgroup>
               ))}
             </select>
-            {stakeholder?.info && <p className="mt-1 text-xs text-fg-muted">{stakeholder.info}</p>}
+            {stakeholder?.info && (
+              <Markdown text={stakeholder.info} className="mt-1 text-xs text-fg-muted" />
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -228,14 +232,14 @@ export function AssignmentDialog({
             <label htmlFor={noteId} className={LABEL_CLASS}>
               Nota
             </label>
-            <textarea
+            <MarkdownTextarea
               id={noteId}
+              label="Nota"
               rows={2}
               maxLength={ASSIGNMENT_NOTE_MAX}
               placeholder="Cosa fa, su quale parte del progetto…"
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              className={FIELD_CLASS}
             />
           </div>
         </form>

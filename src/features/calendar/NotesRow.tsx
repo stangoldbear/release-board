@@ -15,6 +15,10 @@ import { LABEL_CELL, NARROW_DAY_WIDTH, clampLines, columnEdge, columnFill } from
 import type { Column } from './timelineLayout';
 import type { NoteDrag } from './useNoteDrag';
 import { useFormatDate } from '../..//shared/dateFormat';
+import { Markdown } from '../../shared/ui/Markdown';
+import { markdownToPlainText } from '../../utils/markdown';
+import type { TaskColorId } from '../../domain/colors';
+import { taskColorStyle } from '../../themes';
 
 /** The cell of the note of a day, to give it the focus or bring it into view. */
 export function noteCellId(date: string): string {
@@ -24,6 +28,8 @@ export function noteCellId(date: string): string {
 interface NotesRowProps {
   columns: Column[];
   dailyNotes: DailyNotes;
+  /** The color of the row and of its notes. */
+  colorId: TaskColorId;
   /** The days whose note the search finds; null while nothing is searched. */
   matches: Set<string> | null;
   weekColumns: boolean;
@@ -78,6 +84,7 @@ function fitsInItsBox(cell: HTMLElement): boolean {
 export const NotesRow = memo(function NotesRow({
   columns,
   dailyNotes,
+  colorId,
   matches,
   weekColumns,
   dayHeight,
@@ -94,6 +101,7 @@ export const NotesRow = memo(function NotesRow({
   onShowDays,
 }: NotesRowProps) {
   const formatDate = useFormatDate();
+  const noteColor = taskColorStyle(colorId);
   // The Tab key stops at the notes and at one empty day, today's: hundreds of empty days would
   // each be a stop. From there a note goes to any day, with the day field of its window.
   const today = todayIso();
@@ -115,10 +123,16 @@ export const NotesRow = memo(function NotesRow({
     };
   };
   return (
-    <div className="flex border-t-2 border-warning">
-      <div className={`${LABEL_CELL} flex flex-col justify-center bg-warning-soft`}>
+    <div className="flex border-t-2" style={{ borderTopColor: `var(--rb-task-${colorId}-border)` }}>
+      <div className={`${LABEL_CELL} flex flex-col justify-center bg-surface-muted`}>
+        {/* The color of the row, as the lanes have it: the name says the rest. */}
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-1 left-0 w-1 rounded-r-sm"
+          style={{ backgroundColor: `var(--rb-task-${colorId}-border)` }}
+        />
         <span className="flex items-center gap-1 text-xs font-bold uppercase">
-          <StickyNote className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
+          <StickyNote className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           Note
         </span>
         <span className="flex flex-wrap items-center justify-between gap-x-2 text-xs text-fg-muted">
@@ -153,29 +167,29 @@ export const NotesRow = memo(function NotesRow({
               {...(notes.length > 0 ? cardOf(notes, true) : {})}
               aria-label={
                 notes.length > 0
-                  ? `${notes.map(([date, text]) => `${formatDate(date)}: ${text}`).join('; ')}. Mostra i giorni`
+                  ? `${notes.map(([date, text]) => `${formatDate(date)}: ${markdownToPlainText(text)}`).join('; ')}. Mostra i giorni`
                   : undefined
               }
               style={{ width: column.width, minHeight: weekHeight }}
               title={
                 notes.length > 0 ? undefined : `Mostra i giorni dal ${formatDate(column.start)}`
               }
-              className={`relative min-w-0 shrink-0 cursor-pointer overflow-hidden p-1 text-xs hover:bg-warning-soft ${columnEdge(column)} ${column.past ? 'bg-past' : ''} ${expanded ? 'flex flex-col items-stretch justify-start gap-1 text-left' : ''}`}
+              className={`relative min-w-0 shrink-0 cursor-pointer overflow-hidden p-1 text-xs hover:bg-surface-strong ${columnEdge(column)} ${column.past ? 'bg-past' : ''} ${expanded ? 'flex flex-col items-stretch justify-start gap-1 text-left' : ''}`}
             >
               {notes.length > 0 &&
                 (expanded ? (
                   notes.map(([date, text]) => (
                     <span
                       key={date}
-                      style={clampLines(WEEK_NOTE_LINES)}
-                      className="w-full rounded-sm border border-warning bg-warning-soft px-1 break-words hyphens-auto"
+                      style={{ ...clampLines(WEEK_NOTE_LINES), ...noteColor }}
+                      className="w-full rounded-sm border px-1 break-words hyphens-auto"
                     >
                       <span className="font-semibold">{formatDate(date)}</span>{' '}
-                      <Highlight text={text} />
+                      <Highlight text={markdownToPlainText(text)} />
                     </span>
                   ))
                 ) : (
-                  <span className="rounded-sm bg-warning-soft px-1 font-semibold">
+                  <span style={noteColor} className="rounded-sm border px-1 font-semibold">
                     {notes.length} {notes.length === 1 ? 'nota' : 'note'}
                   </span>
                 ))}
@@ -197,16 +211,18 @@ export const NotesRow = memo(function NotesRow({
         // notes are expanded. In a narrow day the note is an icon.
         const oneLine = oneLineText && !expanded;
         const iconOnly = narrow;
-        const chipClass = `w-full min-w-0 rounded-xs border border-warning bg-warning-soft p-1 text-xs in-data-compact:px-1 in-data-compact:py-0.5 ${
+        const chipClass = `w-full min-w-0 rounded-xs border p-1 text-xs in-data-compact:px-1 in-data-compact:py-0.5 ${
           oneLine ? 'truncate' : 'break-words hyphens-auto'
         } ${iconOnly ? 'flex items-center justify-center' : ''}`;
-        const chipStyle =
-          iconOnly || oneLine ? undefined : clampLines(expanded ? EXPANDED_NOTE_LINES : lines);
+        const chipStyle = {
+          ...noteColor,
+          ...(iconOnly || oneLine ? {} : clampLines(expanded ? EXPANDED_NOTE_LINES : lines)),
+        };
         const chipContent = (words: string) =>
           iconOnly ? (
-            <StickyNote className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
+            <StickyNote className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           ) : (
-            <Highlight text={words} />
+            <Highlight text={markdownToPlainText(words)} />
           );
         return (
           <button
@@ -228,7 +244,7 @@ export const NotesRow = memo(function NotesRow({
             style={{ width: column.width, minHeight: dayHeight }}
             aria-label={
               text
-                ? `Nota del ${formatDate(date)}: ${text}`
+                ? `Nota del ${formatDate(date)}: ${markdownToPlainText(text)}`
                 : hidden
                   ? `Nota del ${formatDate(date)}, nascosta dalla ricerca`
                   : `Aggiungi una nota per il ${formatDate(date)}`
@@ -254,7 +270,7 @@ export const NotesRow = memo(function NotesRow({
               </span>
             ) : (
               // The plus is drawn by CSS: one icon element per empty day would weigh on long timelines.
-              <span className="flex w-full items-center justify-center rounded-xs border border-dashed border-line text-base leading-none text-fg-muted opacity-60 after:content-['+'] group-hover/note:border-warning group-hover/note:opacity-100" />
+              <span className="flex w-full items-center justify-center rounded-xs border border-dashed border-line text-base leading-none text-fg-muted opacity-60 after:content-['+'] group-hover/note:border-line-strong group-hover/note:opacity-100" />
             )}
           </button>
         );
@@ -273,7 +289,7 @@ export const NotesRow = memo(function NotesRow({
                 <span className="block text-xs font-semibold text-fg-muted">
                   Nota del {formatDate(date)}
                 </span>
-                <span className="block break-words whitespace-pre-line">{text}</span>
+                <Markdown text={text} />
               </li>
             ))}
           </ul>

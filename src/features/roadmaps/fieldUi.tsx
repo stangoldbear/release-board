@@ -6,6 +6,7 @@ import type { FieldValue, Project, ProjectField } from '../../domain/types';
 import { Highlight } from '../../shared/ui/Highlight';
 import { taskColorStyle } from '../../themes';
 import { useDateFormat } from '../..//shared/dateFormat';
+import { Markdown } from '../../shared/ui/Markdown';
 
 /**
  * A value as a tag: a rounded rectangle in the color of the value, readable in every theme, or a
@@ -66,6 +67,15 @@ export function FieldValues({ project, field }: { project: Project; field: Proje
   const dateFormat = useDateFormat();
   const values = fieldValuesOf(project, field);
   if (values.length === 0) return null;
+  // A long text keeps its Markdown, under its label.
+  if (field.type === 'textarea' && !field.multiple) {
+    return (
+      <span className="flex min-w-0 flex-col gap-0.5 text-xs">
+        <span className="font-semibold text-fg-muted">{field.label}</span>
+        <Markdown text={values.map(String).join('\n')} phrasing />
+      </span>
+    );
+  }
   const tags = field.type === 'choice' || (field.type === 'text' && field.multiple);
   const label = (
     <span className="font-semibold text-fg-muted">

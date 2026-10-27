@@ -2,6 +2,7 @@ import {
   collection,
   deleteField,
   doc,
+  getDoc,
   limit as limitTo,
   onSnapshot,
   orderBy,
@@ -34,8 +35,11 @@ import type { ProjectChanges, ProjectContent } from '../../domain/projects';
 import { applyRoadmapSettings } from '../../domain/roadmapConfig';
 import type { RoadmapSettingsChanges } from '../../domain/roadmapConfig';
 import type { MetricValueChange, TaskChanges } from '../../domain/plan';
+import type { TaskColorId } from '../../domain/colors';
 import type {
   Assignment,
+  Contact,
+  ContactNote,
   DailyMetric,
   Lane,
   Memo,
@@ -54,6 +58,12 @@ import { formatDate } from '../../utils/dateUtils';
 import {
   METRIC_ID,
   ROADMAP_SETTINGS_ID,
+  contactContent,
+  contactNoteContent,
+  readContact,
+  readContactNote,
+  laneContent,
+  RULES_VERSION,
   assignmentContent,
   buildPlan,
   chunk,
@@ -89,6 +99,13 @@ import {
 } from './planDocs';
 import type { RoadmapSettings } from './planDocs';
 import type { MilestoneChanges, MilestoneContent } from '../../domain/milestones';
+import { reportsMovedUp } from '../../domain/contacts';
+import type {
+  ContactChanges,
+  ContactContent,
+  ContactNoteChanges,
+  ContactNoteContent,
+} from '../../domain/contacts';
 
 /** The signed-in member, as recorded in every change. */
 export interface Actor {
@@ -134,6 +151,7 @@ const PART_PATHS: Record<PlanPart, readonly string[]> = {
     'stakeholders/',
     'settings/',
   ],
+  contacts: ['contacts/', 'contactNotes/'],
 };
 
 /** A write of an import: a document to set, or to delete when its data is null. */
@@ -158,6 +176,8 @@ type Parts = {
   teams?: Team[];
   stakeholders?: Stakeholder[];
   settings?: RoadmapSettings;
+  contacts?: Contact[];
+  contactNotes?: ContactNote[];
 };
 
 function mapDocs<T>(
@@ -203,6 +223,8 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
    */
   private readonly refusedParts = new Set<PlanPart>();
   private unreadable: string | null = null;
+  /** The published rules refuse the version this site needs: they are older. */
+  private outdatedRules = false;
   private lastSyncedAt: Date | null = null;
 
   private readonly stops: (() => void)[] = [];
@@ -287,6 +309,20 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       },
       roadmap(() => (this.parts.settings = {})),
     );
+    // The contacts came with the rules of the 0.21: older ones refuse them, and the plan opens
+    // without.
+    const contacts = (fallback: () => void) => ({ part: 'contacts' as const, fallback });
+    this.listen(
+      'contacts',
+      (snapshot) => (this.parts.contacts = mapDocs(snapshot, readContact)),
+      contacts(() => (this.parts.contacts = [])),
+    );
+    this.listen(
+      'contactNotes',
+      (snapshot) => (this.parts.contactNotes = mapDocs(snapshot, readContactNote)),
+      contacts(() => (this.parts.contactNotes = [])),
+    );
+    this.checkRulesVersion();
     if (typeof window !== 'undefined') {
       const refresh = () => this.updateSync();
       // The changes not sent yet live in the memory of the page: leaving it would lose them.
@@ -379,13 +415,28 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     this.commit(batch);
   }
 
-  createLane(name: string): string {
+  createLane(name: string, colorId?: TaskColorId): string {
     const id = this.createId();
     const positions = (this.parts.lanes ?? []).map((item) => item.position);
     // After the last one; positions are whole numbers, as the rules want them.
     const position = positions.length > 0 ? Math.max(...positions) + 1 : 0;
-    this.createDocument('lanes', 'lane', id, { name: name.trim(), position });
+    this.createDocument(
+      'lanes',
+      'lane',
+      id,
+      laneContent(
+        colorId ? { id, name: name.trim(), colorId } : { id, name: name.trim() },
+        position,
+      ),
+    );
     return id;
+  }
+
+  recolorLane(laneId: string, colorId: TaskColorId | null): void {
+    const current = this.plan?.lanes.find((lane) => lane.id === laneId);
+    // A lane deleted meanwhile, by someone else, stays deleted.
+    if (!current || (current.colorId ?? null) === colorId) return;
+    this.updateEntity('lanes', 'lane', current, { colorId }, { name: current.name });
   }
 
   renameLane(laneId: string, name: string): void {
@@ -716,6 +767,72 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     this.deleteDocument('milestones', 'milestone', id, milestoneContent(content));
   }
 
+  createContact(content: ContactContent): string {
+    const id = this.createId();
+    if (this.refusedParts.has('contacts')) return id;
+    this.createDocument('contacts', 'contact', id, contactContent(content));
+    return id;
+  }
+
+  updateContact(contactId: string, changes: ContactChanges): void {
+    const current = this.plan?.contacts.find((contact) => contact.id === contactId);
+    // A person deleted meanwhile, by someone else, stays deleted.
+    if (!current || this.refusedParts.has('contacts')) return;
+    this.updateEntity('contacts', 'contact', current, changes, { name: current.name });
+  }
+
+  /**
+   * Removes a person with the notes on them, in one batch with one history entry; whoever reported
+   * to them reports to their manager, in the same batch.
+   */
+  deleteContact(contactId: string): void {
+    const contacts = this.plan?.contacts ?? [];
+    const before = contacts.find((contact) => contact.id === contactId);
+    if (!before || this.refusedParts.has('contacts')) return;
+    const { id, ...content } = before;
+    const batch = writeBatch(this.db);
+    const historyId = this.record(batch, 'contact', id, 'delete', {
+      before: contactContent(content),
+    });
+    batch.delete(this.ref(`contacts/${id}`));
+    for (const note of this.plan?.contactNotes ?? []) {
+      if (note.contactId === id) batch.delete(this.ref(`contactNotes/${note.id}`));
+    }
+    for (const report of reportsMovedUp(contacts, id)) {
+      batch.update(this.ref(`contacts/${report.id}`), {
+        managerId: report.managerId ?? deleteField(),
+        ...this.audit(historyId),
+      });
+    }
+    this.recordDeletions(batch, historyId);
+    this.commit(batch);
+  }
+
+  createContactNote(content: ContactNoteContent): string {
+    const id = this.createId();
+    if (this.refusedParts.has('contacts')) return id;
+    const data = contactNoteContent({
+      ...content,
+      createdAt: this.now().toISOString(),
+      author: this.author,
+    });
+    this.createDocument('contactNotes', 'contactNote', id, data);
+    return id;
+  }
+
+  updateContactNote(noteId: string, changes: ContactNoteChanges): void {
+    const current = this.plan?.contactNotes.find((note) => note.id === noteId);
+    if (!current || this.refusedParts.has('contacts')) return;
+    this.updateEntity('contactNotes', 'contactNote', current, changes, { text: current.text });
+  }
+
+  deleteContactNote(noteId: string): void {
+    const before = this.plan?.contactNotes.find((note) => note.id === noteId);
+    if (!before || this.refusedParts.has('contacts')) return;
+    const { id, ...content } = before;
+    this.deleteDocument('contactNotes', 'contactNote', id, contactNoteContent(content));
+  }
+
   createProjectNote(content: ProjectNoteContent): string {
     const id = this.createId();
     if (this.refusedParts.has('roadmap')) return id;
@@ -886,7 +1003,7 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       ),
     );
     const noteAuthors = new Map(
-      (this.plan?.projectNotes ?? []).flatMap((note) =>
+      [...(this.plan?.projectNotes ?? []), ...(this.plan?.contactNotes ?? [])].flatMap((note) =>
         note.author ? [[note.id, note.author] as const] : [],
       ),
     );
@@ -897,6 +1014,10 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
         author: authors.get(memo.id) ?? memo.author ?? this.author,
       })),
       projectNotes: plan.projectNotes.map((note) => ({
+        ...note,
+        author: noteAuthors.get(note.id) ?? note.author ?? this.author,
+      })),
+      contactNotes: plan.contactNotes.map((note) => ({
         ...note,
         author: noteAuthors.get(note.id) ?? note.author ?? this.author,
       })),
@@ -1095,6 +1216,22 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     );
   }
 
+  /**
+   * Reads the version of the rules this site needs, a document that never exists: newer rules
+   * answer that it is missing, older ones refuse it. Any other failure, such as no network, says
+   * nothing about the rules.
+   */
+  private checkRulesVersion(): void {
+    getDoc(doc(this.db, `${this.planPath}/rulesVersion/${RULES_VERSION}`)).then(
+      () => undefined,
+      (error: unknown) => {
+        if ((error as Partial<FirestoreError>).code !== 'permission-denied') return;
+        this.outdatedRules = true;
+        this.updateSync();
+      },
+    );
+  }
+
   private updateSync(): void {
     // Node has a navigator without onLine: only an explicit false means offline.
     const online = typeof navigator === 'undefined' || navigator.onLine !== false;
@@ -1108,14 +1245,16 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
         : 'synced';
     const missing = [...this.refusedParts];
     const current = this.sync;
+    const outdatedRules = this.outdatedRules;
     if (
       current.status === status &&
       current.error === error &&
       current.lastSyncedAt?.getTime() === this.lastSyncedAt?.getTime() &&
-      current.missing.join() === missing.join()
+      current.missing.join() === missing.join() &&
+      current.outdatedRules === outdatedRules
     )
       return;
-    this.sync = { status, lastSyncedAt: this.lastSyncedAt, error, missing };
+    this.sync = { status, lastSyncedAt: this.lastSyncedAt, error, missing, outdatedRules };
     for (const listener of this.syncListeners) listener(this.sync);
   }
 
@@ -1165,10 +1304,11 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
     const { lanes, tasks, metricIds, values, notes, memos, privateMemos, projects } = this.parts;
     const { projectNotes, assignments, milestones, fields, teams, stakeholders, settings } =
       this.parts;
+    const { contacts, contactNotes } = this.parts;
     if (!lanes || !tasks || !metricIds || !values || !notes || !memos || !privateMemos || !projects)
       return;
     if (!projectNotes || !assignments || !milestones || !fields || !teams || !stakeholders) return;
-    if (!settings) return;
+    if (!settings || !contacts || !contactNotes) return;
     // Should a shared note ever have the id of a private one, the private note wins: what the
     // author writes there never reaches the shared one.
     const privateIds = new Set(privateMemos.map((memo) => memo.id));
@@ -1187,6 +1327,8 @@ export class FirestorePlanRepository implements PlanRepository, HistoryReader {
       teams,
       stakeholders,
       settings,
+      contacts,
+      contactNotes,
     });
     this.markReady();
     for (const listener of this.planListeners) listener(this.plan);

@@ -5,6 +5,7 @@ import { Dialog } from '../../shared/ui/Dialog';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { isIsoDate } from '../../utils/dateUtils';
 import { useFormatDate } from '../..//shared/dateFormat';
+import { MarkdownTextarea } from '../../shared/ui/MarkdownTextarea';
 
 const SUGGESTED_NOTES = [
   'Kickoff Deploy',
@@ -90,14 +91,14 @@ export function DailyNoteDialog({
           <label htmlFor={textareaId} className={LABEL_CLASS}>
             Testo della nota
           </label>
-          <textarea
+          <MarkdownTextarea
             id={textareaId}
+            label="Testo della nota"
             data-autofocus
             rows={4}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Eventi, scadenze o note operative per questo giorno…"
-            className={FIELD_CLASS}
           />
         </div>
 

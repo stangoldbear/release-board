@@ -46,6 +46,7 @@ import { taskColorStyle } from '../../themes';
 import type { RoadmapConfigActions } from '../roadmaps/roadmapActions';
 import { ColorSwatch } from './ColorMenu';
 import { StakeholderDialog } from '../roadmaps/StakeholderDialog';
+import { markdownToPlainText } from '../../utils/markdown';
 
 const OPTION =
   'flex cursor-pointer items-start gap-2 rounded-lg border border-line p-2 text-sm hover:bg-surface-strong has-checked:border-accent has-checked:bg-accent-soft';
@@ -761,7 +762,7 @@ function TeamPeople({ title, stakeholders, onEdit, onAdd, addLabel }: TeamPeople
               </p>
               <p className="text-xs text-fg-muted">
                 {[
-                  stakeholder.info,
+                  stakeholder.info ? markdownToPlainText(stakeholder.info) : null,
                   stakeholder.absences.length > 0
                     ? `${stakeholder.absences.length} ${stakeholder.absences.length === 1 ? 'assenza' : 'assenze'}`
                     : null,

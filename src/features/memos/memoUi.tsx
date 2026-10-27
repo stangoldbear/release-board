@@ -1,4 +1,4 @@
-import { Bell, BellRing, Lock } from 'lucide-react';
+import { Bell, BellRing, Lock, Pin } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { splitMemoTitle } from '../../domain/memos';
 import { Highlight } from '../../shared/ui/Highlight';
@@ -158,6 +158,14 @@ export function PrivateMark() {
       <Lock className="h-3 w-3" aria-hidden="true" />
     </span>
   );
+}
+
+/**
+ * The pin of a note in evidence (0.21), in the colors of its text: its place on the board says it
+ * too, and its name goes in the label of the element that shows it.
+ */
+export function PinnedMark() {
+  return <Pin className="h-3.5 w-3.5 shrink-0 fill-current" aria-hidden="true" />;
 }
 
 /** Words for screen readers about whose a note is: "nota privata", or "di Mario Rossi". */

@@ -2,11 +2,12 @@ import type { DragEvent, KeyboardEvent } from 'react';
 import type { TaskColorId } from '../../domain/colors';
 import type { NoteShape, NotesLayout } from '../../domain/notesLook';
 import type { Memo } from '../../domain/types';
-import { CURRENT_RESULT, Highlight, useIsCurrentResult } from '../../shared/ui/Highlight';
+import { CURRENT_RESULT, useIsCurrentResult } from '../../shared/ui/Highlight';
 import {
   MemoAuthorLine,
   MemoDot,
   MemoTitle,
+  PinnedMark,
   PrivateMark,
   ReminderBadge,
   memoOwnership,
@@ -16,6 +17,8 @@ import {
   reminderText,
 } from './memoUi';
 import { useDateFormat } from '../..//shared/dateFormat';
+import { Markdown } from '../../shared/ui/Markdown';
+import { markdownToPlainText } from '../../utils/markdown';
 
 /** The element of a note, to give it the focus. */
 export function memoElementId(memoId: string): string {
@@ -103,7 +106,8 @@ export function MemoCard({
       title={movable ? 'Clic per aprirla, trascinala per cambiarle posto' : 'Clic per aprirla'}
       aria-label={[
         memo.title,
-        expanded && memo.body ? memo.body : null,
+        memo.pinned ? 'in evidenza' : null,
+        expanded && memo.body ? markdownToPlainText(memo.body) : null,
         memo.remindOn ? reminderText(memo.remindOn, today, dateFormat) : null,
         memoOwnership(memo, meId, authorName),
       ]
@@ -125,6 +129,7 @@ export function MemoCard({
       } ${current ? CURRENT_RESULT : ''}`}
     >
       <span className="flex w-full items-center gap-1.5">
+        {memo.pinned && <PinnedMark />}
         {memo.private && <PrivateMark />}
         <MemoDot memo={memo} />
         <span className={expanded ? 'min-w-0 flex-1 wrap-break-word' : 'max-w-72 truncate'}>
@@ -134,8 +139,8 @@ export function MemoCard({
       </span>
       {authorName && <MemoAuthorLine name={authorName} />}
       {expanded && memo.body && (
-        <span className={`whitespace-pre-line wrap-break-word ${clamp}`}>
-          <Highlight text={memo.body} />
+        <span className={`block w-full ${clamp}`}>
+          <Markdown text={memo.body} phrasing />
         </span>
       )}
     </button>

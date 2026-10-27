@@ -10,6 +10,8 @@ import {
   memoMoves,
   moveGroup,
   memoSuggestions,
+  pinnedFirst,
+  pinnedRange,
   memosInScope,
   readGroupOrder,
   readSeenReminders,
@@ -361,5 +363,30 @@ describe('the notes grouped by author', () => {
       followerInGroup(mixed, annas, 'a', 1),
     );
     expect(order(moved.memos)).toEqual(['b', 'c', 'd', 'a', 'e']);
+  });
+});
+
+describe('notes in evidence', () => {
+  const note = (id: string, pinned = false) => ({
+    id,
+    title: id,
+    position: Number(id.slice(1)),
+    ...(pinned ? { pinned: true as const } : {}),
+  });
+  const strip = [note('m1'), note('m2', true), note('m3'), note('m4', true)];
+
+  it('come first, each part in the order of the strip', () => {
+    expect(pinnedFirst(strip).map((memo) => memo.id)).toEqual(['m2', 'm4', 'm1', 'm3']);
+  });
+
+  it('move among themselves, and the others among the others', () => {
+    const shown = pinnedFirst(strip);
+    expect(pinnedRange(shown, 'm4')).toEqual([0, 1]);
+    expect(pinnedRange(shown, 'm1')).toEqual([2, 3]);
+  });
+
+  it('are kept when saved, and the flag goes away when it is off', () => {
+    expect(diffMemo(note('m1'), { title: 'm1', pinned: true })).toEqual({ pinned: true });
+    expect(diffMemo(note('m2', true), { title: 'm2' })).toEqual({ pinned: null });
   });
 });

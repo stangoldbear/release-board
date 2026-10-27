@@ -5,10 +5,14 @@ import {
   laneNameError,
   moveLane,
   moveLaneBefore,
+  nextLaneColor,
+  recolorLane,
   removeLane,
   renameLane,
+  taskColorOf,
   tasksOfLane,
 } from './lanes';
+import { TASK_COLOR_IDS } from './colors';
 import { createEmptyPlan } from './plan';
 import type { Lane, PlanSnapshot, TaskItem } from './types';
 
@@ -94,5 +98,30 @@ describe('changing the lanes of a plan', () => {
     expect(tasksOfLane(plan.tasks, 'lane-2')).toHaveLength(2);
     expect(removeLane(plan, 'lane-2')).toBe(plan);
     expect(names(removeLane(plan, 'lane-3').lanes)).toEqual(['CLIENT', 'SERVER']);
+  });
+});
+
+describe('the colors of the lanes', () => {
+  it('gives the tasks the color of their row, or their own when the row has none', () => {
+    expect(taskColorOf({ colorId: 'red' }, { colorId: 'green' })).toBe('green');
+    expect(taskColorOf({ colorId: 'red' }, {})).toBe('red');
+    expect(taskColorOf({ colorId: 'red' }, undefined)).toBe('red');
+  });
+
+  it('colors a new row with a color no row has', () => {
+    expect(nextLaneColor([])).toBe(TASK_COLOR_IDS[0]);
+    expect(nextLaneColor([{ colorId: 'yellow' }, { colorId: 'gray' }, {}])).toBe('blue');
+    const all = TASK_COLOR_IDS.map((colorId) => ({ colorId }));
+    expect(TASK_COLOR_IDS).toContain(nextLaneColor(all));
+  });
+
+  it('adds a lane with its color, changes it and removes it, the tasks untouched', () => {
+    const added = addLane(plan, { id: 'lane-4', name: 'QA', colorId: 'purple' });
+    expect(added.lanes.at(-1)).toEqual({ id: 'lane-4', name: 'QA', colorId: 'purple' });
+    const recolored = recolorLane(added, 'lane-4', 'teal');
+    expect(recolored.lanes.at(-1)?.colorId).toBe('teal');
+    const plain = recolorLane(recolored, 'lane-4', null);
+    expect(plain.lanes.at(-1)).toEqual({ id: 'lane-4', name: 'QA' });
+    expect(plain.tasks).toBe(plan.tasks);
   });
 });

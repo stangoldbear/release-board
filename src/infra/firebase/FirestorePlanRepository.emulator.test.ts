@@ -2,7 +2,7 @@ import type { RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { collection, getDocs } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { unavailableMessage } from '../../app/PlanRepository';
+import { OUTDATED_RULES_MESSAGE, unavailableMessage } from '../../app/PlanRepository';
 import type { PlanPart, SyncState, SyncStatus } from '../../app/PlanRepository';
 import { describeHistoryEntry } from '../../domain/history';
 import {
@@ -29,8 +29,9 @@ import {
   setupRulesEnvironment,
 } from './emulatorTest';
 import type { Identity } from './emulatorTest';
-import { PLAN_ID } from './planDocs';
+import { PLAN_ID, RULES_VERSION } from './planDocs';
 import { checkAccess, createPlan } from './setup';
+import rules from '../../../firestore/firestore.rules?raw';
 
 let env: RulesTestEnvironment;
 let ownerDb: Firestore;
@@ -71,6 +72,8 @@ function matchesSample(plan: PlanSnapshot): boolean {
     plan.roadmap.fields.length === sample.roadmap.fields.length &&
     plan.roadmap.teams.length === sample.roadmap.teams.length &&
     plan.roadmap.stakeholders.length === sample.roadmap.stakeholders.length &&
+    plan.contacts.length === sample.contacts.length &&
+    plan.contactNotes.length === sample.contactNotes.length &&
     // The default configuration has as many people: the absences tell the sample's apart.
     plan.roadmap.stakeholders.some((item) => item.absences.length > 0)
   );
@@ -124,6 +127,16 @@ function statusesUntilSynced(repository: FirestorePlanRepository): Promise<SyncS
         stop();
         resolve(seen);
       }
+    });
+  });
+}
+
+/** The synchronization state as it is now. */
+function currentSync(repository: FirestorePlanRepository): Promise<SyncState> {
+  return new Promise((resolve) => {
+    const stop = repository.subscribeSync((state) => {
+      resolve(state);
+      setTimeout(() => stop());
     });
   });
 }
@@ -205,15 +218,19 @@ describe('access and setup', () => {
       assignments: [],
       milestones: [],
       roadmap: { fields: [], teams: [], stakeholders: [] },
+      contacts: [],
+      contactNotes: [],
     });
 
     repository.replacePlan(createEmptyPlan());
-    const empty = await planWhere(repository, (plan) => plan.lanes.length === 4);
-    expect(empty.lanes.map((lane) => lane.name)).toEqual([
-      'Frontend',
-      'Backend',
-      'Contenuti',
-      'QA',
+    const empty = await planWhere(repository, (plan) => plan.lanes.length === 5);
+    // The rows of a new plan, each with its color.
+    expect(empty.lanes.map((lane) => `${lane.name}:${lane.colorId}`)).toEqual([
+      'Client iOS:blue',
+      'Client Android:green',
+      'QA:purple',
+      'Server:orange',
+      'Content:pink',
     ]);
 
     repository.replacePlan(sample);
@@ -231,6 +248,14 @@ describe('access and setup', () => {
     );
     expect(imported.assignments).toEqual(sample.assignments);
     expect(imported.milestones).toEqual(sample.milestones);
+    expect(imported.contacts).toEqual(sample.contacts);
+    // The notes on the contacts take the importer as their author, as those of the projects.
+    expect(imported.contactNotes).toEqual(
+      sample.contactNotes.map((note) => ({
+        ...note,
+        author: { id: OWNER.githubId, login: OWNER.login },
+      })),
+    );
     expect(imported.roadmap).toEqual(sample.roadmap);
     expect(new Set(imported.tasks.map((task) => task.id))).toEqual(
       new Set(sample.tasks.map((task) => task.id)),
@@ -317,6 +342,18 @@ describe('changes', () => {
     );
     expect(renamed.tasks).toHaveLength(tasksBefore);
 
+    // The color of a row, which its tasks take, and its removal.
+    other.recolorLane('lane-1', 'teal');
+    await planWhere(
+      repository,
+      (plan) => plan.lanes.find((lane) => lane.id === 'lane-1')?.colorId === 'teal',
+    );
+    repository.recolorLane('lane-1', null);
+    await planWhere(other, (plan) => {
+      const lane = plan.lanes.find((item) => item.id === 'lane-1');
+      return lane !== undefined && !('colorId' in lane);
+    });
+
     // A row with tasks stays; an empty one goes.
     repository.deleteLane('lane-1');
     repository.deleteLane(qa);
@@ -327,7 +364,7 @@ describe('changes', () => {
     const entries = await new Promise<HistoryEntry[]>((resolve) => {
       const stop = repository.subscribeHistory({ limit: 50 }, (items) => {
         const lanes = items.filter((item) => item.entity === 'lane');
-        if (lanes.length === 4 && lanes.every((item) => item.at !== null)) {
+        if (lanes.length === 6 && lanes.every((item) => item.at !== null)) {
           stop();
           resolve(lanes);
         }
@@ -335,6 +372,8 @@ describe('changes', () => {
     });
     expect(entries.map((entry) => describeHistoryEntry(entry))).toEqual([
       'owner ha eliminato la corsia «QA»',
+      'owner ha modificato la corsia «CLIENT»',
+      'editor ha modificato la corsia «CLIENT»',
       'editor ha modificato la corsia «CLIENT»',
       'owner ha spostato la corsia «QA»',
       'editor ha aggiunto la corsia «QA»',
@@ -741,7 +780,7 @@ describe('changes', () => {
       actor: actorOf(OWNER),
       after: { text: 'Rilascio' },
     });
-    expect(entries[1]?.summary).toMatch(/4 corsie, 11 attività/);
+    expect(entries[1]?.summary).toMatch(/5 corsie, 11 attività/);
 
     const history = await getDocs(collection(ownerDb, `plans/${PLAN_ID}/history`));
     expect(
@@ -763,6 +802,12 @@ describe('changes', () => {
       });
     expect(await since(new Date(Date.now() + 60 * 60 * 1000))).toEqual([]);
     expect(await since(new Date(Date.now() - 60 * 60 * 1000))).toHaveLength(3);
+  });
+
+  it('knows that the published rules are those of this site', async () => {
+    repository.setNote('2026-09-11', 'Regole');
+    await whenSynced(repository);
+    expect(await currentSync(repository)).toMatchObject({ status: 'synced', outdatedRules: false });
   });
 
   it('turns a refused change into an error status', async () => {
@@ -876,6 +921,89 @@ service cloud.firestore {
       expect(state.error).toBeNull();
     } finally {
       await legacy.cleanup();
+    }
+  });
+});
+
+describe('contacts', () => {
+  let repository: FirestorePlanRepository;
+
+  beforeEach(async () => {
+    repository = await bootstrap();
+  });
+
+  it('adds people and notes, moves up the reports of a removed person, and records it all', async () => {
+    const other = repositoryFor(editorDb, EDITOR);
+    await other.whenReady();
+    const head = repository.createContact({ name: 'Elena', role: 'Direzione' });
+    const lead = repository.createContact({ name: 'Paolo', managerId: head });
+    const dev = other.createContact({ name: 'Giulia', managerId: lead, team: 'Mobile' });
+    const note = other.createContactNote({ contactId: lead, text: '**Lunedì** alle 10' });
+    const seen = await planWhere(
+      repository,
+      (plan) => plan.contacts.length === 3 && plan.contactNotes.length === 1,
+    );
+    expect(seen.contactNotes[0]).toMatchObject({
+      id: note,
+      contactId: lead,
+      author: { id: EDITOR.githubId, login: EDITOR.login },
+    });
+    repository.updateContact(dev, { team: null, email: 'giulia@example.com' });
+    repository.updateContactNote(note, { text: 'Martedì' });
+    await planWhere(other, (plan) =>
+      plan.contactNotes.some((item) => item.id === note && item.text === 'Martedì'),
+    );
+
+    // Paolo goes: Giulia reports to Elena, and the note on Paolo goes with him.
+    repository.deleteContact(lead);
+    // One batch, but each collection has its own snapshot.
+    const after = await planWhere(
+      other,
+      (plan) => plan.contacts.length === 2 && plan.contactNotes.length === 0,
+    );
+    expect(after.contacts.find((contact) => contact.id === dev)).toEqual({
+      id: dev,
+      name: 'Giulia',
+      email: 'giulia@example.com',
+      managerId: head,
+    });
+    expect(after.contactNotes).toEqual([]);
+    await whenSynced(repository);
+    await whenSynced(other);
+    expect((await currentSync(repository)).status).toBe('synced');
+  });
+});
+
+describe('rules older than the site', () => {
+  // The rules of the previous version: everything as now, but another version.
+  const olderRules = rules.replace(`version == '${RULES_VERSION}'`, "version == '0.0.0'");
+
+  it('opens the plan and says that the rules must be published', async () => {
+    const projectId = 'demo-release-board-older';
+    const older = await setupRulesEnvironment({ rules: olderRules, projectId });
+    try {
+      const db = clientAs(OWNER, projectId);
+      await createPlan(db, PLAN_ID, actorOf(OWNER), 'Piano', '', createId);
+      const repository = new FirestorePlanRepository({
+        db,
+        planId: PLAN_ID,
+        actor: actorOf(OWNER),
+        createId,
+      });
+      repositories.push(repository);
+      await repository.whenReady();
+      const state = await new Promise<SyncState>((resolve) => {
+        const stop = repository.subscribeSync((current) => {
+          if (!current.outdatedRules) return;
+          resolve(current);
+          setTimeout(() => stop());
+        });
+      });
+      // A limit of the instance, not an error of the saving.
+      expect(state).toMatchObject({ status: 'synced', error: null, missing: [] });
+      expect(OUTDATED_RULES_MESSAGE).toMatch(/regole.*precedente.*pubblicare/);
+    } finally {
+      await older.cleanup();
     }
   });
 });

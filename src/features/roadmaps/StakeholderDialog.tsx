@@ -17,6 +17,7 @@ import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { isIsoDate } from '../../utils/dateUtils';
 import { ABSENCE_STRIPES } from './WorkBar';
 import { useFormatDate } from '../..//shared/dateFormat';
+import { MarkdownTextarea } from '../../shared/ui/MarkdownTextarea';
 
 interface StakeholderDialogProps {
   /** The person to edit; null for a new one. */
@@ -159,14 +160,14 @@ export function StakeholderDialog({
             <label htmlFor={infoId} className={LABEL_CLASS}>
               Info
             </label>
-            <textarea
+            <MarkdownTextarea
               id={infoId}
+              label="Info"
               rows={2}
               maxLength={STAKEHOLDER_INFO_MAX}
               placeholder="Competenze, orario, fornitore…"
               value={info}
               onChange={(event) => setInfo(event.target.value)}
-              className={FIELD_CLASS}
             />
           </div>
 

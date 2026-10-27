@@ -29,8 +29,9 @@ export function BetaSection({ enabled, onChange }: BetaSectionProps) {
       <span>
         <span className="block font-semibold">Attiva le funzioni beta</span>
         <span id={descriptionId} className="block text-xs text-fg-muted">
-          Mostra le parti ancora in sviluppo. La scelta vale per questo browser; i dati del piano
-          restano gli stessi per tutti.
+          Mostra le parti ancora in sviluppo: oggi la scheda «Contatti», con l’organigramma e le
+          note sulle persone. La scelta vale per questo browser; i dati del piano restano gli stessi
+          per tutti.
         </span>
       </span>
     </label>

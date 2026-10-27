@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useRef } from 'react';
 import type { KeyboardEvent } from 'react';
-import { Copy, Pen, Trash } from 'lucide-react';
+import { Copy, Pen, Scissors, Trash } from 'lucide-react';
 import type { TaskItem } from '../../domain/types';
 
 interface TaskContextMenuProps {
@@ -10,12 +10,14 @@ interface TaskContextMenuProps {
   y: number;
   onEdit: () => void;
   onDuplicate: () => void;
+  /** Opens the window that splits the task; absent for a task of one day. */
+  onSplit?: () => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
 const MENU_WIDTH = 224;
-const MENU_HEIGHT = 170;
+const MENU_HEIGHT = 210;
 
 /**
  * Actions on a task, opened with a right click or the context menu key. Arrow keys move between
@@ -27,6 +29,7 @@ export function TaskContextMenu({
   y,
   onEdit,
   onDuplicate,
+  onSplit,
   onDelete,
   onClose,
 }: TaskContextMenuProps) {
@@ -44,7 +47,9 @@ export function TaskContextMenu({
   }, []);
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    const items = [...(menuRef.current?.querySelectorAll('button') ?? [])];
+    const items = [
+      ...(menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []),
+    ];
     const index = items.indexOf(document.activeElement as HTMLButtonElement);
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
@@ -56,15 +61,22 @@ export function TaskContextMenu({
     }
   };
 
-  const item = (label: string, Icon: typeof Copy, action: () => void, danger = false) => (
+  const item = (
+    label: string,
+    Icon: typeof Copy,
+    action: (() => void) | undefined,
+    danger = false,
+  ) => (
     <button
       type="button"
       role="menuitem"
+      disabled={!action}
       onClick={() => {
-        action();
+        // Closed first: the focus goes back to the bar, and then to a window that opens.
         onClose();
+        action?.();
       }}
-      className={`flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-surface-strong focus-visible:bg-surface-strong ${
+      className={`flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-surface-strong focus-visible:bg-surface-strong disabled:cursor-default disabled:text-fg-muted ${
         danger ? 'text-danger' : ''
       }`}
     >
@@ -91,6 +103,7 @@ export function TaskContextMenu({
       </p>
       {item('Modifica dettagli', Pen, onEdit)}
       {item('Duplica', Copy, onDuplicate)}
+      {item('Dividi…', Scissors, onSplit)}
       {item('Elimina…', Trash, onDelete, true)}
     </div>
   );

@@ -6,6 +6,7 @@ import {
   duplicateContingency,
   moveContingency,
   removeContingency,
+  splitContingency,
 } from './contingency';
 import type { Project } from './types';
 
@@ -17,6 +18,58 @@ const project: Project = {
   status: 'in_progress',
   owner: 'Giulia',
 };
+
+describe('splitting a block of contingency', () => {
+  const item = {
+    ...project,
+    contingency: {
+      startDate: '2026-11-02',
+      manDays: 4,
+      note: 'Riserva',
+      segments: [{ id: 'later', startDate: '2026-12-01', manDays: 1 }],
+    },
+  };
+  const parts = [
+    { startDate: '2026-11-02', manDays: 2 },
+    { startDate: '2026-11-04', manDays: 2 },
+  ];
+
+  it('puts the parts in place of the block, the first keeping its id and the note', () => {
+    expect(splitContingency(item, item.id, parts, ['new'], false)).toEqual({
+      startDate: '2026-11-02',
+      manDays: 2,
+      note: 'Riserva',
+      segments: [
+        { id: 'new', startDate: '2026-11-04', manDays: 2 },
+        { id: 'later', startDate: '2026-12-01', manDays: 1 },
+      ],
+    });
+    expect(splitContingency(item, item.id, parts, ['new'], true)?.segments?.[0]?.note).toBe(
+      'Riserva',
+    );
+  });
+
+  it('splits a later block too, and refuses too many blocks or a missing one', () => {
+    expect(
+      splitContingency(
+        item,
+        'later',
+        [
+          { startDate: '2026-12-01', manDays: 0.5 },
+          { startDate: '2026-12-02', manDays: 0.5 },
+        ],
+        ['b'],
+        true,
+      )?.segments?.map((block) => block.id),
+    ).toEqual(['later', 'b']);
+    const many = Array.from({ length: CONTINGENCY_SEGMENTS_MAX + 1 }, (_, index) => ({
+      startDate: '2026-11-02',
+      manDays: 1 + index,
+    }));
+    expect(splitContingency(item, item.id, many, ['a', 'b', 'c', 'd', 'e'], true)).toBeNull();
+    expect(splitContingency(item, 'missing', parts, ['new'], true)).toBeNull();
+  });
+});
 
 describe('projects', () => {
   it('duplicates reserve work after its end and moves every segment with the project', () => {

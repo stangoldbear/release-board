@@ -41,6 +41,7 @@ import type { ProjectDrag } from './useProjectDrag';
 import { draggedWork } from './useWorkDrag';
 import type { WorkChanges, WorkDrag, WorkDragKind } from './useWorkDrag';
 import { WorkBar, workBarId } from './WorkBar';
+import { workSplitParts } from './useWorkSplit';
 
 /** The bar of the work whose days are being typed. */
 export interface Editing {
@@ -281,6 +282,10 @@ export interface ProjectRowProps {
   onDuplicate: (() => void) | undefined;
   onDuplicateWork: (item: WorkItem) => void;
   contingencyDuplicable: boolean;
+  /** Opens the window that splits a bar of work in parts. */
+  onSplitWork: (item: WorkItem) => void;
+  /** Parts a block of contingency can make at most: the blocks the project can still take, plus it. */
+  contingencySplitParts: number;
   onOpenContingency: (item: WorkItem) => void;
   onChange: (changes: ProjectChanges) => void;
   onMove: (days: number) => void;
@@ -348,6 +353,8 @@ export function ProjectRow({
   onDuplicate,
   onDuplicateWork,
   contingencyDuplicable,
+  onSplitWork,
+  contingencySplitParts,
   onOpenContingency,
   onChange,
   onMove,
@@ -720,6 +727,14 @@ export function ProjectRow({
                         item.kind === 'contingency' && !contingencyDuplicable
                           ? undefined
                           : () => onDuplicateWork(item)
+                      }
+                      onSplit={
+                        workSplitParts(
+                          item,
+                          item.kind === 'contingency' ? contingencySplitParts : undefined,
+                        ) >= 2
+                          ? () => onSplitWork(item)
+                          : undefined
                       }
                     />
                     {isEdited(item) && (

@@ -6,6 +6,72 @@ Le modifiche rilevanti di ogni versione. Il formato segue
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-27
+
+**Le regole Firestore cambiano**: aggiornare il sito e ripubblicare le regole uno subito dopo
+l'altro, e fare ricaricare la pagina a tutti i membri. Le regole nuove ammettono il colore delle
+corsie e delle note dei giorni, le note in evidenza, i contatti e le loro note, e rispondono alla
+versione che il sito controlla. I backup passano allo schema 9; restano leggibili quelli degli
+schemi da 3 a 8, mentre una versione precedente rifiuta i nuovi backup anziché perdere dati.
+
+### Aggiunto
+
+- Scheda «Contatti», in beta (Impostazioni → Informazioni → Funzioni beta): l'organigramma
+  dell'azienda, costruito a mano. Ogni persona ha nome, ruolo, team o ufficio, email, telefono e
+  a chi riporta; chi non riporta a nessuno sta in cima. Si vede come organigramma, con le linee
+  tra responsabili e collaboratori, o come elenco rientrato, di serie sul telefono. Ogni persona
+  ha le sue note in Markdown, con autore e ora, da aggiungere, modificare ed eliminare.
+  Eliminare una persona porta chi le riportava al suo responsabile ed elimina le note sulla persona.
+  La ricerca della pagina trova le persone per nome, ruolo, team, email, telefono e note, e
+  l'organigramma mostra anche i loro responsabili. Contatti e note sono condivisi con tutti i
+  membri, con la cronologia e nei backup; le regole precedenti non li conoscono e la scheda lo
+  dice.
+
+- «Dividi…» nel menu contestuale delle barre, sotto «Duplica» (tasto destro, tasto menu o
+  Maiusc + F10), e nelle informazioni della barra per il tocco: divide il lavoro di una persona,
+  un blocco di contingency o un'attività di Next Releases (anche dalla sua finestra) in più parti
+  che insieme fanno l'intera barra. La finestra chiede quante parti, la pausa tra una parte e
+  l'altra (giorni lavorativi per il lavoro, giorni per le attività) e se copiare la nota in ogni
+  parte; l'anteprima mostra le parti in proporzione, con i tagli da trascinare o da spostare con
+  le frecce, e un piccolo calendario con pause e giorni liberi; l'elenco delle parti ha i giorni
+  di ognuna, modificabili, e le date. «Parti uguali» le riporta uguali. La prima parte resta la
+  barra di prima, le altre sono nuove; la disposizione del progetto diventa manuale.
+- Ogni corsia di Next Releases ha un colore, che colora le sue attività: un'attività spostata in
+  un'altra corsia ne prende il colore, e la finestra dell'attività non chiede più il colore quando
+  la corsia ne ha uno. Anche la riga «Note» ha il suo colore, che colora le note dei giorni. I
+  colori si scelgono in Impostazioni → Next Releases → Corsie, con l'anteprima accanto al nome;
+  una corsia nuova parte con un colore che nessun'altra ha. Una scheda «Corsie di Next Releases»
+  accanto a «Campi dei progetti» e «Team e persone» porta alle corsie. Le corsie delle istanze
+  esistenti restano senza colore, e le attività con il loro, finché non se ne sceglie uno.
+- Corsie predefinite di un piano nuovo e dell'esempio: Client iOS, Client Android, QA, Server e
+  Content, ognuna con il suo colore, più la riga «Note».
+- Note «In evidenza»: una casella nella finestra della nota la mette nella prima riga della
+  lavagna di Notes, con una puntina sulla nota; le note in evidenza restano prima delle altre
+  anche quando si spostano.
+- La lavagna di Notes in «Muratura» dispone le note come una bacheca: le prime, cioè quelle in
+  evidenza e poi le altre nel loro ordine, riempiono la prima riga, e ogni nota dopo va nella
+  colonna più corta, così sotto le note brevi non restano colonne vuote. Tastiera, lettori di
+  schermo e trascinamento seguono sempre l'ordine delle note.
+- Markdown nei testi lunghi: note libere, note dei giorni, note dei progetti, delle persone,
+  della contingency e sulla timeline, descrizione del progetto, campi «Testo lungo», info delle
+  persone e note delle attività. Si scrivono titoli (`#`), **grassetto**, _corsivo_, barrato,
+  `codice`, elenchi puntati e numerati, caselle (`- [ ]`, `- [x]`), citazioni, righe di
+  separazione e link (`[testo](https://…)`, o un indirizzo scritto per intero); sotto ogni campo
+  ci sono le indicazioni e il pulsante «Anteprima». Le note si vedono con gli stili nelle schede,
+  nelle informazioni dei progetti e negli avvisi; dove stanno su una riga resta il solo testo.
+  Le note già scritte restano come prima, a capo compresi. L'HTML scritto in una nota non arriva
+  mai alla pagina e i link aprono solo indirizzi web o email.
+
+### Corretto
+
+- Un blocco di contingency duplicato compariva e spariva subito dopo quando l'istanza aveva
+  ancora le regole Firestore di una versione precedente, che rifiutano i blocchi successivi al
+  primo, e l'indicatore diceva solo «Errore». Ora il sito controlla a ogni avvio la versione
+  delle regole pubblicate: se sono più vecchie, l'indicatore di sincronizzazione dice «Regole da
+  aggiornare» e spiega che vanno ripubblicate, e lo ripete accanto a ogni modifica rifiutata.
+  Con le regole aggiornate i blocchi duplicati restano. Quando un blocco in più non si può
+  aggiungere (sei al massimo per progetto, o non c'è posto nel calendario) un avviso dice perché.
+
 ## [0.20.0] - 2026-10-21
 
 **Le regole Firestore cambiano**: aggiornare il sito e ripubblicare le regole prima di usare i

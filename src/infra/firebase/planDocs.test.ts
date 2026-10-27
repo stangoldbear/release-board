@@ -11,6 +11,8 @@ import {
   projectFieldContent,
   projectNoteContent,
   readAssignment,
+  readContact,
+  readContactNote,
   readLane,
   readMemo,
   readMilestone,
@@ -80,6 +82,16 @@ describe('free note documents', () => {
     expect(readMemo('m1', { ...data, remindOn: '2026-02-30' })).toEqual({ id: 'm1', ...data });
     expect(readMemo('m1', { position: 1 })).toBeNull();
     expect(readMemo('m1', { title: 'Senza posto' })).toBeNull();
+    // In evidence, only when true.
+    expect(memoContent({ title: 'Su', position: 1, pinned: true })).toEqual({
+      title: 'Su',
+      position: 1,
+      pinned: true,
+    });
+    expect(readMemo('m1', { title: 'Su', position: 1, pinned: true })?.pinned).toBe(true);
+    expect(readMemo('m1', { title: 'Su', position: 1, pinned: 'yes' })).not.toHaveProperty(
+      'pinned',
+    );
   });
 });
 
@@ -252,6 +264,24 @@ describe('documents of the notes, assignments and configuration of the roadmap',
     expect(
       readRoadmapSettings({ closures: [...closures, { start: '2026-09-02', end: '2026-09-01' }] }),
     ).toEqual({ closures: [closures[1], closures[0]] });
+    // The color of the notes of the days: only a known one, and not the default, is stored.
+    expect(roadmapSettingsContent({ dayNotesColorId: 'amber' })).toEqual({
+      dayNotesColorId: 'amber',
+    });
+    expect(readRoadmapSettings({ dayNotesColorId: 'amber' })).toEqual({ dayNotesColorId: 'amber' });
+    expect(readRoadmapSettings({ dayNotesColorId: 'neon' })).toEqual({});
+    expect(readRoadmapSettings({ dayNotesColorId: 'yellow' })).toEqual({});
+  });
+
+  it('keeps the color of a lane, when it has a known one', () => {
+    expect(readLane('l1', { name: 'QA', position: 2, colorId: 'purple' })).toEqual({
+      lane: { id: 'l1', name: 'QA', colorId: 'purple' },
+      position: 2,
+    });
+    expect(readLane('l1', { name: 'QA', position: 2, colorId: 'neon' })?.lane).toEqual({
+      id: 'l1',
+      name: 'QA',
+    });
   });
 });
 
@@ -298,8 +328,16 @@ describe('plan documents', () => {
       settings: readRoadmapSettings(
         writes.find((write) => write.path === 'settings/roadmap')!.data,
       ),
+      contacts: writes
+        .filter((write) => write.path.startsWith('contacts/'))
+        .map((write) => readContact(write.path.split('/')[1]!, write.data)!),
+      contactNotes: writes
+        .filter((write) => write.path.startsWith('contactNotes/'))
+        .map((write) => readContactNote(write.path.split('/')[1]!, write.data)!),
     };
     const rebuilt = buildPlan(parts);
+    expect(rebuilt.contacts).toEqual(plan.contacts);
+    expect(rebuilt.contactNotes).toEqual(plan.contactNotes);
     expect(rebuilt.projects).toEqual(plan.projects);
     expect(rebuilt.projectNotes).toEqual(plan.projectNotes);
     expect(rebuilt.assignments).toEqual(plan.assignments);
@@ -332,6 +370,8 @@ describe('plan documents', () => {
       teams: [],
       stakeholders: [],
       settings: {},
+      contacts: [],
+      contactNotes: [],
     });
     expect(rebuilt.lanes.map((lane) => lane.name)).toEqual(['Prima', 'Terza']);
   });
@@ -339,7 +379,7 @@ describe('plan documents', () => {
   it('writes the metric definition along with the content', () => {
     expect(contentWrites(plan).some((write) => write.path === 'metrics/metric-1')).toBe(true);
     expect(importSummary(plan)).toBe(
-      '4 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere, 5 progetti, 4 note dei progetti, 10 assegnazioni, 2 note sulla timeline',
+      '5 corsie, 11 attività, 22 valori giornalieri, 2 note, 3 note libere, 5 progetti, 4 note dei progetti, 10 assegnazioni, 2 note sulla timeline',
     );
   });
 

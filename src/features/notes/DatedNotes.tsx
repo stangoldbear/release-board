@@ -19,6 +19,7 @@ import { dayName } from '../calendar/timelineLayout';
 import { NoteMarks } from './NoteMarks';
 import type { NoteMarkActions } from './NoteMarks';
 import { DiamondSymbol, FlagSymbol, PostitSymbol } from './noteSymbols';
+import { markdownToPlainText } from '../../utils/markdown';
 
 /** The days of the small timeline, from today. */
 export const MINI_TIMELINE_DAYS = 42;
@@ -109,8 +110,8 @@ function Agenda({ sources, look, paperColor, actions, today }: PartProps) {
         {
           key: `day-${mark.date}`,
           symbol: <FlagSymbol colorId={look.kinds.dayNote.color as TaskColorId} size={14} />,
-          title: mark.text,
-          label: `Nota del giorno di Next Releases, ${day}: ${mark.text}`,
+          title: markdownToPlainText(mark.text),
+          label: `Nota del giorno di Next Releases, ${day}: ${markdownToPlainText(mark.text)}`,
           open: () => actions.onOpenDayNote(mark.date),
         },
       ];

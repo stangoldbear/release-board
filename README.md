@@ -23,14 +23,20 @@ giornalieri.
 - Testo di note e calendari regolabile con le lenti, dal 75% al 175%, e tre densità: «Large»,
   «Standard», che mostra più testo in ogni casella, e «Compatta», che stringe anche le barre delle
   persone dei progetti.
-- Attività da trascinare e ridimensionare, anche da tastiera, con stato, colore, assegnatario e
-  checklist.
+- Attività da trascinare e ridimensionare, anche da tastiera, con stato, assegnatario e
+  checklist, nel colore della loro corsia: le corsie, con i loro colori, si scelgono nelle
+  Impostazioni.
+- «Dividi…» nel menu delle barre spezza il lavoro di una persona, la contingency o un'attività in
+  più parti, con una pausa tra l'una e l'altra, da un'anteprima con i tagli da trascinare.
 - Note e valori giornalieri, per esempio il fatturato, allineati ai giorni del calendario. Le note
   si spostano trascinandole su un altro giorno, anche da tastiera, e «Espandi» ne mostra il testo
   intero.
-- Note libere sotto la ricerca, una dopo l'altra: titolo, testo, colore, un promemoria che compare
-  il giorno scelto e un ordine che si cambia trascinandole. In un'istanza condivisa ognuno vede le
-  sue, può guardare quelle di tutti, raggruppate per autore, e può tenerne alcune private.
+- Note libere sotto la ricerca, come una bacheca senza vuoti: titolo, testo, colore, un
+  promemoria che compare il giorno scelto, «In evidenza» per tenerle nella prima riga e un ordine
+  che si cambia trascinandole. In un'istanza condivisa ognuno vede le sue, può guardare quelle di
+  tutti, raggruppate per autore, e può tenerne alcune private.
+- I testi lunghi (note, descrizioni, campi «Testo lungo») si scrivono anche in Markdown, con
+  l'anteprima, e si leggono con titoli, elenchi, caselle, grassetto e link.
 - Roadmap: i progetti passati, in corso e futuri, una riga ciascuno con il titolo, lo stato come
   forma, i team al lavoro e l'etichetta della dimensione; tutto il resto, periodo, giorni uomo,
   responsabile, deadline, descrizione, campi personalizzati (link a Jira, Figma e Confluence,
@@ -54,8 +60,10 @@ giornalieri.
   progetto. I giorni in cui una persona ha più progetti insieme sono segnati in rosso, con il
   numero accanto al nome; una barra si sposta nel tempo o, trascinata su un'altra persona (anche
   con Alt + frecce), le passa il lavoro, e progetti e giorni uomo seguono subito.
-- Ricerca in attività, note dei giorni, note libere, progetti (anche note e campi) e note sulla
-  timeline, con tutte le parole o almeno una: le parole trovate sono evidenziate e i risultati si
+- Contatti (funzione beta, da attivare nelle Impostazioni): l'organigramma dell'azienda costruito
+  a mano, come schema o come elenco, con le note su ogni persona.
+- Ricerca in attività, note dei giorni, note libere, progetti (anche note e campi), note sulla
+  timeline e contatti, con tutte le parole o almeno una: le parole trovate sono evidenziate e i risultati si
   scorrono uno alla volta.
 - Date per esteso nel formato scelto nelle Impostazioni, `gg-mm-aa` di serie.
 - Fatturato previsto importato da un foglio Google in CSV, con il semaforo dei rilasci e le

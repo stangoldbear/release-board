@@ -13,6 +13,8 @@ import { MilestoneDiamond } from '../roadmaps/MilestoneDiamond';
 import type { MilestoneTools } from '../roadmaps/MilestoneDiamond';
 import { MIN_TITLE_ROOM, titleRooms } from './markLayout';
 import { DiamondSymbol, FlagSymbol, PostitSymbol } from './noteSymbols';
+import { Markdown } from '../../shared/ui/Markdown';
+import { markdownToPlainText } from '../../utils/markdown';
 
 /** How far apart the marks of a day sit on their line. */
 export const MARK_SLOT = 22;
@@ -36,8 +38,9 @@ export interface NoteMarkActions {
   onOpenMilestone: (milestone: Milestone) => void;
 }
 
+/** A note on one line, without the marks of its Markdown. */
 function oneLine(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
+  return markdownToPlainText(text).replace(/\s+/g, ' ').trim();
 }
 
 /** The color a free note shows: its own or the kind's, and the paper of Notes when it has none. */
@@ -76,7 +79,7 @@ function MarkDetails({
           <FlagSymbol colorId={look.kinds.dayNote.color as TaskColorId} size={14} />,
           'Nota del giorno di Next Releases',
         )}
-        <p className="break-words whitespace-pre-line">{mark.text}</p>
+        <Markdown text={mark.text} />
       </div>
     );
   }
@@ -106,9 +109,7 @@ function MarkDetails({
     <div className="space-y-1.5 text-sm">
       {heading(<DiamondSymbol colorId={mark.milestone.colorId} size={12} />, 'Nota sulla timeline')}
       <p className="font-bold break-words">{mark.milestone.title}</p>
-      {mark.milestone.body && (
-        <p className="break-words whitespace-pre-line">{mark.milestone.body}</p>
-      )}
+      {mark.milestone.body && <Markdown text={mark.milestone.body} />}
     </div>
   );
 }

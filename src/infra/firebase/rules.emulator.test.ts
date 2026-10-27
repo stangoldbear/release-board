@@ -323,6 +323,23 @@ describe('tasks', () => {
     );
   });
 
+  it('accepts a lane with or without its color, and only a known color', async () => {
+    const writeLane = (data: Record<string, unknown>) => {
+      const historyId = newEntryId();
+      const batch = writeBatch(editor);
+      batch.set(doc(editor, `${PLAN}/lanes/lane-9`), { ...data, ...audit(EDITOR, historyId) });
+      batch.set(
+        doc(editor, `${PLAN}/history/${historyId}`),
+        historyEntry(EDITOR, 'lane', 'lane-9'),
+      );
+      return batch.commit();
+    };
+    await assertSucceeds(writeLane({ name: 'Client iOS', position: 5, colorId: 'blue' }));
+    await assertSucceeds(writeLane({ name: 'Client iOS', position: 5 }));
+    await assertFails(writeLane({ name: 'Client iOS', position: 5, colorId: 'neon' }));
+    await assertFails(writeLane({ name: 'Client iOS', position: 5, color: 'blue' }));
+  });
+
   it('refuses a task without a history entry in the batch', async () => {
     await assertFails(
       setDoc(doc(editor, `${PLAN}/tasks/t2`), { ...TASK, ...audit(EDITOR, 'missing') }),
@@ -524,6 +541,7 @@ describe('free notes', () => {
         'm2',
       ),
     );
+    await assertSucceeds(writeMemo(editor, EDITOR, { ...MEMO, pinned: true }, 'm3'));
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/memos`)));
   });
 
@@ -535,7 +553,9 @@ describe('free notes', () => {
     await assertFails(writeMemo(editor, EDITOR, { ...MEMO, colorId: 'neon' }));
     await assertFails(writeMemo(editor, EDITOR, { ...MEMO, remindOn: '17/07/2026' }));
     await assertFails(writeMemo(editor, EDITOR, { ...MEMO, position: '1' }));
-    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, pinned: true }));
+    // In evidence is written only when true (0.21); other fields are not notes'.
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, pinned: false }));
+    await assertFails(writeMemo(editor, EDITOR, { ...MEMO, starred: true }));
     await assertFails(writeMemo(editor, EDITOR, { ...MEMO, private: true }));
   });
 
@@ -596,6 +616,7 @@ describe('free notes', () => {
     const note = { title: 'Solo per me', position: 1.5, body: 'Testo', colorId: 'red' };
     await assertSucceeds(setDoc(doc(editor, privatePath(EDITOR)), note));
     await assertSucceeds(updateDoc(doc(editor, privatePath(EDITOR)), { remindOn: '2026-07-17' }));
+    await assertSucceeds(updateDoc(doc(editor, privatePath(EDITOR)), { pinned: true }));
     await assertSucceeds(getDocs(collection(editor, `${PLAN}/members/${EDITOR.githubId}/memos`)));
     // Nobody else reads, lists, writes or deletes them, the owner included.
     await assertFails(getDoc(doc(owner, privatePath(EDITOR))));
@@ -1135,6 +1156,12 @@ describe('configuration of the roadmap', () => {
       writeConfig(editor, EDITOR, 'stakeholders', 'qa-1', { ...PERSON, default: false }),
     );
     await assertFails(writeConfig(editor, EDITOR, 'settings', 'other', {}));
+    await assertSucceeds(
+      writeConfig(editor, EDITOR, 'settings', 'roadmap', { dayNotesColorId: 'amber' }),
+    );
+    await assertFails(
+      writeConfig(editor, EDITOR, 'settings', 'roadmap', { dayNotesColorId: 'neon' }),
+    );
     await assertFails(
       writeConfig(editor, EDITOR, 'settings', 'roadmap', { contingencyFormula: 10 }),
     );
@@ -1231,6 +1258,79 @@ describe('milestones', () => {
     await assertFails(getDocs(collection(stranger, `${PLAN}/milestones`)));
     await assertFails(getDoc(doc(nobody, `${PLAN}/milestones/m1`)));
     await assertFails(deleteDoc(doc(stranger, `${PLAN}/milestones/m1`)));
+  });
+});
+
+describe('contacts', () => {
+  beforeEach(seedPlan);
+
+  const PERSON: Record<string, unknown> = { name: 'Paolo', role: 'Prodotto', managerId: 'c0' };
+  const AUTHOR = { id: EDITOR.githubId, login: EDITOR.login };
+  const NOTE: Record<string, unknown> = {
+    contactId: 'c1',
+    text: '**Riunione** il lunedì',
+    createdAt: '2026-10-27T09:00:00.000Z',
+    author: AUTHOR,
+  };
+
+  function write(
+    db: Firestore,
+    identity: Identity,
+    path: 'contacts' | 'contactNotes',
+    id: string,
+    data: Record<string, unknown>,
+    action = 'create',
+  ) {
+    const historyId = `h-${id}-${Math.random().toString(36).slice(2)}`;
+    const batch = writeBatch(db);
+    const ref = doc(db, `${PLAN}/${path}/${id}`);
+    if (action === 'update') batch.update(ref, { ...data, ...audit(identity, historyId) });
+    else batch.set(ref, { ...data, ...audit(identity, historyId) });
+    const entity = path === 'contacts' ? 'contact' : 'contactNote';
+    batch.set(doc(db, `${PLAN}/history/${historyId}`), historyEntry(identity, entity, id, action));
+    return batch.commit();
+  }
+
+  it('accepts a person with their history entry, and refuses bad fields', async () => {
+    await assertSucceeds(write(editor, EDITOR, 'contacts', 'c1', PERSON));
+    await assertSucceeds(
+      write(editor, EDITOR, 'contacts', 'c2', {
+        name: 'Sara',
+        team: 'Contenuti',
+        email: 'sara@example.com',
+        phone: '+39 000',
+      }),
+    );
+    await assertSucceeds(getDocs(collection(editor, `${PLAN}/contacts`)));
+    await assertFails(write(editor, EDITOR, 'contacts', 'c3', { ...PERSON, name: '' }));
+    await assertFails(
+      write(editor, EDITOR, 'contacts', 'c3', { ...PERSON, phone: 'x'.repeat(41) }),
+    );
+    await assertFails(write(editor, EDITOR, 'contacts', 'c3', { ...PERSON, managerId: 'c3' }));
+    await assertFails(write(editor, EDITOR, 'contacts', 'c3', { ...PERSON, salary: 1 }));
+    await assertFails(
+      setDoc(doc(editor, `${PLAN}/contacts/c4`), { ...PERSON, ...audit(EDITOR, 'h9') }),
+    );
+    await assertSucceeds(deleteRecorded(owner, OWNER, `${PLAN}/contacts/c2`, 'contact'));
+  });
+
+  it('wants the writer as the author of a note, and keeps author, person and time', async () => {
+    await assertSucceeds(write(editor, EDITOR, 'contactNotes', 'n1', NOTE));
+    await assertFails(write(owner, OWNER, 'contactNotes', 'n2', NOTE));
+    await assertFails(
+      write(editor, EDITOR, 'contactNotes', 'n3', { ...NOTE, text: 'x'.repeat(5001) }),
+    );
+    await assertSucceeds(
+      write(owner, OWNER, 'contactNotes', 'n1', { text: 'Riunione spostata' }, 'update'),
+    );
+    await assertFails(write(owner, OWNER, 'contactNotes', 'n1', { contactId: 'c2' }, 'update'));
+    await assertSucceeds(deleteRecorded(owner, OWNER, `${PLAN}/contactNotes/n1`, 'contactNote'));
+  });
+
+  it('keeps strangers and anonymous visitors out', async () => {
+    await assertFails(getDocs(collection(stranger, `${PLAN}/contacts`)));
+    await assertFails(getDocs(collection(nobody, `${PLAN}/contactNotes`)));
+    await assertFails(write(stranger, STRANGER, 'contacts', 'c9', PERSON));
   });
 });
 

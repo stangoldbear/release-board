@@ -7,11 +7,18 @@ import { Button } from '../../shared/ui/Button';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { FIELD_CLASS } from '../../shared/ui/field';
 import { useListDrag } from '../../shared/useListDrag';
+import type { TaskColorId } from '../../domain/colors';
+import { ColorMenu } from './ColorMenu';
 
 /** What the lanes of the plan can do, for every member. */
 export interface LaneActions {
+  /** Adds a lane at the end, with a color no other lane has. */
   onCreate: (name: string) => void;
   onRename: (laneId: string, name: string) => void;
+  /** The color of a lane, which its tasks take; undefined leaves each task its own. */
+  onRecolor: (laneId: string, colorId: TaskColorId | undefined) => void;
+  /** The color of the row «Note» and of the notes of the days. */
+  onRecolorNotes: (colorId: TaskColorId) => void;
   /** Puts a lane right before another one, or last when `beforeId` is null. */
   onMove: (laneId: string, beforeId: string | null) => void;
   onDelete: (laneId: string) => void;
@@ -46,7 +53,8 @@ function LaneNameField({
     if (!error) setDraft(null);
   };
   return (
-    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+    // At least a name's width: on phones the color and the commands go to a line of their own.
+    <span className="flex min-w-48 flex-1 flex-col gap-0.5">
       <input
         id={nameFieldId(lane.id)}
         type="text"
@@ -80,18 +88,21 @@ function LaneNameField({
 }
 
 /**
- * Impostazioni › Next Releases › Corsie: the rows of the tasks, in the order of the timeline.
- * A name changes in its field, a new lane goes last, the order changes by dragging or with the
- * arrows, and a lane goes away only without tasks, so that none is lost. The row of the notes of
- * the days is no lane: it stays under the last one.
+ * Impostazioni › Next Releases › Corsie: the rows of the tasks, in the order of the timeline,
+ * each with its color, which its tasks take. A name changes in its field, a new lane goes last
+ * with a color of its own, the order changes by dragging or with the arrows, and a lane goes away
+ * only without tasks, so that none is lost. The row of the notes of the days is no lane: it stays
+ * under the last one, with a color for its notes.
  */
 export function LanesSettings({
   lanes,
   tasks,
+  notesColorId,
   actions,
 }: {
   lanes: readonly Lane[];
   tasks: readonly TaskItem[];
+  notesColorId: TaskColorId;
   actions: LaneActions;
 }) {
   const [name, setName] = useState('');
@@ -138,9 +149,10 @@ export function LanesSettings({
   return (
     <div className="space-y-4">
       <p className="text-xs text-fg-muted">
-        Le righe delle attività di Next Releases, nell’ordine della timeline. Un’attività passa da
-        una corsia all’altra trascinandola sulla timeline o dalla sua finestra. La riga «Note» dei
-        giorni resta sempre l’ultima.
+        Le righe delle attività di Next Releases, nell’ordine della timeline, ognuna con il suo
+        colore: le attività prendono quello della loro corsia, anche quando cambiano corsia.
+        Un’attività passa da una corsia all’altra trascinandola sulla timeline o dalla sua finestra.
+        La riga «Note» dei giorni resta sempre l’ultima e colora le note.
       </p>
       <ul {...drag.container} aria-describedby={helpId} className="space-y-1.5">
         {lanes.map((lane, index) => {
@@ -151,7 +163,7 @@ export function LanesSettings({
               key={lane.id}
               {...drag.target(LIST, ids, index, 'y')}
               onKeyDown={(event) => handleKey(event, lane, index)}
-              className={`relative flex items-start gap-2 rounded-lg border border-line bg-surface p-2 ${
+              className={`relative flex flex-wrap items-start gap-2 rounded-lg border border-line bg-surface p-2 sm:flex-nowrap ${
                 drag.dragged === lane.id ? 'opacity-50' : ''
               }`}
             >
@@ -177,6 +189,22 @@ export function LanesSettings({
                   setAnnouncement(`Corsia rinominata: ${next}`);
                 }}
               />
+              {/* A column of its own, so that the names line up whatever the color is called. */}
+              <span className="mt-0.5 w-36 shrink-0">
+                <ColorMenu
+                  label={`Colore della corsia ${lane.name}`}
+                  value={lane.colorId}
+                  noneLabel="Di ogni attività"
+                  onChange={(colorId) => {
+                    actions.onRecolor(lane.id, colorId);
+                    setAnnouncement(
+                      colorId
+                        ? `Corsia ${lane.name}: le attività prendono il suo colore`
+                        : `Corsia ${lane.name}: ogni attività ha il suo colore`,
+                    );
+                  }}
+                />
+              </span>
               <span className="mt-2 shrink-0 text-xs text-fg-muted tabular-nums">
                 {count === 1 ? '1 attività' : `${count} attività`}
               </span>
@@ -227,12 +255,20 @@ export function LanesSettings({
             </li>
           );
         })}
-        <li className="flex items-center gap-2 rounded-lg border border-dashed border-line-strong px-3 py-2 text-sm text-fg-muted">
+        <li className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-line-strong px-3 py-2 text-sm text-fg-muted sm:flex-nowrap">
           <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>
+          <span className="min-w-0 flex-1">
             <span className="font-semibold text-fg">Note</span> · una per giorno, sempre l’ultima
             riga: non si sposta né si rinomina.
           </span>
+          <ColorMenu
+            label="Colore delle note dei giorni"
+            value={notesColorId}
+            allowNone={false}
+            onChange={(colorId) => {
+              if (colorId) actions.onRecolorNotes(colorId);
+            }}
+          />
         </li>
       </ul>
       <p id={helpId} className="sr-only">

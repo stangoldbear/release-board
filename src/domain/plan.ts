@@ -29,11 +29,13 @@ import type {
   Team,
 } from './types';
 
+/** The rows of a new plan, each with its color; the row «Note» of the days comes last. */
 export const DEFAULT_LANES: readonly Lane[] = [
-  { id: 'lane-1', name: 'Frontend' },
-  { id: 'lane-2', name: 'Backend' },
-  { id: 'lane-3', name: 'Contenuti' },
-  { id: 'lane-4', name: 'QA' },
+  { id: 'lane-1', name: 'Client iOS', colorId: 'blue' },
+  { id: 'lane-2', name: 'Client Android', colorId: 'green' },
+  { id: 'lane-3', name: 'QA', colorId: 'purple' },
+  { id: 'lane-4', name: 'Server', colorId: 'orange' },
+  { id: 'lane-5', name: 'Content', colorId: 'pink' },
 ];
 
 /** The single daily metric of this version. Label and unit become configurable per plan later. */
@@ -64,6 +66,8 @@ export function createEmptyPlan(): PlanSnapshot {
     assignments: [],
     milestones: [],
     roadmap: defaultRoadmapConfig(),
+    contacts: [],
+    contactNotes: [],
   };
 }
 

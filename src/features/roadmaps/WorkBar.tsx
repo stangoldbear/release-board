@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react';
-import { Copy, Info, Pencil } from 'lucide-react';
+import { Copy, Info, Pencil, Scissors } from 'lucide-react';
 import { describeEffort, moveAssignment } from '../../domain/assignments';
 import type { WorkSchedule } from '../../domain/assignments';
 import type { DateRange } from '../../domain/schedule';
@@ -18,6 +18,7 @@ import { formatManDays } from './barRendering';
 import type { WorkItem } from './barRendering';
 import { useClickOrDoubleClick } from './useClickOrDoubleClick';
 import type { WorkChanges, WorkDragKind } from './useWorkDrag';
+import { Markdown } from '../../shared/ui/Markdown';
 
 /** The element of the bar of an assignment, to give it the focus. */
 export function assignmentBarId(assignmentId: string): string {
@@ -93,6 +94,8 @@ interface WorkBarProps {
   /** Alt and the arrows up and down give the work to the person above or below. */
   onReassign?: (step: -1 | 1) => void;
   onDuplicate?: () => void;
+  /** Opens the window that splits the bar in parts; absent when it cannot be split. */
+  onSplit?: () => void;
 }
 
 /**
@@ -124,12 +127,13 @@ export function WorkBar({
   colorId = item.colorId,
   onReassign,
   onDuplicate,
+  onSplit,
 }: WorkBarProps) {
   const dateFormat = useDateFormat();
   const formatDate = useFormatDate();
   const clicks = useClickOrDoubleClick(onOpen, onEditDays, ignoreClick);
   const [infoAnchor, setInfoAnchor] = useState<HTMLElement | null>(null);
-  const commands = useBarMenu(ariaName, setInfoAnchor, onDuplicate);
+  const commands = useBarMenu(ariaName, setInfoAnchor, onDuplicate, onSplit);
   const { schedule } = item;
   if (schedule.start > range.end || schedule.end < range.start) return null;
   const first = Math.max(0, diffDays(range.start, schedule.start));
@@ -295,7 +299,11 @@ export function WorkBar({
             <p className="text-xs">{words}</p>
             <section aria-label="Nota del segmento" className="border-t border-line pt-2">
               <h3 className="text-xs font-semibold text-fg-muted">Nota del segmento</h3>
-              <p className="mt-1 whitespace-pre-wrap break-words">{item.note || 'Nessuna nota'}</p>
+              {item.note ? (
+                <Markdown text={item.note} className="mt-1" />
+              ) : (
+                <p className="mt-1">Nessuna nota</p>
+              )}
             </section>
             <div className="flex flex-wrap gap-2 border-t border-line pt-2">
               <Button
@@ -318,6 +326,17 @@ export function WorkBar({
               >
                 <Copy className="h-4 w-4" aria-hidden="true" />
                 Duplica
+              </Button>
+              <Button
+                size="sm"
+                disabled={!onSplit}
+                onClick={() => {
+                  setInfoAnchor(null);
+                  onSplit?.();
+                }}
+              >
+                <Scissors className="h-4 w-4" aria-hidden="true" />
+                Dividi…
               </Button>
             </div>
           </div>

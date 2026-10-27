@@ -22,6 +22,7 @@ describe('the layout of the page', () => {
       'releases',
       'roadmaps',
       'people',
+      'contacts',
     ]);
     expect(pageTabs(AREAS).map(({ label }) => label)).toEqual([
       'All',
@@ -29,6 +30,7 @@ describe('the layout of the page', () => {
       'Next Releases',
       'Roadmap',
       'Persone',
+      'Contatti',
     ]);
   });
 
@@ -43,5 +45,8 @@ describe('the layout of the page', () => {
     expect(tabShowsArea('all', 'notes')).toBe(true);
     expect(tabShowsArea('releases', 'releases')).toBe(true);
     expect(tabShowsArea('releases', 'roadmaps')).toBe(false);
+    // The contacts have their own tab only.
+    expect(tabShowsArea('all', 'contacts')).toBe(false);
+    expect(tabShowsArea('contacts', 'contacts')).toBe(true);
   });
 });

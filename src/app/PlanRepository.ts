@@ -1,4 +1,5 @@
 import type { AssignmentChanges, AssignmentContent } from '../domain/assignments';
+import type { TaskColorId } from '../domain/colors';
 import type { MemoChanges, MemoContent } from '../domain/memos';
 import type { MilestoneChanges, MilestoneContent } from '../domain/milestones';
 import type { ProjectNoteChanges, ProjectNoteContent } from '../domain/projectNotes';
@@ -14,6 +15,12 @@ import type {
   TaskItem,
   Team,
 } from '../domain/types';
+import type {
+  ContactChanges,
+  ContactContent,
+  ContactNoteChanges,
+  ContactNoteContent,
+} from '../domain/contacts';
 
 /** Whether the changes made here have reached where the plan is kept. */
 export type SyncStatus = 'synced' | 'saving' | 'offline' | 'error';
@@ -22,13 +29,14 @@ export type SyncStatus = 'synced' | 'saving' | 'offline' | 'error';
  * Parts of the plan that came with rules of their own, which a published copy may lack: the
  * free notes (0.5), the projects (0.6), and their notes, assignments and configuration (0.7).
  */
-export type PlanPart = 'memos' | 'projects' | 'roadmap';
+export type PlanPart = 'memos' | 'projects' | 'roadmap' | 'contacts';
 
 /** The parts by name, for the sentence that says what the published rules refuse. */
 export const PART_NAMES: Record<PlanPart, string> = {
   memos: 'Note libere',
   projects: 'Progetti',
   roadmap: 'Dettagli dei progetti',
+  contacts: 'Contatti',
 };
 
 /** "Note libere e progetti non disponibili: chi gestisce l'istanza deve pubblicare le regole…". */
@@ -55,7 +63,16 @@ export interface SyncState {
    * error: the status says how the saving goes.
    */
   missing: readonly PlanPart[];
+  /**
+   * The published security rules are older than this site: some of its changes are refused, and
+   * vanish right after they appear. A limit of the instance, as the missing parts.
+   */
+  outdatedRules: boolean;
 }
+
+/** What the page says when the published rules are older than the site. */
+export const OUTDATED_RULES_MESSAGE =
+  'Le regole di sicurezza pubblicate sono di una versione precedente del sito: alcune modifiche vengono rifiutate e spariscono subito dopo. Chi gestisce l’istanza deve pubblicare le regole di questa versione.';
 
 /** The state of a repository before it says otherwise. */
 export const INITIAL_SYNC: SyncState = {
@@ -63,6 +80,7 @@ export const INITIAL_SYNC: SyncState = {
   lastSyncedAt: null,
   error: null,
   missing: [],
+  outdatedRules: false,
 };
 
 /**
@@ -82,9 +100,11 @@ export interface PlanRepository {
   createTask(content: Omit<TaskItem, 'id'>): string;
   updateTask(taskId: string, changes: TaskChanges): void;
   deleteTask(taskId: string): void;
-  /** Adds a row of tasks at the end, with its name, and returns its id. */
-  createLane(name: string): string;
+  /** Adds a row of tasks at the end, with its name and its color, and returns its id. */
+  createLane(name: string, colorId?: TaskColorId): string;
   renameLane(laneId: string, name: string): void;
+  /** Gives a row of tasks a color, which its tasks take, or removes it with null. */
+  recolorLane(laneId: string, colorId: TaskColorId | null): void;
   /** Puts a row of tasks right before another one, or last when `beforeId` is null. */
   moveLane(laneId: string, beforeId: string | null): void;
   /** Removes a row of tasks without tasks; a row with tasks stays, so that none is lost. */
@@ -126,6 +146,15 @@ export interface PlanRepository {
    * Adds a note to a project, written now, and returns its id. In a shared instance its author is
    * the signed-in member.
    */
+  /** Adds a person to the contacts (0.21, beta) and returns their id. */
+  createContact(content: ContactContent): string;
+  updateContact(contactId: string, changes: ContactChanges): void;
+  /** Removes a person and the notes on them; who reported to them moves up to their manager. */
+  deleteContact(contactId: string): void;
+  /** Adds a note on a person, by the signed-in member, and returns its id. */
+  createContactNote(content: ContactNoteContent): string;
+  updateContactNote(noteId: string, changes: ContactNoteChanges): void;
+  deleteContactNote(noteId: string): void;
   createProjectNote(content: ProjectNoteContent): string;
   /** Changes some fields of a note of a project, null removing an optional one. */
   updateProjectNote(noteId: string, changes: ProjectNoteChanges): void;

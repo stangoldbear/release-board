@@ -41,7 +41,9 @@ export function parsePageTab(value: unknown): PageTab | null {
   return value === ALL_TAB || AREAS.some((area) => area.id === value) ? (value as PageTab) : null;
 }
 
-/** Whether a tab shows an area: «All» shows them all. */
+/** Whether a tab shows an area: «All» shows them all, but those that have only their own tab. */
 export function tabShowsArea(tab: PageTab, area: AreaId): boolean {
-  return tab === ALL_TAB || tab === area;
+  return (
+    tab === area || (tab === ALL_TAB && !AREAS.some((item) => item.id === area && item.ownTab))
+  );
 }

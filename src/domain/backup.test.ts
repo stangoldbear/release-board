@@ -102,6 +102,8 @@ const plan: PlanSnapshot = {
   ],
   milestones: [],
   roadmap: defaultRoadmapConfig(),
+  contacts: [],
+  contactNotes: [],
 };
 
 /** A file written by the previous app version, with invented content. */
@@ -149,7 +151,7 @@ function errorsOf(value: unknown): string[] {
 }
 
 describe('backup round trip', () => {
-  it('preserves split reserve segments in schema 8 and still reads schema 7', () => {
+  it('preserves split reserve segments, and still reads the schemas 7 and 8', () => {
     const reserve = {
       startDate: '2026-11-02',
       manDays: 2,
@@ -163,8 +165,8 @@ describe('backup round trip', () => {
       ),
     };
     const file = createBackupFile(split, new Date('2026-10-21T10:00:00Z'));
-    expect(file.schemaVersion).toBe(8);
-    expect(BACKUP_SCHEMA_VERSION).toBe(8);
+    expect(file.schemaVersion).toBe(9);
+    expect(BACKUP_SCHEMA_VERSION).toBe(9);
     const parsed = parseBackupText(serializeBackup(file));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
@@ -177,6 +179,78 @@ describe('backup round trip', () => {
         schemaVersion: 7,
       }),
     ).toMatchObject({ ok: true });
+    expect(
+      parseBackup({
+        ...createBackupFile(plan, new Date('2026-10-21T10:00:00Z')),
+        schemaVersion: 8,
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it('keeps the contacts and the notes on them, and a manager that is gone sends to the top', () => {
+    const withContacts = {
+      ...plan,
+      contacts: [
+        { id: 'c1', name: 'Direzione' },
+        { id: 'c2', name: 'Acquisti', managerId: 'c1', email: 'acquisti@example.com' },
+      ],
+      contactNotes: [
+        {
+          id: 'n1',
+          contactId: 'c2',
+          text: '**Ordini** il martedì',
+          createdAt: '2026-10-20T09:00:00.000Z',
+          author: { id: '1', login: 'owner' },
+        },
+      ],
+    };
+    const file = createBackupFile(withContacts, new Date('2026-10-27T10:00:00Z'));
+    const parsed = parseBackupText(serializeBackup(file));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.plan.contacts).toEqual(withContacts.contacts.slice().reverse());
+    expect(parsed.plan.contactNotes).toEqual(withContacts.contactNotes);
+    const orphan = parseBackup({
+      ...file,
+      contacts: [{ id: 'c2', name: 'Acquisti', managerId: 'c1' }],
+      contactNotes: [],
+    });
+    expect(orphan.ok && orphan.plan.contacts).toEqual([{ id: 'c2', name: 'Acquisti' }]);
+    const bad = parseBackup({
+      ...file,
+      contactNotes: [
+        { id: 'n2', contactId: 'nobody', text: 'x', createdAt: '2026-10-20T09:00:00Z' },
+      ],
+    });
+    expect(bad.ok).toBe(false);
+  });
+
+  it('keeps the colors of the rows and of the notes of the days', () => {
+    const colored = {
+      ...plan,
+      lanes: plan.lanes.map((lane, index) =>
+        index === 0 ? { ...lane, colorId: 'teal' as const } : lane,
+      ),
+      roadmap: { ...plan.roadmap, dayNotesColorId: 'amber' as const },
+    };
+    const parsed = parseBackupText(
+      serializeBackup(createBackupFile(colored, new Date('2026-10-27T10:00:00Z'))),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.plan.lanes[0]?.colorId).toBe('teal');
+    expect(parsed.plan.roadmap.dayNotesColorId).toBe('amber');
+    // A color the app does not know leaves the row without one, and the file is still read.
+    const file = createBackupFile(colored, new Date('2026-10-27T10:00:00Z'));
+    const unknown = parseBackup({
+      ...file,
+      lanes: file.lanes.map((lane) => ({ ...lane, colorId: 'neon' })),
+      roadmap: { ...file.roadmap, dayNotesColorId: 'neon' },
+    });
+    expect(unknown.ok).toBe(true);
+    if (!unknown.ok) return;
+    expect(unknown.plan.lanes.every((lane) => lane.colorId === undefined)).toBe(true);
+    expect(unknown.plan.roadmap.dayNotesColorId).toBeUndefined();
   });
 
   it('restores exactly the exported plan', () => {
@@ -268,6 +342,8 @@ describe('files of the previous app version', () => {
       assignments: [],
       milestones: [],
       roadmap: defaultRoadmapConfig(),
+      contacts: [],
+      contactNotes: [],
     });
   });
 

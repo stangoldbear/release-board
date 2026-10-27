@@ -23,6 +23,11 @@ export interface TaskItem {
 export interface Lane {
   id: string;
   name: string;
+  /**
+   * The color of the row: its tasks take it, whatever color each one has. Absent on the rows of
+   * the versions before 0.21, whose tasks keep their own.
+   */
+  colorId?: TaskColorId;
 }
 
 /**
@@ -64,6 +69,8 @@ export interface Memo {
   author?: MemoAuthor;
   /** Seen by its author only; absent on the notes that every member sees. */
   private?: true;
+  /** In evidence (0.21): the board shows it in its first row, before the others. */
+  pinned?: true;
 }
 
 /** How far a project of the roadmap has come. */
@@ -300,6 +307,11 @@ export interface RoadmapConfig {
   contingencyFormula?: string;
   /** The company closures, by start; absent when there are none. */
   closures?: Closure[];
+  /**
+   * The color of the row «Note» of Next Releases and of the notes of the days; absent means the
+   * default one. Kept with the shared settings, as the closures, which are not only the roadmap's.
+   */
+  dayNotesColorId?: TaskColorId;
 }
 
 /**
@@ -335,6 +347,37 @@ export interface PlanSnapshot {
   assignments: Assignment[];
   milestones: Milestone[];
   roadmap: RoadmapConfig;
+  /** The people of the organization chart (0.21, beta) and the notes on them. */
+  contacts: Contact[];
+  contactNotes: ContactNote[];
+}
+
+/**
+ * A person of the company, in the organization chart of the area «Contatti» (0.21, beta), built
+ * by hand: whom they report to makes the chart.
+ */
+export interface Contact {
+  id: string;
+  name: string;
+  /** What they do, as «Responsabile acquisti». */
+  role?: string;
+  /** Where they work: a team, an office, a company. */
+  team?: string;
+  email?: string;
+  phone?: string;
+  /** Whom they report to; absent at the top of the chart. */
+  managerId?: string;
+}
+
+/** A note on a person of the contacts, in Markdown, by the member who writes it. */
+export interface ContactNote {
+  id: string;
+  contactId: string;
+  text: string;
+  /** ISO date and time of when it was written. */
+  createdAt: string;
+  /** In a shared instance; the notes of the local mode have no author. */
+  author?: MemoAuthor;
 }
 
 /** Calendar rows the user chose to hide. New lanes are visible by default. */

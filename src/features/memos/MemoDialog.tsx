@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
-import { Lock, NotebookPen, Trash, X } from 'lucide-react';
+import { Lock, NotebookPen, Pin, Trash, X } from 'lucide-react';
 import { TASK_COLORS } from '../../domain/colors';
 import type { TaskColorId } from '../../domain/colors';
 import {
@@ -18,6 +18,7 @@ import { Dialog } from '../../shared/ui/Dialog';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { isIsoDate, todayIso } from '../../utils/dateUtils';
 import { MemoDot, MemoTitle, PrivateMark, ReminderBadge, memoSurface } from './memoUi';
+import { MarkdownTextarea } from '../../shared/ui/MarkdownTextarea';
 
 interface MemoDialogProps {
   memo: Memo;
@@ -60,6 +61,7 @@ export function MemoDialog({
   const [colorId, setColorId] = useState<TaskColorId | undefined>(memo.colorId);
   const [remindOn, setRemindOn] = useState(memo.remindOn ?? '');
   const [isPrivate, setIsPrivate] = useState(memo.private === true);
+  const [isPinned, setIsPinned] = useState(memo.pinned === true);
   // Null until a place is chosen: the strip may change meanwhile, and the note keeps its own.
   const [place, setPlace] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -107,6 +109,7 @@ export function MemoDialog({
     if (colorId) content.colorId = colorId;
     if (remindOn) content.remindOn = remindOn;
     if (isPrivate) content.private = true;
+    if (isPinned) content.pinned = true;
     onSave(content, place === null ? undefined : follower(place));
     onClose();
   };
@@ -231,14 +234,14 @@ export function MemoDialog({
             <label htmlFor={bodyId} className={LABEL_CLASS}>
               Testo
             </label>
-            <textarea
+            <MarkdownTextarea
               id={bodyId}
+              label="Testo"
               rows={4}
               maxLength={MEMO_BODY_MAX}
               value={body}
               onChange={(event) => setBody(event.target.value)}
               placeholder="Dettagli, link, chi se ne occupa…"
-              className={FIELD_CLASS}
             />
           </div>
 
@@ -278,6 +281,25 @@ export function MemoDialog({
             </p>
           </div>
 
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={isPinned}
+              onChange={(event) => setIsPinned(event.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="flex items-center gap-1.5 font-semibold">
+                <Pin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                In evidenza
+              </span>
+              <span className="block text-xs text-fg-muted">
+                Sta nella prima riga della lavagna, con le altre note in evidenza, prima di tutte le
+                altre.
+              </span>
+            </span>
+          </label>
+
           {isMine && (
             <label className="flex cursor-pointer items-start gap-2 text-sm">
               <input
@@ -303,7 +325,13 @@ export function MemoDialog({
           {index >= 0 && strip.length > 1 && (
             <div>
               <label htmlFor={placeId} className={LABEL_CLASS}>
-                {inGroup ? 'Posizione nel gruppo' : 'Posizione nella fila'}
+                {memo.pinned
+                  ? inGroup
+                    ? 'Posizione tra le note in evidenza del gruppo'
+                    : 'Posizione tra le note in evidenza'
+                  : inGroup
+                    ? 'Posizione nel gruppo'
+                    : 'Posizione nella fila'}
               </label>
               <select
                 id={placeId}

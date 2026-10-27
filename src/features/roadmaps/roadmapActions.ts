@@ -5,12 +5,17 @@ import type { ProjectChanges, ProjectContent } from '../../domain/projects';
 import type { RoadmapSettingsChanges } from '../../domain/roadmapConfig';
 import type { Project, ProjectField, RoadmapConfig, Stakeholder, Team } from '../../domain/types';
 import type { MilestoneChanges, MilestoneContent } from '../../domain/milestones';
+import type { SplitChoice } from '../split/SplitDialog';
 
 // What the roadmap can do to the plan, grouped by entity, so that the area and its windows take
 // one object each instead of a dozen callbacks.
 
 export interface ProjectActions {
   onDuplicate: (project: Project) => void;
+  /** Adds a copy of a block of the contingency of a project after it. */
+  onDuplicateContingency: (projectId: string, segmentId: string) => void;
+  /** Splits a block of the contingency of a project in parts, which take its place. */
+  onSplitContingency: (projectId: string, segmentId: string, choice: SplitChoice) => void;
   /** Adds a project and returns its id, so that the work of its team can follow. */
   onCreate: (content: ProjectContent) => string;
   onUpdate: (projectId: string, changes: ProjectChanges) => void;
@@ -35,6 +40,8 @@ export interface NoteActions {
 
 export interface AssignmentActions {
   onDuplicate: (assignmentId: string) => void;
+  /** Splits the work of a person in parts: the first stays the assignment, the others are new. */
+  onSplit: (assignmentId: string, choice: SplitChoice) => void;
   onCreate: (content: AssignmentContent) => void;
   onUpdate: (assignmentId: string, changes: AssignmentChanges) => void;
   onDelete: (assignmentId: string) => void;

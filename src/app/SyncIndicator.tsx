@@ -12,7 +12,7 @@ import { Button } from '../shared/ui/Button';
 import { HoverCard, useHoverCard } from '../shared/ui/HoverCard';
 import { useNow } from '../shared/useNow';
 import { formatDateTimeLongIT, timeAgo } from '../utils/dateUtils';
-import { unavailableMessage } from './PlanRepository';
+import { OUTDATED_RULES_MESSAGE, unavailableMessage } from './PlanRepository';
 import type { PlanPart, PlanRepository, SyncState, SyncStatus } from './PlanRepository';
 import { useSyncState } from './useSyncState';
 
@@ -46,6 +46,8 @@ const LABELS: Record<SyncStatus, { text: string; Icon: LucideIcon; tone: string;
 
 /** The parts the rules refuse are a limit of the page, not an error of the saving. */
 const LIMITED = { text: 'Parti non disponibili', Icon: TriangleAlert, tone: 'text-warning' };
+/** Rules older than the site: a limit of the instance too, until they are published. */
+const OUTDATED = { text: 'Regole da aggiornare', Icon: TriangleAlert, tone: 'text-warning' };
 
 /** What the indicator shows, and the words it adds to its name when something is wrong. */
 function presentation(sync: SyncState): {
@@ -59,8 +61,17 @@ function presentation(sync: SyncState): {
     const detail = unavailableMessage(sync.missing);
     return { ...LIMITED, detail, announced: detail };
   }
+  if (sync.status !== 'error' && sync.outdatedRules) {
+    return { ...OUTDATED, detail: OUTDATED_RULES_MESSAGE, announced: OUTDATED_RULES_MESSAGE };
+  }
   const { text, Icon, tone, detail } = LABELS[sync.status];
-  const error = sync.status === 'error' ? sync.error : null;
+  // A refusal of rules older than the site: the reason, rather than a guess.
+  const error =
+    sync.status === 'error' && sync.error
+      ? sync.outdatedRules
+        ? `${sync.error} ${OUTDATED_RULES_MESSAGE}`
+        : sync.error
+      : null;
   return { text, Icon, tone, detail: error ?? detail, announced: error ?? '' };
 }
 

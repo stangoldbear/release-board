@@ -4,6 +4,7 @@ import type { TaskChanges } from '../../domain/plan';
 import { moveTask, resizeTask } from '../../domain/schedule';
 import type { PlacedTask } from '../../domain/schedule';
 import type { TaskItem } from '../../domain/types';
+import type { TaskColorId } from '../../domain/colors';
 import { CURRENT_RESULT, Highlight, useIsCurrentResult } from '../../shared/ui/Highlight';
 import { taskColorStyle } from '../../themes';
 import { daysBetween } from '../../utils/dateUtils';
@@ -23,6 +24,8 @@ export function taskBarId(taskId: string): string {
 
 interface TaskBarProps {
   placed: PlacedTask<TaskItem>;
+  /** The color shown: the row's, when it has one, or the task's own. */
+  colorId: TaskColorId;
   dayWidth: number;
   top: number;
   height: number;
@@ -51,6 +54,7 @@ function oneLine(text: string): string {
  */
 export function TaskBar({
   placed,
+  colorId,
   dayWidth,
   top,
   height,
@@ -117,7 +121,7 @@ export function TaskBar({
       onKeyDown={handleKeyDown}
       style={
         {
-          ...taskColorStyle(task.colorId),
+          ...taskColorStyle(colorId),
           left: first * dayWidth + 2,
           width: Math.max(width, 6),
           top,

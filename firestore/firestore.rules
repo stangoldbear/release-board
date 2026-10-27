@@ -141,6 +141,7 @@ service cloud.firestore {
               'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown', 'navy', 'cyan',
               'petrol', 'forest', 'amber', 'wine', 'plum', 'slate'])
         && (!('remindOn' in data) || isIsoDate(data.remindOn))
+        && (!('pinned' in data) || data.pinned == true)
         && data.position is number;
     }
 
@@ -163,6 +164,13 @@ service cloud.firestore {
         && isText(request.resource.data.name, 80)
         && recorded(planId);
       allow delete: if false;
+
+      // The version of these rules, which the site reads at every start: a site newer than the
+      // published rules says so, instead of seeing its changes refused and undone in silence.
+      // A release that changes the rules changes the version, here and in the app.
+      match /rulesVersion/{version} {
+        allow get: if isMember(planId) && version == '0.21.0';
+      }
 
       match /members/{memberId} {
         function validMember() {
@@ -205,19 +213,26 @@ service cloud.firestore {
         match /memos/{memoId} {
           allow read, delete: if memberId == githubId() && isMember(planId);
           allow create, update: if memberId == githubId() && isMember(planId)
-            && request.resource.data.keys().hasOnly(['title', 'body', 'colorId', 'remindOn', 'position'])
+            && request.resource.data.keys().hasOnly(['title', 'body', 'colorId', 'remindOn', 'pinned',
+                'position'])
             && validMemoContent(request.resource.data);
         }
       }
 
       match /lanes/{laneId} {
         allow read: if isMember(planId);
+        // A row of the tasks; its color, from the 0.21, colors its tasks.
         function validLane() {
           let data = request.resource.data;
-          return data.keys().hasOnly(['name', 'position', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+          return data.keys().hasOnly(['name', 'position', 'colorId', 'updatedAt', 'updatedBy',
+              'lastHistoryId'])
             && isText(data.name, 60)
             && data.position is int
-            && data.position >= 0;
+            && data.position >= 0
+            && (!('colorId' in data)
+              || data.colorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
+                'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown', 'navy', 'cyan',
+                'petrol', 'forest', 'amber', 'wine', 'plum', 'slate']);
         }
 
         allow create: if isMemberAfter(planId) && audited(planId) && validLane();
@@ -316,7 +331,7 @@ service cloud.firestore {
         allow read: if isMember(planId);
         function validMemo() {
           let data = request.resource.data;
-          return data.keys().hasOnly(['title', 'body', 'colorId', 'remindOn', 'position',
+          return data.keys().hasOnly(['title', 'body', 'colorId', 'remindOn', 'pinned', 'position',
               'author', 'updatedAt', 'updatedBy', 'lastHistoryId'])
             && validMemoContent(data)
             && validAuthor(data.author);
@@ -552,12 +567,16 @@ service cloud.firestore {
           let data = request.resource.data;
           return settingId == 'roadmap'
             && data.keys().hasOnly(['contingencyFormula', 'projectColors', 'colorFieldId',
-              'closures', 'updatedAt', 'updatedBy', 'lastHistoryId'])
+              'closures', 'dayNotesColorId', 'updatedAt', 'updatedBy', 'lastHistoryId'])
             && (!('contingencyFormula' in data) || isText(data.contingencyFormula, 200))
             && (!('projectColors' in data) || data.projectColors in ['field', 'free'])
             && (!('colorFieldId' in data) || isText(data.colorFieldId, 100))
             && (!('closures' in data)
-              || (data.closures is list && data.closures.size() <= 100));
+              || (data.closures is list && data.closures.size() <= 100))
+            && (!('dayNotesColorId' in data)
+              || data.dayNotesColorId in ['yellow', 'gray', 'blue', 'ice', 'green', 'indigo', 'red', 'purple',
+                'orange', 'coral', 'pink', 'magenta', 'teal', 'lime', 'olive', 'brown', 'navy', 'cyan',
+                'petrol', 'forest', 'amber', 'wine', 'plum', 'slate']);
         }
 
         // Lower-case domains, such as "example.com"; never a list that leaves out the owner who
@@ -577,6 +596,53 @@ service cloud.firestore {
           && (validSettings() || (validAccess() && isOwner(planId)));
         allow delete: if isMember(planId) && recorded(planId)
           && (settingId != 'access' || isOwner(planId));
+      }
+
+      // A person of the organization chart of the contacts (0.21, beta), built by hand: whom
+      // they report to makes the chart, never themselves.
+      match /contacts/{contactId} {
+        allow read: if isMember(planId);
+        function validContact() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['name', 'role', 'team', 'email', 'phone', 'managerId',
+              'updatedAt', 'updatedBy', 'lastHistoryId'])
+            && isText(data.name, 100)
+            && (!('role' in data) || isText(data.role, 100))
+            && (!('team' in data) || isText(data.team, 100))
+            && (!('email' in data) || isText(data.email, 200))
+            && (!('phone' in data) || isText(data.phone, 40))
+            && (!('managerId' in data) || (isText(data.managerId, 100)
+              && data.managerId != contactId));
+        }
+
+        allow create, update: if isMemberAfter(planId) && audited(planId) && validContact();
+        allow delete: if isMember(planId) && recorded(planId);
+      }
+
+      // A note on a person of the contacts, in Markdown, by the member who writes it; as for the
+      // notes of the projects, only an import keeps other authors. Its person and its time never
+      // change.
+      match /contactNotes/{noteId} {
+        allow read: if isMember(planId);
+        function validContactNote() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['contactId', 'text', 'createdAt', 'author', 'updatedAt',
+              'updatedBy', 'lastHistoryId'])
+            && isText(data.contactId, 100)
+            && isText(data.text, 5000)
+            && data.createdAt is string
+            && data.createdAt.size() <= 40
+            && data.createdAt.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*')
+            && validAuthor(data.author);
+        }
+
+        allow create: if isMemberAfter(planId) && audited(planId) && validContactNote()
+          && (writtenBy(planId, request.resource.data.author) || isImport(planId));
+        allow update: if isMemberAfter(planId) && audited(planId) && validContactNote()
+          && request.resource.data.author == resource.data.author
+          && request.resource.data.contactId == resource.data.contactId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isMember(planId) && recorded(planId);
       }
 
       // The last batch of a writer that leaves no document to record it, as a deletion: the id
@@ -603,7 +669,7 @@ service cloud.firestore {
             && data.entity
               in ['plan', 'lane', 'task', 'metric', 'value', 'note', 'memo', 'project',
                 'projectNote', 'assignment', 'projectField', 'team', 'stakeholder',
-                'roadmapSettings', 'milestone', 'member', 'access']
+                'roadmapSettings', 'milestone', 'member', 'access', 'contact', 'contactNote']
             && data.action in ['create', 'update', 'delete', 'import', 'setup']
             && ((data.action != 'setup' && (data.action != 'import' || data.entity != 'plan'))
               || member.role == 'owner')

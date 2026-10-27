@@ -4,13 +4,8 @@ import { notesOfProject } from '../../domain/projectNotes';
 import { Button } from '../../shared/ui/Button';
 import { assignmentsOfProject } from '../../domain/assignments';
 import type { AssignmentChanges } from '../../domain/assignments';
-import {
-  changeContingency,
-  duplicateContingency,
-  removeContingency,
-} from '../../domain/contingency';
+import { changeContingency, removeContingency } from '../../domain/contingency';
 import { CONTINGENCY_SEGMENTS_MAX } from '../../domain/projects';
-import { createId } from '../../utils/id';
 import { ContingencyDialog } from './ContingencyDialog';
 import { applyChanges } from '../../domain/changes';
 import { milestonesOfProject } from '../../domain/milestones';
@@ -53,6 +48,8 @@ import { useProjectDrag } from './useProjectDrag';
 import { draggedWork, useWorkDrag } from './useWorkDrag';
 import type { WorkChanges } from './useWorkDrag';
 import { workBarId } from './WorkBar';
+import { useWorkSplit } from './useWorkSplit';
+import type { SplitChoice } from '../split/SplitDialog';
 
 export interface ProjectsSectionProps {
   geometry: TimelineGeometry;
@@ -78,6 +75,9 @@ export interface ProjectsSectionProps {
   onOpen: (project: Project) => void;
   onDuplicateProject: (project: Project) => void;
   onDuplicateAssignment: (assignmentId: string) => void;
+  onDuplicateContingency: (projectId: string, segmentId: string) => void;
+  /** Splits a bar of work, of a person or of the contingency, in parts. */
+  onSplitWork: (item: WorkItem, choice: SplitChoice) => void;
   /** Adds a project from the days in view, as the button above the timeline does. */
   onAdd: () => void;
   /** Adds a project from a day. */
@@ -180,6 +180,8 @@ export function ProjectsSection({
   onOpen,
   onDuplicateProject,
   onDuplicateAssignment,
+  onDuplicateContingency,
+  onSplitWork,
   onAdd,
   onAddAt,
   onChange,
@@ -239,15 +241,13 @@ export function ProjectsSection({
   );
 
   const addAt = useStableCallback(onAddAt);
+  const workSplit = useWorkSplit(onSplitWork);
+  // A block of contingency splits in as many parts as the blocks the project can still take.
+  const contingencySplitPartsOf = (project: Project) =>
+    CONTINGENCY_SEGMENTS_MAX + 1 - (project.contingency?.segments?.length ?? 0);
   const duplicateWork = (item: WorkItem) => {
-    if (item.kind === 'assignment') {
-      onDuplicateAssignment(item.id);
-      return;
-    }
-    const project = projects.find((entry) => entry.id === item.projectId);
-    if (!project) return;
-    const contingency = duplicateContingency(project, item.id, createId(), config.closures ?? []);
-    if (contingency) onChange(project.id, { contingency, arrangement: 'manual' });
+    if (item.kind === 'assignment') onDuplicateAssignment(item.id);
+    else onDuplicateContingency(item.projectId, item.id);
   };
   const reserveProject = reserveEditor
     ? projects.find((project) => project.id === reserveEditor.projectId)
@@ -396,6 +396,14 @@ export function ProjectsSection({
                   contingencyDuplicable={
                     (project.contingency?.segments?.length ?? 0) < CONTINGENCY_SEGMENTS_MAX
                   }
+                  onSplitWork={(item) =>
+                    workSplit.open(
+                      item,
+                      project.title,
+                      item.kind === 'contingency' ? contingencySplitPartsOf(project) : undefined,
+                    )
+                  }
+                  contingencySplitParts={contingencySplitPartsOf(project)}
                   onOpenContingency={(item) =>
                     setReserveEditor({ projectId: item.projectId, id: item.id })
                   }
@@ -490,6 +498,7 @@ export function ProjectsSection({
           </div>
         </FloatingPanel>
       )}
+      {workSplit.dialog}
       {reserveItem && reserveProject && (
         <ContingencyDialog
           key={reserveItem.id}

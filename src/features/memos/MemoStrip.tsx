@@ -3,10 +3,11 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { Check, ChevronDown, ChevronUp, GripVertical, Users } from 'lucide-react';
 import {
   MEMO_SCOPES,
-  followerAt,
   followerInGroup,
   groupMemos,
   moveGroup,
+  pinnedFirst,
+  pinnedRange,
 } from '../../domain/memos';
 import type { MemoGroup, MemoScope } from '../../domain/memos';
 import type { NotesLayout, NotesLook } from '../../domain/notesLook';
@@ -195,8 +196,11 @@ export function MemoStrip({
 
   const groups = sharing?.grouped ? groupMemos(memos, sharing.groupOrder) : null;
   const groupKeys = groups?.map((group) => group.key) ?? [];
+  // The notes of a list as shown: those in evidence first.
   const listOf = (key: string) =>
-    key === WHOLE_STRIP ? memos : (groups?.find((group) => group.key === key)?.memos ?? []);
+    pinnedFirst(
+      key === WHOLE_STRIP ? memos : (groups?.find((group) => group.key === key)?.memos ?? []),
+    );
   const groupName = (group: MemoGroup) =>
     group.author && sharing
       ? `${sharing.nameOf(group.author)}${group.author.id === sharing.me.id ? ' (tu)' : ''}`
@@ -215,17 +219,20 @@ export function MemoStrip({
     setAnnouncement(`Nota libera aggiunta${isPrivate ? ', privata' : ''}: «${title}»`);
   };
 
-  /** Moves a note to `index` of its list, the whole strip or its group, and keeps the focus on it. */
+  /**
+   * Moves a note to `index` of its list as shown, the whole strip or its group, and keeps the
+   * focus on it. A note stays among those in evidence, or among the others: the index is kept
+   * within its part, whose notes are in the order of the strip.
+   */
   const moveNote = (memoId: string, list: string, index: number) => {
     const notes = listOf(list);
     const memo = notes.find((item) => item.id === memoId);
     if (!memo) return;
-    const beforeId =
-      list === WHOLE_STRIP
-        ? followerAt(memos, memoId, index)
-        : followerInGroup(memos, notes, memoId, index);
-    onMove(memoId, beforeId);
-    setAnnouncement(`«${memo.title}» in posizione ${index + 1} di ${notes.length}`);
+    const [first, last] = pinnedRange(notes, memoId);
+    const at = Math.min(Math.max(index, first), last);
+    const part = notes.slice(first, last + 1);
+    onMove(memoId, followerInGroup(memos, part, memoId, at - first));
+    setAnnouncement(`«${memo.title}» in posizione ${at + 1} di ${notes.length}`);
     window.requestAnimationFrame(() => document.getElementById(memoElementId(memoId))?.focus());
   };
 
@@ -252,9 +259,13 @@ export function MemoStrip({
     // Alt and the side arrows are also the browser's back and forward: never on a note.
     event.preventDefault();
     const target = index + step;
+    const notes = listOf(list);
+    const [first, last] = pinnedRange(notes, memo.id);
     if (searching) setAnnouncement('Durante la ricerca le note non si spostano');
     else if (target < 0) setAnnouncement(`«${memo.title}» è già la prima`);
-    else if (target >= listOf(list).length) setAnnouncement(`«${memo.title}» è già l'ultima`);
+    else if (target >= notes.length) setAnnouncement(`«${memo.title}» è già l'ultima`);
+    else if (target < first || target > last)
+      setAnnouncement('Le note in evidenza restano prima delle altre');
     else moveNote(memo.id, list, target);
   };
 
@@ -402,7 +413,7 @@ export function MemoStrip({
                   </span>
                 )}
               </div>
-              {renderNotes(group.key, group.memos)}
+              {renderNotes(group.key, listOf(group.key))}
             </div>
           );
         })}
@@ -543,7 +554,8 @@ export function MemoStrip({
           <div
             className={`min-w-0 p-1 ${alwaysExpanded ? '' : 'sm:max-h-[60vh] sm:overflow-y-auto'}`}
           >
-            {memos.length > 0 && (groups ? renderGroups(groups) : renderNotes(WHOLE_STRIP, memos))}
+            {memos.length > 0 &&
+              (groups ? renderGroups(groups) : renderNotes(WHOLE_STRIP, listOf(WHOLE_STRIP)))}
             {memos.length === 0 && emptyMessage}
           </div>
         </div>
@@ -558,7 +570,9 @@ export function MemoStrip({
             (groups ? (
               renderGroups(groups)
             ) : (
-              <div className="flex min-w-0 flex-1">{renderNotes(WHOLE_STRIP, memos)}</div>
+              <div className="flex min-w-0 flex-1">
+                {renderNotes(WHOLE_STRIP, listOf(WHOLE_STRIP))}
+              </div>
             ))}
           {memos.length === 0 && emptyMessage}
         </div>

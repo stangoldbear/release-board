@@ -11,6 +11,8 @@ import { NoteEditor } from './NoteEditor';
 import type { NoteDraft } from './NoteEditor';
 import { DueBadge } from './noteUi';
 import type { NoteActions } from './roadmapActions';
+import { Markdown } from '../../shared/ui/Markdown';
+import { markdownToPlainText } from '../../utils/markdown';
 
 interface ProjectNotesPanelProps {
   projectId: string;
@@ -112,16 +114,15 @@ export function ProjectNotesPanel({
                           status: event.target.checked ? 'done' : 'open',
                         })
                       }
-                      aria-label={`Fatta: ${note.text}`}
+                      aria-label={`Fatta: ${markdownToPlainText(note.text)}`}
                       className="mt-1 shrink-0"
                     />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p
-                      className={`whitespace-pre-line wrap-break-word ${done ? 'text-fg-muted line-through' : ''}`}
-                    >
-                      <Highlight text={note.text} />
-                    </p>
+                    <Markdown
+                      text={note.text}
+                      className={done ? 'text-fg-muted line-through' : ''}
+                    />
                     <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-fg-muted">
                       <span>
                         {author ? `${author} · ` : ''}
@@ -154,7 +155,7 @@ export function ProjectNotesPanel({
                       size="icon"
                       className="p-1.5"
                       onClick={() => setEditing(note.id)}
-                      aria-label={`Modifica la nota: ${note.text}`}
+                      aria-label={`Modifica la nota: ${markdownToPlainText(note.text)}`}
                       title="Modifica"
                     >
                       <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -164,7 +165,7 @@ export function ProjectNotesPanel({
                       size="icon"
                       className="p-1.5"
                       onClick={() => setToDelete(note)}
-                      aria-label={`Elimina la nota: ${note.text}`}
+                      aria-label={`Elimina la nota: ${markdownToPlainText(note.text)}`}
                       title="Elimina"
                     >
                       <Trash className="h-4 w-4" aria-hidden="true" />

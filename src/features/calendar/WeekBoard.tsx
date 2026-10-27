@@ -31,6 +31,9 @@ import {
 import { APPROVAL_TONE, ApprovalIcon, DayDetails, describeDay } from '../metrics/MetricDetails';
 import { CLOSURE_NAME } from './timelineLayout';
 import { useFormatDate, useDateFormat } from '../..//shared/dateFormat';
+import { Markdown } from '../../shared/ui/Markdown';
+import { taskColorOf } from '../../domain/lanes';
+import type { TaskColorId } from '../../domain/colors';
 
 interface WeekBoardProps {
   week: DateRange;
@@ -38,6 +41,8 @@ interface WeekBoardProps {
   lanes: Lane[];
   metrics: DailyMetric[];
   dailyNotes: DailyNotes;
+  /** The color of the notes of the days, from the shared settings. */
+  dayNotesColorId: TaskColorId;
   /** The days whose note the search finds; null while nothing is searched. */
   noteMatches: Set<string> | null;
   /** The revenue of each day, in its header. */
@@ -67,6 +72,7 @@ export function WeekBoard({
   lanes,
   metrics,
   dailyNotes,
+  dayNotesColorId,
   noteMatches,
   showMetrics,
   highlightWeekends,
@@ -85,7 +91,7 @@ export function WeekBoard({
   const today = todayIso();
   const { card, triggerProps, cardProps } = useHoverCard<DailyMetric>();
   const visibleTasks = tasks.filter((task) => !visibility.hiddenLaneIds.includes(task.laneId));
-  const laneNames = new Map(lanes.map((lane) => [lane.id, lane.name]));
+  const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
 
   const shift = (task: TaskItem, days: number) => {
     const { startDate, endDate } = moveTask(task, days);
@@ -194,15 +200,11 @@ export function WeekBoard({
                     draggable
                     onDragStart={(event) => event.dataTransfer.setData(NOTE_DRAG_TYPE, date)}
                     title="Trascina la nota su un altro giorno per spostarla"
-                    className="flex cursor-grab gap-1 rounded-sm border border-warning bg-warning-soft px-1.5 py-1 text-xs active:cursor-grabbing"
+                    style={taskColorStyle(dayNotesColorId)}
+                    className="flex cursor-grab gap-1 rounded-sm border px-1.5 py-1 text-xs active:cursor-grabbing"
                   >
-                    <StickyNote
-                      className="mt-0.5 h-3 w-3 shrink-0 text-warning"
-                      aria-hidden="true"
-                    />
-                    <span className="break-words hyphens-auto">
-                      <Highlight text={note} />
-                    </span>
+                    <StickyNote className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                    <Markdown text={note} phrasing className="min-w-0 hyphens-auto" />
                   </p>
                 )}
               </header>
@@ -213,13 +215,13 @@ export function WeekBoard({
                     key={task.id}
                     draggable
                     onDragStart={(event) => event.dataTransfer.setData(DRAG_TYPE, task.id)}
-                    style={taskColorStyle(task.colorId)}
+                    style={taskColorStyle(taskColorOf(task, laneById.get(task.laneId)))}
                     className={`group rounded-lg border-2 p-2 shadow-xs in-data-compact:p-1.5 ${
                       task.borderStyle === 'dashed' ? 'border-dashed' : 'border-solid'
                     }`}
                   >
                     <p className="mb-1 truncate text-xs font-semibold in-data-compact:mb-0.5">
-                      {laneNames.get(task.laneId) ?? 'Senza corsia'}
+                      {laneById.get(task.laneId)?.name ?? 'Senza corsia'}
                     </p>
                     <button
                       type="button"

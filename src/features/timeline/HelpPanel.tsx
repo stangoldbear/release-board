@@ -60,8 +60,9 @@ export function HelpPanel({ releases, projects, people }: HelpPanelProps) {
           {releases && (
             <li>
               Trascina il nome di una corsia per cambiarne l&apos;ordine; un&apos;attività passa a
-              un&apos;altra corsia trascinandola in su o in giù. Le corsie si aggiungono e si
-              rinominano da Impostazioni → Next Releases → Corsie.
+              un&apos;altra corsia trascinandola in su o in giù e prende il colore della corsia. Le
+              corsie si aggiungono, si rinominano e si colorano da Impostazioni → Next Releases →
+              Corsie, dove c&apos;è anche il colore delle note dei giorni.
             </li>
           )}
           {releases && (

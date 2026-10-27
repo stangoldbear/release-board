@@ -57,6 +57,7 @@ import { projectPeriod } from './roadmapLayout';
 import { initialRows, toTeamRows } from './teamEffort';
 import type { EffortRow } from './teamEffort';
 import { TeamEffortTable } from './TeamEffortTable';
+import { MarkdownTextarea } from '../../shared/ui/MarkdownTextarea';
 
 /** The two parts of the window: the project itself, and its notes. */
 export type ProjectTab = 'project' | 'notes';
@@ -743,14 +744,14 @@ export function ProjectDialog({
                 <label htmlFor={descriptionId} className={LABEL_CLASS}>
                   Descrizione
                 </label>
-                <textarea
+                <MarkdownTextarea
                   id={descriptionId}
+                  label="Descrizione"
                   rows={4}
                   maxLength={PROJECT_DESCRIPTION_MAX}
                   placeholder="Obiettivi, tappe, link…"
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
-                  className={FIELD_CLASS}
                 />
               </div>
             )}

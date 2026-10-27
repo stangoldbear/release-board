@@ -10,6 +10,7 @@ describe('the areas shown', () => {
       releases: true,
       roadmaps: false,
       people: false,
+      contacts: true,
     });
   });
 
@@ -19,6 +20,7 @@ describe('the areas shown', () => {
       releases: true,
       roadmaps: true,
       people: true,
+      contacts: true,
     });
     expect(parseAreaVisibility({ notes: 'no' })).toEqual(ALL_AREAS_VISIBLE);
   });
@@ -31,14 +33,20 @@ describe('the areas shown', () => {
 });
 
 describe('the areas available', () => {
-  it('offers every area with or without the beta features, now that nothing is in beta', () => {
+  it('offers the contacts only with the beta features (0.21)', () => {
     expect(availableAreas(false).map(({ id }) => id)).toEqual([
       'notes',
       'releases',
       'roadmaps',
       'people',
     ]);
-    expect(availableAreas(true)).toEqual(availableAreas(false));
-    expect(HAS_BETA_FEATURES).toBe(false);
+    expect(availableAreas(true).map(({ id }) => id)).toEqual([
+      'notes',
+      'releases',
+      'roadmaps',
+      'people',
+      'contacts',
+    ]);
+    expect(HAS_BETA_FEATURES).toBe(true);
   });
 });

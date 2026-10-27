@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 import { DATE_MAX, FIELD_CLASS, LABEL_CLASS } from '../../shared/ui/field';
 import { isIsoDate } from '../../utils/dateUtils';
 import type { WorkItem } from './barRendering';
+import { MarkdownTextarea } from '../../shared/ui/MarkdownTextarea';
 
 export function ContingencyDialog({
   item,
@@ -94,13 +95,13 @@ export function ContingencyDialog({
             <label htmlFor={noteId} className={LABEL_CLASS}>
               Nota
             </label>
-            <textarea
+            <MarkdownTextarea
               id={noteId}
+              label="Nota"
               rows={3}
               maxLength={ASSIGNMENT_NOTE_MAX}
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              className={FIELD_CLASS}
             />
           </div>
         </form>

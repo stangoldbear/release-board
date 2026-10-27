@@ -11,6 +11,7 @@ import {
   isProjectColorsMode,
   isRoadmapId,
   parseClosures,
+  parseDayNotesColor,
   parseProjectField,
   parseStakeholder,
   parseTeam,
@@ -19,6 +20,8 @@ import {
 import { BORDER_STYLES, DAILY_METRIC, TASK_STATUSES, planContentSummary } from '../../domain/plan';
 import type {
   Assignment,
+  Contact,
+  ContactNote,
   DailyMetric,
   DailyNotes,
   Lane,
@@ -36,9 +39,15 @@ import type {
 } from '../../domain/types';
 import { isIsoDate } from '../../utils/dateUtils';
 import { parseMilestone, sortMilestones } from '../../domain/milestones';
+import {
+  parseContact,
+  parseContactNote,
+  sortContactNotes,
+  sortContacts,
+} from '../../domain/contacts';
 
 // How the plan is laid out in Firestore, under plans/{planId}:
-//   lanes/{laneId}                    name, position
+//   lanes/{laneId}                    name, position, and colorId when set
 //   tasks/{taskId}                    the task without its id
 //   metrics/{metricId}                label, unit, decimals, position, visible
 //   metrics/{metricId}/values/{date}  value, and from a forecast approval, promoEu, promoNonEu
@@ -52,12 +61,19 @@ import { parseMilestone, sortMilestones } from '../../domain/milestones';
 //   projectFields/{fieldId}           a custom field of the projects, as the settings define it
 //   teams/{teamId}                    name, tag, colorId, position
 //   stakeholders/{stakeholderId}      name, teamId, absences, position, and info when set
+//   contacts/{contactId}              name, and role, team, email, phone, managerId when set (0.21)
+//   contactNotes/{noteId}             contactId, text, createdAt, author (0.21)
 // Every document but the private notes also carries updatedAt, updatedBy and lastHistoryId,
 // added by the repository: private notes leave no history, since nobody else may read them.
 // Reading is lenient: the rules validate writes, and a document that does not fit is skipped.
 
 /** The one plan of an instance. */
 export const PLAN_ID = 'main';
+/**
+ * The version of the security rules this site needs: the rules let members read
+ * `rulesVersion/<this>`, and older rules refuse it. It changes with a release that changes them.
+ */
+export const RULES_VERSION = '0.21.0';
 export const METRIC_ID: string = DAILY_METRIC.id;
 
 /** A document to write under the plan: its path relative to the plan, and its content. */
@@ -115,10 +131,19 @@ export function readTask(id: string, data: DocumentData): TaskItem | null {
   return task;
 }
 
+/** The document of a lane: its name, its place, and its color when it has one. */
+export function laneContent(lane: Lane, position: number): DocumentData {
+  return lane.colorId
+    ? { name: lane.name, position, colorId: lane.colorId }
+    : { name: lane.name, position };
+}
+
 export function readLane(id: string, data: DocumentData): { lane: Lane; position: number } | null {
   if (!isText(data.name)) return null;
+  const lane: Lane = { id, name: data.name };
+  if (typeof data.colorId === 'string' && isKnownColorId(data.colorId)) lane.colorId = data.colorId;
   return {
-    lane: { id, name: data.name },
+    lane,
     position: typeof data.position === 'number' ? data.position : Number.MAX_SAFE_INTEGER,
   };
 }
@@ -156,6 +181,7 @@ export function memoContent(memo: Omit<Memo, 'id'>): DocumentData {
   if (memo.body) data.body = memo.body;
   if (memo.colorId) data.colorId = memo.colorId;
   if (memo.remindOn) data.remindOn = memo.remindOn;
+  if (memo.pinned) data.pinned = true;
   if (memo.author && !memo.private) data.author = { id: memo.author.id, login: memo.author.login };
   return data;
 }
@@ -173,6 +199,7 @@ export function readMemo(id: string, data: DocumentData): Memo | null {
   if (isText(data.body)) memo.body = data.body;
   if (typeof data.colorId === 'string' && isKnownColorId(data.colorId)) memo.colorId = data.colorId;
   if (isIsoDate(data.remindOn)) memo.remindOn = data.remindOn;
+  if (data.pinned === true) memo.pinned = true;
   const author = readAuthor(data.author);
   if (author) memo.author = author;
   return memo;
@@ -236,6 +263,36 @@ export function projectNoteContent(note: Omit<ProjectNote, 'id'>): DocumentData 
 
 export function readProjectNote(id: string, data: DocumentData): ProjectNote | null {
   return parseProjectNote(id, data);
+}
+
+/** A person of the contacts without their id, and without empty optional fields. */
+export function contactContent(contact: Omit<Contact, 'id'>): DocumentData {
+  const data: DocumentData = { name: contact.name };
+  if (contact.role) data.role = contact.role;
+  if (contact.team) data.team = contact.team;
+  if (contact.email) data.email = contact.email;
+  if (contact.phone) data.phone = contact.phone;
+  if (contact.managerId) data.managerId = contact.managerId;
+  return data;
+}
+
+export function readContact(id: string, data: DocumentData): Contact | null {
+  return parseContact(id, data);
+}
+
+/** A note on a person without its id. */
+export function contactNoteContent(note: Omit<ContactNote, 'id'>): DocumentData {
+  const data: DocumentData = {
+    contactId: note.contactId,
+    text: note.text,
+    createdAt: note.createdAt,
+  };
+  if (note.author) data.author = { id: note.author.id, login: note.author.login };
+  return data;
+}
+
+export function readContactNote(id: string, data: DocumentData): ContactNote | null {
+  return parseContactNote(id, data);
 }
 
 /** A note on the timeline without its id, and without empty optional fields. */
@@ -345,7 +402,7 @@ export const ROADMAP_SETTINGS_ID = 'roadmap';
 /** The shared settings of the roadmap: the keys that are set, and nothing else. */
 export type RoadmapSettings = Pick<
   RoadmapConfig,
-  'contingencyFormula' | 'projectColors' | 'colorFieldId' | 'closures'
+  'contingencyFormula' | 'projectColors' | 'colorFieldId' | 'closures' | 'dayNotesColorId'
 >;
 
 export function roadmapSettingsContent(config: RoadmapSettings): DocumentData {
@@ -358,6 +415,7 @@ export function roadmapSettingsContent(config: RoadmapSettings): DocumentData {
       reason ? { start, end, reason } : { start, end },
     );
   }
+  if (config.dayNotesColorId) data.dayNotesColorId = config.dayNotesColorId;
   return data;
 }
 
@@ -371,6 +429,8 @@ export function readRoadmapSettings(data: DocumentData): RoadmapSettings {
   if (isRoadmapId(data.colorFieldId)) settings.colorFieldId = data.colorFieldId;
   const closures = parseClosures(data.closures);
   if (closures.length > 0) settings.closures = closures;
+  const notesColor = parseDayNotesColor(data.dayNotesColorId);
+  if (notesColor) settings.dayNotesColorId = notesColor;
   return settings;
 }
 
@@ -388,6 +448,8 @@ export interface PlanParts {
   teams: Team[];
   stakeholders: Stakeholder[];
   settings: RoadmapSettings;
+  contacts: Contact[];
+  contactNotes: ContactNote[];
 }
 
 /** The plan as the app sees it: lanes in position order, values and tasks in a stable order. */
@@ -416,6 +478,8 @@ export function buildPlan(parts: PlanParts): PlanSnapshot {
       teams: sortByPosition(parts.teams),
       stakeholders: sortByPosition(parts.stakeholders),
     },
+    contacts: sortContacts(parts.contacts),
+    contactNotes: sortContactNotes(parts.contactNotes),
   };
 }
 
@@ -435,7 +499,7 @@ export function contentWrites(plan: PlanSnapshot): ContentWrite[] {
   return [
     ...plan.lanes.map((lane, position) => ({
       path: `lanes/${lane.id}`,
-      data: { name: lane.name, position },
+      data: laneContent(lane, position),
     })),
     { path: `metrics/${METRIC_ID}`, data: metricContent() },
     ...plan.metrics.map((metric) => ({
@@ -472,6 +536,14 @@ export function contentWrites(plan: PlanSnapshot): ContentWrite[] {
       data: milestoneContent(content),
     })),
     ...configWrites(plan.roadmap),
+    ...plan.contacts.map(({ id, ...content }) => ({
+      path: `contacts/${id}`,
+      data: contactContent(content),
+    })),
+    ...plan.contactNotes.map(({ id, ...content }) => ({
+      path: `contactNotes/${id}`,
+      data: contactNoteContent(content),
+    })),
   ];
 }
 

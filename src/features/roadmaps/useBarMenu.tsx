@@ -1,12 +1,13 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, Info } from 'lucide-react';
+import { Copy, Info, Scissors } from 'lucide-react';
 
 export function useBarMenu(
   name: string,
   onInfo: (anchor: HTMLElement) => void,
   onDuplicate?: () => void,
+  onSplit?: () => void,
 ) {
   const [position, setPosition] = useState<{ x: number; y: number; anchor: HTMLElement } | null>(
     null,
@@ -35,6 +36,7 @@ export function useBarMenu(
         position={position}
         onInfo={() => onInfo(position.anchor)}
         onDuplicate={onDuplicate}
+        onSplit={onSplit}
         onClose={() => setPosition(null)}
       />
     ),
@@ -46,12 +48,15 @@ function BarMenu({
   position,
   onInfo,
   onDuplicate,
+  onSplit,
   onClose,
 }: {
   name: string;
   position: { x: number; y: number; anchor: HTMLElement };
   onInfo: () => void;
   onDuplicate?: () => void;
+  /** Opens the window that splits the bar in parts; absent when it cannot be split. */
+  onSplit?: () => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -98,7 +103,7 @@ function BarMenu({
       onKeyDown={keyDown}
       style={{
         left: Math.max(8, Math.min(position.x, window.innerWidth - 240)),
-        top: Math.max(8, Math.min(position.y, window.innerHeight - 128)),
+        top: Math.max(8, Math.min(position.y, window.innerHeight - 168)),
       }}
       className="fixed z-50 w-56 max-w-[calc(100vw-16px)] overflow-hidden rounded-lg border border-line bg-surface py-1 text-fg shadow-xl"
     >
@@ -129,6 +134,19 @@ function BarMenu({
       >
         <Copy className="h-4 w-4" aria-hidden="true" />
         Duplica
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={!onSplit}
+        className={itemClass}
+        onClick={() => {
+          close();
+          onSplit?.();
+        }}
+      >
+        <Scissors className="h-4 w-4" aria-hidden="true" />
+        Dividi…
       </button>
     </div>,
     document.body,
